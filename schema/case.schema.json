@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/tool-call-bench/case.schema.json",
+  "title": "ToolCallEvalCase",
+  "description": "A single evaluation case. Separates tool-selection ground truth from argument ground truth, and splits arguments into exact- vs semantic-scored fields.",
+  "type": "object",
+  "required": ["id", "query", "expected_tool", "expected_args", "distractor_tools", "negative", "provenance"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^case_[0-9]{4}$" },
+    "query": { "type": "string", "minLength": 1 },
+    "expected_tool": {
+      "description": "Correct tool name. Null iff negative==true.",
+      "type": ["string", "null"]
+    },
+    "expected_args": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "exact":    { "type": "object", "description": "Fields scored by exact match (enums, numbers, dates)." },
+        "semantic": { "type": "object", "description": "Free-text fields scored by similarity/judge, not exact match." }
+      },
+      "default": { "exact": {}, "semantic": {} }
+    },
+    "distractor_tools": {
+      "description": "Plausible-but-wrong tools present in the tool set for this case. Controls selection difficulty.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "negative": {
+      "description": "If true, the correct behavior is to call NO tool. expected_tool must be null.",
+      "type": "boolean"
+    },
+    "provenance": {
+      "description": "How this case was produced. Lets readers recompute metrics excluding any generation method.",
+      "type": "string",
+      "enum": ["seed_manual", "grounded", "adversarial_manual"]
+    },
+    "source": {
+      "description": "For grounded cases: the public dataset the argument ground-truth is grounded in.",
+      "type": "string"
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "negative": { "const": true } } },
+      "then": { "properties": { "expected_tool": { "const": null } } }
+    },
+    {
+      "if": { "properties": { "provenance": { "const": "grounded" } } },
+      "then": { "required": ["source"] }
+    }
+  ]
+}

@@ -1,0 +1,1909 @@
+{
+  "$comment": "Canonical tool definitions for tool-call-bench. Generic-ERP vocabulary only, expanded from the standard ERP module set (master/sales/purchase/inventory/accounting/hr/report). Near-duplicate functions are placed WITHIN each module on purpose so that selection difficulty grows with tool-set size. Argument scoring mode is carried by x-scoring and is stripped from the model-facing view.",
+  "version": "2.0.0",
+  "scoring_convention": {
+    "exact": [
+      "enum",
+      "integer",
+      "boolean",
+      "string-with-pattern",
+      "plain string identifiers"
+    ],
+    "semantic": [
+      "free_text"
+    ],
+    "note": "A field is scored semantically iff x-scoring == 'semantic'. Everything else is exact."
+  },
+  "tool_set_stages": {
+    "$comment": "Tool count is an experiment variable: the same cases are run under each stage to produce a selection-accuracy degradation curve. Stage sizes must be large enough to hold the correct tool plus all declared distractors (max 3 here), so the smallest usable stage is 5, not 3. The top stage equals the full catalogue.",
+    "stages": [
+      5,
+      10,
+      20,
+      40
+    ]
+  },
+  "tools": [
+    {
+      "name": "search_master",
+      "module": "master",
+      "description": "マスタデータから単一レコードの属性を引く。取引先・品目・部門などの実体を、コードまたは名称で特定して登録属性を返す。文書検索や複数レコードの集計には使わない。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "customer",
+              "item",
+              "department",
+              "employee"
+            ],
+            "description": "対象マスタの種別",
+            "x-scoring": "exact"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,16}$",
+            "description": "レコードを特定するコード",
+            "x-scoring": "exact"
+          },
+          "name": {
+            "type": "string",
+            "description": "レコードを特定する名称",
+            "x-scoring": "exact"
+          },
+          "field": {
+            "type": "string",
+            "description": "取得したい属性の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_report",
+      "module": "report",
+      "description": "帳票・文書から記載値を引く。年度や文書種別で特定される文書内の記載を対象とする。マスタの登録属性ではない。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "report_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "yuho",
+              "ordinance",
+              "law",
+              "internal_manual"
+            ],
+            "description": "対象文書の種別",
+            "x-scoring": "exact"
+          },
+          "fiscal_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "対象年度（西暦4桁）",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "employee_count",
+              "net_sales",
+              "operating_income",
+              "capital",
+              "average_age",
+              "none"
+            ],
+            "description": "定型指標。定型外は query_text のみ使う",
+            "x-scoring": "exact"
+          },
+          "query_text": {
+            "type": "string",
+            "description": "文書内で探したい内容の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_metric",
+      "module": "accounting",
+      "description": "複数レコードを集約して合計・平均などを返す。個別レコードの参照ではなく、期間や区分でまとめた数値が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "metric",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "sales",
+              "purchase_amount",
+              "headcount",
+              "inventory_qty",
+              "work_hours"
+            ],
+            "description": "集計対象の数量",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "集約の区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_sales_record",
+      "module": "sales",
+      "description": "販売モジュールの伝票・レコードを条件で検索し、該当する一覧を返す。集計値ではなく個々のレコードが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "closed",
+              "cancelled",
+              "any"
+            ],
+            "description": "レコードの状態",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "検索条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_sales_detail",
+      "module": "sales",
+      "description": "販売モジュールの単一レコードを伝票番号で特定し、明細行を含む詳細を返す。一覧検索ではなく特定レコードの中身が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "document_no"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "document_no": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,20}$",
+            "description": "伝票番号",
+            "x-scoring": "exact"
+          },
+          "include_lines": {
+            "type": "boolean",
+            "description": "明細行を含めるか",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_sales",
+      "module": "sales",
+      "description": "販売モジュールの数量を期間・区分で集約する。個々のレコードではなく合計や平均が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "集計対象種別",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "customer",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_purchase_record",
+      "module": "purchase",
+      "description": "購買モジュールの伝票・レコードを条件で検索し、該当する一覧を返す。集計値ではなく個々のレコードが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "closed",
+              "cancelled",
+              "any"
+            ],
+            "description": "レコードの状態",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "検索条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_purchase_detail",
+      "module": "purchase",
+      "description": "購買モジュールの単一レコードを伝票番号で特定し、明細行を含む詳細を返す。一覧検索ではなく特定レコードの中身が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "document_no"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "document_no": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,20}$",
+            "description": "伝票番号",
+            "x-scoring": "exact"
+          },
+          "include_lines": {
+            "type": "boolean",
+            "description": "明細行を含めるか",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_purchase",
+      "module": "purchase",
+      "description": "購買モジュールの数量を期間・区分で集約する。個々のレコードではなく合計や平均が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "集計対象種別",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "customer",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_inventory_record",
+      "module": "inventory",
+      "description": "在庫モジュールの伝票・レコードを条件で検索し、該当する一覧を返す。集計値ではなく個々のレコードが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "warehouse",
+              "movement"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "closed",
+              "cancelled",
+              "any"
+            ],
+            "description": "レコードの状態",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "検索条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_inventory_detail",
+      "module": "inventory",
+      "description": "在庫モジュールの単一レコードを伝票番号で特定し、明細行を含む詳細を返す。一覧検索ではなく特定レコードの中身が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "document_no"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "warehouse",
+              "movement"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "document_no": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,20}$",
+            "description": "伝票番号",
+            "x-scoring": "exact"
+          },
+          "include_lines": {
+            "type": "boolean",
+            "description": "明細行を含めるか",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_inventory",
+      "module": "inventory",
+      "description": "在庫モジュールの数量を期間・区分で集約する。個々のレコードではなく合計や平均が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "warehouse",
+              "movement"
+            ],
+            "description": "集計対象種別",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "customer",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_accounting_record",
+      "module": "accounting",
+      "description": "会計モジュールの伝票・レコードを条件で検索し、該当する一覧を返す。集計値ではなく個々のレコードが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "journal",
+              "account_balance",
+              "cost_center"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "closed",
+              "cancelled",
+              "any"
+            ],
+            "description": "レコードの状態",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "検索条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_accounting_detail",
+      "module": "accounting",
+      "description": "会計モジュールの単一レコードを伝票番号で特定し、明細行を含む詳細を返す。一覧検索ではなく特定レコードの中身が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "document_no"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "journal",
+              "account_balance",
+              "cost_center"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "document_no": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,20}$",
+            "description": "伝票番号",
+            "x-scoring": "exact"
+          },
+          "include_lines": {
+            "type": "boolean",
+            "description": "明細行を含めるか",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_accounting",
+      "module": "accounting",
+      "description": "会計モジュールの数量を期間・区分で集約する。個々のレコードではなく合計や平均が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "journal",
+              "account_balance",
+              "cost_center"
+            ],
+            "description": "集計対象種別",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "customer",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_hr_record",
+      "module": "hr",
+      "description": "人事モジュールの伝票・レコードを条件で検索し、該当する一覧を返す。集計値ではなく個々のレコードが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "confirmed",
+              "closed",
+              "cancelled",
+              "any"
+            ],
+            "description": "レコードの状態",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "検索条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_hr_detail",
+      "module": "hr",
+      "description": "人事モジュールの単一レコードを伝票番号で特定し、明細行を含む詳細を返す。一覧検索ではなく特定レコードの中身が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "document_no"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "対象レコード種別",
+            "x-scoring": "exact"
+          },
+          "document_no": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,20}$",
+            "description": "伝票番号",
+            "x-scoring": "exact"
+          },
+          "include_lines": {
+            "type": "boolean",
+            "description": "明細行を含めるか",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "aggregate_hr",
+      "module": "hr",
+      "description": "人事モジュールの数量を期間・区分で集約する。個々のレコードではなく合計や平均が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "aggregation"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "集計対象種別",
+            "x-scoring": "exact"
+          },
+          "aggregation": {
+            "type": "string",
+            "enum": [
+              "sum",
+              "avg",
+              "max",
+              "min",
+              "count"
+            ],
+            "description": "集約方法",
+            "x-scoring": "exact"
+          },
+          "group_by": {
+            "type": "string",
+            "enum": [
+              "department",
+              "supplier",
+              "customer",
+              "item",
+              "month",
+              "none"
+            ],
+            "description": "区分軸",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_master_records",
+      "module": "master",
+      "description": "マスタの複数レコードを条件で一覧する。単一レコードの属性取得ではなく、条件に合う実体の一覧が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "customer",
+              "item",
+              "department",
+              "employee"
+            ],
+            "description": "対象マスタ種別",
+            "x-scoring": "exact"
+          },
+          "active_only": {
+            "type": "boolean",
+            "description": "有効レコードのみに限定するか",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "絞り込み条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_master_hierarchy",
+      "module": "master",
+      "description": "マスタの階層構造（部門ツリー、品目分類など）を返す。単一レコードの属性ではなく、親子関係が必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "department",
+              "item"
+            ],
+            "description": "階層を持つマスタ種別",
+            "x-scoring": "exact"
+          },
+          "root_code": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,16}$",
+            "description": "起点ノードのコード",
+            "x-scoring": "exact"
+          },
+          "depth": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "取得する階層の深さ",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_report_documents",
+      "module": "report",
+      "description": "条件に合う帳票・文書の一覧を返す。文書内の記載値そのものではなく、どの文書が存在するかを知りたい場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "report_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "yuho",
+              "ordinance",
+              "law",
+              "internal_manual"
+            ],
+            "description": "文書種別",
+            "x-scoring": "exact"
+          },
+          "fiscal_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "対象年度",
+            "x-scoring": "exact"
+          },
+          "keyword": {
+            "type": "string",
+            "description": "文書の絞り込み条件の自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "compare_report_metric",
+      "module": "report",
+      "description": "同一指標を複数年度間で比較する。単年度の記載値取得ではなく、推移や増減が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "report_type",
+          "metric"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "yuho",
+              "ordinance",
+              "law",
+              "internal_manual"
+            ],
+            "description": "文書種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "employee_count",
+              "net_sales",
+              "operating_income",
+              "capital",
+              "average_age"
+            ],
+            "description": "比較する指標",
+            "x-scoring": "exact"
+          },
+          "year_from": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "比較開始年度",
+            "x-scoring": "exact"
+          },
+          "year_to": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "比較終了年度",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "resolve_code",
+      "module": "master",
+      "description": "名称からコードを解決する。属性取得ではなく、コードが不明な場合の前段として使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "name"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "customer",
+              "item",
+              "department",
+              "employee"
+            ],
+            "description": "対象マスタ種別",
+            "x-scoring": "exact"
+          },
+          "name": {
+            "type": "string",
+            "description": "解決したい名称",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_fiscal_calendar",
+      "module": "accounting",
+      "description": "会計期間の定義（期首・期末・四半期区切り）を返す。数値データではなく期間定義そのものが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "fiscal_year"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "fiscal_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "対象年度",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "export_dataset",
+      "module": "accounting",
+      "description": "検索・集計結果をファイル形式で書き出す。データ取得そのものではなく、出力形式の指定が主目的の場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "format"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "csv",
+              "xlsx",
+              "json"
+            ],
+            "description": "出力形式",
+            "x-scoring": "exact"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "current_result",
+              "full_table"
+            ],
+            "description": "出力範囲",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "trend_sales",
+      "module": "sales",
+      "description": "販売モジュールの数量の時系列推移を返す。単一期間の集計ではなく、期間をまたぐ推移が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "metric"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "amount",
+              "quantity",
+              "count"
+            ],
+            "description": "推移させる数量",
+            "x-scoring": "exact"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "quarter"
+            ],
+            "description": "時系列の粒度",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_open_sales_items",
+      "module": "sales",
+      "description": "販売モジュールの未処理・未消込レコードを一覧する。全レコードの検索ではなく、滞留しているものだけが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "overdue_only": {
+            "type": "boolean",
+            "description": "期限超過分のみに限定するか",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "trend_purchase",
+      "module": "purchase",
+      "description": "購買モジュールの数量の時系列推移を返す。単一期間の集計ではなく、期間をまたぐ推移が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "metric"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "amount",
+              "quantity",
+              "count"
+            ],
+            "description": "推移させる数量",
+            "x-scoring": "exact"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "quarter"
+            ],
+            "description": "時系列の粒度",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_open_purchase_items",
+      "module": "purchase",
+      "description": "購買モジュールの未処理・未消込レコードを一覧する。全レコードの検索ではなく、滞留しているものだけが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "overdue_only": {
+            "type": "boolean",
+            "description": "期限超過分のみに限定するか",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "trend_inventory",
+      "module": "inventory",
+      "description": "在庫モジュールの数量の時系列推移を返す。単一期間の集計ではなく、期間をまたぐ推移が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "metric"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "warehouse",
+              "movement"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "amount",
+              "quantity",
+              "count"
+            ],
+            "description": "推移させる数量",
+            "x-scoring": "exact"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "quarter"
+            ],
+            "description": "時系列の粒度",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_open_inventory_items",
+      "module": "inventory",
+      "description": "在庫モジュールの未処理・未消込レコードを一覧する。全レコードの検索ではなく、滞留しているものだけが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "stock",
+              "warehouse",
+              "movement"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "overdue_only": {
+            "type": "boolean",
+            "description": "期限超過分のみに限定するか",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "trend_hr",
+      "module": "hr",
+      "description": "人事モジュールの数量の時系列推移を返す。単一期間の集計ではなく、期間をまたぐ推移が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "metric"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "amount",
+              "quantity",
+              "count"
+            ],
+            "description": "推移させる数量",
+            "x-scoring": "exact"
+          },
+          "interval": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "quarter"
+            ],
+            "description": "時系列の粒度",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_open_hr_items",
+      "module": "hr",
+      "description": "人事モジュールの未処理・未消込レコードを一覧する。全レコードの検索ではなく、滞留しているものだけが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "overdue_only": {
+            "type": "boolean",
+            "description": "期限超過分のみに限定するか",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "search_report_section",
+      "module": "report",
+      "description": "文書内の特定セクション本文を返す。指標値の取得ではなく、記述そのものが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "report_type"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "yuho",
+              "ordinance",
+              "law",
+              "internal_manual"
+            ],
+            "description": "文書種別",
+            "x-scoring": "exact"
+          },
+          "fiscal_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "対象年度",
+            "x-scoring": "exact"
+          },
+          "section": {
+            "type": "string",
+            "description": "セクションの自由記述",
+            "x-scoring": "semantic"
+          }
+        }
+      }
+    },
+    {
+      "name": "get_master_change_history",
+      "module": "master",
+      "description": "マスタレコードの変更履歴を返す。現在の登録属性ではなく、いつ何が変わったかが必要な場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity",
+          "code"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "supplier",
+              "customer",
+              "item",
+              "department",
+              "employee"
+            ],
+            "description": "対象マスタ種別",
+            "x-scoring": "exact"
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[0-9A-Z-]{1,16}$",
+            "description": "レコードコード",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "compare_period_metric",
+      "module": "accounting",
+      "description": "同一数量を2期間で比較し差分を返す。単一期間の集計や時系列推移ではなく、2点間の増減が求められている場合に使う。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "metric",
+          "period_a",
+          "period_b"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": [
+              "sales",
+              "purchase_amount",
+              "headcount",
+              "inventory_qty",
+              "work_hours"
+            ],
+            "description": "比較する数量",
+            "x-scoring": "exact"
+          },
+          "period_a": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "比較元期間",
+            "x-scoring": "exact"
+          },
+          "period_b": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "比較先期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "trend_report_metric",
+      "module": "report",
+      "description": "同一指標の値を複数年度にわたる時系列で返す。2時点間の差分ではなく、区間内の推移そのものが必要な場合に使う。compare_report_metricは2年度間の比較値のみを返すのに対し、本ツールは区間内の各年度の値を系列で返す。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "report_type",
+          "metric",
+          "year_from",
+          "year_to"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "report_type": {
+            "type": "string",
+            "enum": [
+              "yuho",
+              "ordinance",
+              "law",
+              "internal_manual"
+            ],
+            "description": "対象文書の種別",
+            "x-scoring": "exact"
+          },
+          "metric": {
+            "type": "string",
+            "enum": [
+              "employee_count",
+              "net_sales",
+              "operating_income",
+              "capital",
+              "average_age"
+            ],
+            "description": "推移を見る指標",
+            "x-scoring": "exact"
+          },
+          "year_from": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "推移開始年度",
+            "x-scoring": "exact"
+          },
+          "year_to": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "推移終了年度",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_pending_sales_approvals",
+      "module": "sales",
+      "description": "承認待ちで停止している販売系レコードを一覧する。list_open_sales_itemsが指す出荷・請求などの未処理状態とは異なり、承認ワークフロー上の停止（与信確認・値引承認など）にあるものだけを対象とする。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "sales_order",
+              "invoice",
+              "shipment"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "approval_stage": {
+            "type": "string",
+            "enum": [
+              "credit_check",
+              "discount_approval",
+              "manager_signoff",
+              "any"
+            ],
+            "description": "承認ステージ",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_pending_purchase_approvals",
+      "module": "purchase",
+      "description": "承認待ちで停止している購買系レコードを一覧する。list_open_purchase_itemsが指す入荷・請求などの未処理状態とは異なり、承認ワークフロー上の停止（予算確認・決裁など）にあるものだけを対象とする。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "purchase_order",
+              "receipt",
+              "supplier_invoice"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "approval_stage": {
+            "type": "string",
+            "enum": [
+              "budget_check",
+              "manager_signoff",
+              "finance_signoff",
+              "any"
+            ],
+            "description": "承認ステージ",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    },
+    {
+      "name": "list_pending_hr_approvals",
+      "module": "hr",
+      "description": "承認待ちで停止している人事系レコードを一覧する。list_open_hr_itemsが指す未処理状態とは異なり、承認ワークフロー上の停止（上長決裁・人事決裁など）にあるものだけを対象とする。",
+      "parameters": {
+        "type": "object",
+        "required": [
+          "entity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "entity": {
+            "type": "string",
+            "enum": [
+              "attendance",
+              "payroll",
+              "headcount"
+            ],
+            "description": "対象種別",
+            "x-scoring": "exact"
+          },
+          "approval_stage": {
+            "type": "string",
+            "enum": [
+              "manager_signoff",
+              "hr_signoff",
+              "any"
+            ],
+            "description": "承認ステージ",
+            "x-scoring": "exact"
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "last_month",
+              "this_month",
+              "last_quarter",
+              "this_fiscal_year",
+              "last_fiscal_year"
+            ],
+            "description": "対象期間",
+            "x-scoring": "exact"
+          }
+        }
+      }
+    }
+  ]
+}
