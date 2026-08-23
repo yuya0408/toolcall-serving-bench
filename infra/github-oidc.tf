@@ -23,11 +23,15 @@ data "aws_iam_policy_document" "github_actions_assume_role" {
       values   = ["sts.amazonaws.com"]
     }
 
-    # yuya0408/tool-call-bench リポジトリからのワークフロー実行のみ信頼する
+    # yuya0408/tool-call-bench リポジトリからのワークフロー実行のみ信頼する。
+    # GitHubのOIDCトークンのsubクレームは owner/repo名だけでなく不変ID(@数字)を含む形式
+    # （repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:...）で発行されるため、名前だけの条件では一致しない。
+    # 実際にCloudTrailで観測したsubクレーム、およびgh api users/yuya0408・repos/yuya0408/tool-call-bench
+    # のidフィールドと突き合わせて確認済み（owner_id=240127008, repo_id=1335809260）。
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:yuya0408/tool-call-bench:*"]
+      values   = ["repo:yuya0408@240127008/tool-call-bench@1335809260:*"]
     }
   }
 }
