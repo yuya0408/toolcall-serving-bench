@@ -208,6 +208,24 @@ Article1の元ファイル・元ケース・5/10/20/40の4段階は一切変更�
 新規60ツールの具体的な生成は設計判断ではなくコンテンツ作成作業のため、
 実装前の具体タスクとして下記「残る未決定事項」に切り出す。
 
+**完了（2026-08-29、同日中）**：`scripts/generate_extended_catalog.py`で
+`schema/tools_extended.json`（100ツール）を生成済み。既存ケース（`data/`配下
+14件、report/sales/masterに集中——正例12件中10件、accounting/purchaseは
+各1件、inventory/hrは0件）の分布をadvisor壁打ちで確認した上で、深掘り36
+（同一モジュールpaddingが実際に効くreport/sales/masterに厚く配分）＋
+新規2モジュール（production/project）24の内訳に決定（当初の
+「新規4モジュール31／深掘り29」案は、ケースが1件も無いモジュールへの
+深掘りも新規モジュール追加も"同一モジュールpadding非該当"という意味で
+機能的に同じという指摘を受けて撤回）。`tests/test_extended_catalog.py`で
+100件一意性・元40件の完全一致・新規モジュールがERPドメイン内・
+全ケースのvalidate_case_against_tools通過・stage 50/100でのbuild_tool_set
+非エラーを検証、`pytest tests/`で12件全通過。
+
+**未解消の1点（今回は対応しない、実行系実装時に効かせる）**：
+`build_tool_set`に拡張100ツール辞書を渡してstage=10を実行することを
+コード上で防ぐガードは無く、現状コメント規律のみに依存している。
+実行ランナー実装時にここへガードを入れること。
+
 **ON/OFFトグルとの決定的な違い**：並び順は正解性に影響しうる
 （position bias / "lost in the middle" 等の既知の現象）。ON/OFFは精度に
 影響しない前提を置けたが、`prompt_layout`はその前提を置けないため、
