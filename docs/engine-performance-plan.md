@@ -88,8 +88,8 @@ vLLMのcontinuous batchingを正しく評価できる設計**という方法論�
 成果物では「手法自体は20-30B級の本番規模にそのまま適用可能」と明記する。
 
 - **インスタンス**: g6.xlarge（NVIDIA L4, 22GB VRAM）、ap-northeast-1オンデマンド
-  **$1.167/hr**（2026-08-29 Web検索で確認、正式applyの前にAWS公式料金ページか
-  `aws pricing get-products`で再確認する）
+  **$1.1672/hr**（2026-08-29、WSL2側`aws pricing get-products`で一次情報確認済み。
+  SKU `ZEHXGXZKA86RDSNK`、価格改定日2026-08-01。Web検索での$1.167/hrとほぼ一致）
 - 8Bクラスなら4bit量子化で重み約5GB、L4 22GBならKVキャッシュ＋複数リクエスト分の
   バッチング余地も十分確保できる
 
@@ -322,8 +322,11 @@ Article2の拡張100ツールカタログは、これらに触れない**純粋�
    上述）。設計判断ではなくコンテンツ作成作業のため、別セッション/別タスクとして
    着手する（`schema/tools.json`とは別バージョン・別ファイルで管理し、既存40ツール
    版は変更しない）。既存ケースは無変更でそのまま流用するため、新規ケース作成は不要
-3. g6.xlargeのTokyo単価$1.167/hrはWeb検索での確認値。このWindowsシェルには
-   AWS CLIが無く（WSL2側のみ）今回は一次情報で裏取りできなかった。正式apply前に
-   AWS公式料金ページか`aws pricing get-products`（WSL2側）で再確認する
+3. ~~g6.xlargeのTokyo単価の一次情報確認~~ **完了（2026-08-29）**。`wsl.exe -d Ubuntu`
+   経由で`aws pricing get-products`を実行し、**$1.1672/hr**（SKU
+   `ZEHXGXZKA86RDSNK`、2026-08-01改定）を確認。Web検索値$1.167/hrとほぼ一致。
+   このWindowsシェル自体にAWS CLIは無いが、`wsl.exe -d Ubuntu -- bash -lc "..."`
+   経由でWSL2側のCLIを呼び出せることが判明（デフォルトディストロは
+   `docker-desktop`でbash/aws共に無し、`-d Ubuntu`で明示指定が必要）
 4. 各engine（transformers_hf/llama_cpp/vllm、任意でollama）の具体的な
    セットアップ手順・依存パッケージ・8Bモデルの具体的なチェックポイント選定
