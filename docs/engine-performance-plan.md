@@ -241,6 +241,63 @@ Article1の元ファイル・元ケース・5/10/20/40の4段階は一切変更�
 レイテンシに有意差が出ないことが期待される想定（「キャッシュ機構がなければ
 並び順を工夫しても速くならない」という対照点として機能する）。
 
+## モデルチェックポイントと各engineのセットアップ（2026-08-29決定）
+
+### モデルチェックポイント
+
+**`Qwen/Qwen3-8B`**（denseモデル、ネイティブでtool-calling対応）に決定。
+
+当初案のQwen2.5-7B-Instructはユーザー指摘（「もっと新しいモデルが存在すると思う」）を受けて
+Web検索で再検討した。2026-08-29時点でQwenはQwen3.5/Qwen3.8系列まで進んでいるが、これらは
+不採用：
+
+- **Qwen3.5-9B**：GGUFは公開されているが、**vLLMのGGUFローダーが`qwen35`アーキテクチャに
+  未対応**（[unsloth/Qwen3.5-35B-A3B-GGUF discussion #15](https://huggingface.co/unsloth/Qwen3.5-35B-A3B-GGUF/discussions/15)）。
+  この計画の核である「quantization形式をengine間で揃える、揃えられなければそのセルを除外する」
+  規律（[schema/run_manifest.schema.json](../schema/run_manifest.schema.json)の`quantization`）
+  にいきなり抵触するリスクがある
+- **Qwen3.8系列**：最小でも27B級（Qwen3.8-27B、[vLLM Blog 2026-08-12](https://vllm.ai/blog/2026-08-12-qwen3.8)）
+  で、8Bクラスに絞った予算判断（上述）と矛盾する
+
+Qwen3-8Bは、Qwen2.5より新しくtool-callingがネイティブ設計されている一方、GGUF/AWQ/safetensors
+の3形式ともエコシステムが成熟しており（[Qwen公式llama.cppガイド](https://qwen.readthedocs.io/en/latest/quantization/llama.cpp.html)、
+[Qwen公式vLLMガイド](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)）、この計画の
+比較可能性の規律と両立する。
+
+**dual-mode thinkingは`enable_thinking=False`で無効化する**（`/no_think`または
+`apply_chat_template(..., enable_thinking=False)`）。理由：(1) ツール選択ベンチマークが
+測りたいのは選択・引数抽出の精度であって推論過程の質ではない、(2) thinkingトークンが
+レイテンシ計測に無関係なノイズを乗せる。non-thinkingモード時の推奨サンプリング値
+（temperature=0.7, top_p=0.8, top_k=20, min_p=0）を`sampling_params`のベースラインにする。
+
+### engineごとのチェックポイント・quantization
+
+| engine | チェックポイント | quantization | 備考 |
+|---|---|---|---|
+| `transformers_hf` | `Qwen/Qwen3-8B` | `bf16-none` | ナイーブベースラインなので無量子化 |
+| `llama_cpp` | `Qwen/Qwen3-8B-GGUF`（または`unsloth/Qwen3-8B-GGUF`） | `gguf-q4_k_m` | |
+| `vllm` | `Qwen/Qwen3-8B-AWQ`（公式prequantized） | `awq-4bit` | |
+
+`transformers_hf`のみ無量子化（bf16）である点は「quantizationをengine間で揃える」規律に対する
+意図的な例外——ナイーブベースラインの定義上、量子化という最適化そのものを持たせない。
+`llama_cpp`と`vllm`の2本を4bit同士で比較するペアが、この計画の主目的（配信スタックの差分）
+に対する主たる比較軸になる。
+
+### 依存パッケージ・起動フラグ（Web検索で確認、実際のセットアップ時に再確認要）
+
+- **`transformers_hf`**: `transformers>=4.51.0`（Qwen3対応の最小版、[HF Transformers Qwen3 docs](https://huggingface.co/docs/transformers/model_doc/qwen3)）、`torch`（CUDA 12.x系）、`accelerate`
+- **`vllm`**: `vllm>=0.19.0`目安（[Qwen公式vLLMガイド](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)がQwen3.6向けに言及した数字を流用しており、Qwen3-8B向けの正確な下限は起動時に再確認する）、CUDA 12.8以上。
+  起動フラグに`--enable-auto-tool-choice --tool-call-parser hermes`が必要（Qwen系はHermes形式の
+  tool-calling出力のため）。prefix cachingはV1エンジンでデフォルトON（既述）
+- **`llama_cpp`**: `llama.cpp`をCUDA対応でビルド（L4向け）。**`--jinja`フラグが必須**——
+  これが無いとtools付きリクエストが`tools param requires --jinja flag`で拒否され、
+  agentic tool callingが機能しない（[llama.cpp server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)）。
+  `cache_prompt`は既定でtrueのためフラグ不要（既述）
+
+**再確認が必要な項目**：vLLMの正確なバージョン下限とtool-call-parser名（`hermes`）は
+Qwen3.6向けの情報から類推したもので、Qwen3-8B specificに検証できていない。実際の
+GPUインスタンス起動時に`vllm serve --help`と公式ドキュメントで確定させる。
+
 ## 実行計画の規律：フルグリッドを避ける
 
 model × engine × tool段階 × n の総当たりは組まない（既存の精度スイープだけで
@@ -312,21 +369,27 @@ Article2の拡張100ツールカタログは、これらに触れない**純粋�
 
 ## 残る未決定事項（実装着手前に解消する）
 
-1. **`eval_bench/repetition.py`の`aggregate_repeated`拡張**：
-   `arg_exact_mean`/`arg_semantic_mean`の集計が未実装（上述）。run manifestの
-   accuracy resultsを埋められるようにする、この層のコード変更で最初にやること
-2. **拡張ツールカタログの作成（40→100、60ツール追加）**：既存7モジュールの深掘り
-   ＋必要なら実在の大規模ERPにありそうな追加モジュール（生産管理・プロジェクト
-   管理等）。confusabilityの精緻な設計までは不要だが、機械的なプレースホルダーは
-   不可——実在感のある業務機能として作る（τ-bench等の外部precedentに基づく判断、
-   上述）。設計判断ではなくコンテンツ作成作業のため、別セッション/別タスクとして
-   着手する（`schema/tools.json`とは別バージョン・別ファイルで管理し、既存40ツール
-   版は変更しない）。既存ケースは無変更でそのまま流用するため、新規ケース作成は不要
-3. ~~g6.xlargeのTokyo単価の一次情報確認~~ **完了（2026-08-29）**。`wsl.exe -d Ubuntu`
+**2026-08-29時点で全4項目が解消済み**（詳細は各項目内のリンク先セクション参照）。
+次はいよいよ実行系（GPUインスタンスのTerraform、engineごとの起動スクリプト、
+run manifest出力）の実装に着手できる状態。
+
+1. ~~`eval_bench/repetition.py`の`aggregate_repeated`拡張~~ **完了**。
+   `arg_exact_mean`/`arg_semantic_mean`の集計を追加、`tests/test_repetition.py`に
+   検証テスト追加（コミット`3aa2689`）
+2. ~~拡張ツールカタログの作成（40→100、60ツール追加）~~ **完了**。
+   `scripts/generate_extended_catalog.py`→`schema/tools_extended.json`、
+   `tests/test_extended_catalog.py`で検証（コミット`ce51969`。配分の根拠は
+   上述「tool_stageの水準とツールカタログの設計」参照）
+3. ~~g6.xlargeのTokyo単価の一次情報確認~~ **完了**。`wsl.exe -d Ubuntu`
    経由で`aws pricing get-products`を実行し、**$1.1672/hr**（SKU
-   `ZEHXGXZKA86RDSNK`、2026-08-01改定）を確認。Web検索値$1.167/hrとほぼ一致。
-   このWindowsシェル自体にAWS CLIは無いが、`wsl.exe -d Ubuntu -- bash -lc "..."`
-   経由でWSL2側のCLIを呼び出せることが判明（デフォルトディストロは
-   `docker-desktop`でbash/aws共に無し、`-d Ubuntu`で明示指定が必要）
-4. 各engine（transformers_hf/llama_cpp/vllm、任意でollama）の具体的な
-   セットアップ手順・依存パッケージ・8Bモデルの具体的なチェックポイント選定
+   `ZEHXGXZKA86RDSNK`、2026-08-01改定）を確認。Web検索値$1.167/hrとほぼ一致
+   （コミット`c4f9ae5`）。このWindowsシェル自体にAWS CLIは無いが、
+   `wsl.exe -d Ubuntu -- bash -lc "..."`経由でWSL2側のCLIを呼び出せることが判明
+   （デフォルトディストロは`docker-desktop`でbash/aws共に無し、`-d Ubuntu`で
+   明示指定が必要）
+4. ~~各engineの具体的なセットアップ手順・依存パッケージ・8Bモデルの
+   チェックポイント選定~~ **完了**。上述「モデルチェックポイントと各engineの
+   セットアップ」参照。`Qwen/Qwen3-8B`を軸に、`transformers_hf`=bf16無量子化・
+   `llama_cpp`=GGUF Q4_K_M・`vllm`=AWQ 4bit(公式prequantized)で構成。
+   vLLMのバージョン下限とtool-call-parser名はQwen3.6向け情報からの類推のため、
+   実際のGPUインスタンス起動時に再確認が必要（上述の注記通り）
