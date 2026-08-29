@@ -5,8 +5,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval_bench.dataset.loader import load_cases
 from eval_bench.dataset.tools import load_tools
-from eval_bench.scorers.separated import Prediction
-from eval_bench.repetition import aggregate_repeated, bootstrap_ci, run_repeated_case
+from eval_bench.scorers.separated import CaseScore, Prediction
+from eval_bench.repetition import RepeatedCaseResult, aggregate_repeated, bootstrap_ci, run_repeated_case
 
 
 def _judge(exp, pred):  # trivial semantic judge, mirrors tests/test_smoke.py
@@ -77,6 +77,12 @@ def test_aggregate_and_bootstrap_ci_are_sane():
     assert agg["consistency"] == 1.0
     lo, hi = agg["selection_ci95"]
     assert 0.0 <= lo <= agg["selection_mean"] <= hi <= 1.0
+    # predict_always_correct feeds back every expected exact/semantic field,
+    # so both means should be perfect wherever they were applicable at all.
+    if agg["arg_exact_mean"] is not None:
+        assert agg["arg_exact_mean"] == 1.0
+    if agg["arg_semantic_mean"] is not None:
+        assert agg["arg_semantic_mean"] == 1.0
 
     lo2, hi2 = bootstrap_ci([1.0, 1.0, 1.0])
     assert lo2 == hi2 == 1.0
@@ -114,8 +120,42 @@ def test_bootstrap_ci_is_non_degenerate_for_mixed_accuracy():
     print("repetition ok")
 
 
+def _fake_result(case_id, arg_exact_vals, arg_semantic_vals):
+    trials = [
+        CaseScore(case_id=case_id, selection=True, arg_exact=ae, arg_semantic=asem, e2e=False)
+        for ae, asem in zip(arg_exact_vals, arg_semantic_vals)
+    ]
+    predictions = [Prediction(tool="t", args={}) for _ in trials]
+    return RepeatedCaseResult(case_id=case_id, stage_size=10, trials=trials, predictions=predictions)
+
+
+def test_arg_means_are_null_when_never_applicable():
+    """A stage/model where no case has scoreable exact/semantic fields must
+    report null, per run_manifest.schema.json's 'null iff no case had
+    scoreable fields' contract -- not 0.0 or NaN, which would misread as
+    'measured and failing'."""
+    results = [_fake_result("c1", [None, None], [None, None])]
+    agg = aggregate_repeated(results)
+    assert agg["arg_exact_mean"] is None
+    assert agg["arg_semantic_mean"] is None
+
+
+def test_arg_means_pool_only_applicable_trials():
+    # c1 has exact fields (3/4 correct across its trials), c2 has none (N/A).
+    # c2's None entries must not dilute c1's rate.
+    results = [
+        _fake_result("c1", [True, True, True, False], [None, None, None, None]),
+        _fake_result("c2", [None, None], [True, False]),
+    ]
+    agg = aggregate_repeated(results)
+    assert agg["arg_exact_mean"] == 0.75
+    assert agg["arg_semantic_mean"] == 0.5
+
+
 if __name__ == "__main__":
     test_order_insensitive_predictor_is_perfectly_consistent()
     test_order_sensitive_predictor_is_detected_as_inconsistent()
     test_aggregate_and_bootstrap_ci_are_sane()
     test_bootstrap_ci_is_non_degenerate_for_mixed_accuracy()
+    test_arg_means_are_null_when_never_applicable()
+    test_arg_means_pool_only_applicable_trials()

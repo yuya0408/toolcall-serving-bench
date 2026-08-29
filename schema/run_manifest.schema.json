@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/tool-call-bench/run_manifest.schema.json",
+  "title": "EngineRunManifest",
+  "description": "One (engine, model) cell's execution record for the engine-performance layer (docs/engine-performance-plan.md). Every accuracy or latency result row must carry one of these so a delta can be attributed to engine/quantization/sampling/hardware rather than left ambiguous. Accuracy and latency passes for the same cell are two separate manifests (separate runs), never one.",
+  "type": "object",
+  "required": ["run_id", "created_at", "pass_type", "cell", "hardware"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": { "type": "string", "description": "Unique per execution, e.g. ULID. Distinct from case id." },
+    "created_at": { "type": "string", "format": "date-time" },
+    "pass_type": {
+      "type": "string",
+      "enum": ["accuracy", "latency"],
+      "description": "Which pass produced this manifest. An accuracy sweep and a latency pass over the same cell are never the same run (eval_bench/repetition.py's n=5 shuffle sweep is itself a load generator and would corrupt its own timing numbers)."
+    },
+    "cell": {
+      "type": "object",
+      "required": ["engine", "engine_version", "model", "quantization", "sampling_params", "prompt_layout", "tool_catalog_version"],
+      "additionalProperties": false,
+      "properties": {
+        "engine": {
+          "type": "string",
+          "enum": ["transformers_hf", "llama_cpp", "vllm", "ollama"],
+          "description": "transformers_hf is the naive baseline (no serving-level batching). ollama is optional/deprioritized: it wraps llama_cpp's inference core, so engine deltas against llama_cpp may be near-null and must be reported as such, not hidden."
+        },
+        "engine_version": { "type": "string" },
+        "tool_catalog_version": {
+          "type": "string",
+          "description": "schema/tools.json's top-level 'version'. Determined by tool_stage, not by pass_type: tool_stage=10 must reference the original 40-tool catalog version (identical to Article 1's), tool_stage=50/100 must reference the extended 100-tool catalog version (40 original + 60 filler added for this layer). Never compare results across different catalog versions at the same nominal stage -- the tool sets, and therefore selection difficulty, differ."
+        },
+        "model": { "type": "string", "description": "8B-class model id/name, pinned to a specific checkpoint (see docs/engine-performance-plan.md's model-size decision)." },
+        "quantization": { "type": "string", "description": "e.g. 'gguf-q4_k_m', 'awq-4bit', 'fp16-none'. Must be held equivalent across engines being compared in the same cell pair; if an engine can't match, exclude that cell rather than silently adjusting." },
+        "sampling_params": {
+          "type": "object",
+          "required": ["temperature", "top_p", "max_tokens", "seed"],
+          "additionalProperties": true,
+          "properties": {
+            "temperature": { "type": "number" },
+            "top_p": { "type": "number" },
+            "max_tokens": { "type": "integer" },
+            "seed": { "type": ["integer", "null"] }
+          }
+        },
+        "tool_stage": {
+          "type": "integer",
+          "enum": [10, 50, 100],
+          "description": "Shared by both accuracy and latency pass_type: [10, 50, 100] (see docs/engine-performance-plan.md). Stage 10 uses ONLY the original 40-tool catalog (schema/tools.json) -- same tools dict Article 1 uses, so results overlay Article 1's own stage=10 numbers exactly. Stages 50/100 use the extended 100-tool catalog (original 40 + 60 added for this layer, same ERP domain, same module structure -- deepened existing modules and/or plausible additional ERP modules, e.g. production/project management; not confusability-engineered like the original 40, but must be genuinely plausible business tools, not generic placeholders, per external precedent (tau-bench, BFCL, ToolBench all scale within a coherent domain rather than mixing unrelated ones) -- obviously-synthetic filler risks teaching the model an 'ignore oddly-named tools' shortcut that would distort the very large-catalog effect this stage is meant to measure). Passing the extended dict for a stage=10 run would change the padding candidate pool and break the Article-1-overlay property -- must not be done."
+        },
+        "prompt_layout": {
+          "type": "string",
+          "enum": ["stable_first", "query_first"],
+          "description": "Ordering of the stable prefix (system prompt + tool schema + few-shot) versus the variable query within the prompt. stable_first (query last) maximizes prefix-cache hit rate under each engine's default-on caching (vLLM V1 and llama.cpp server's cache_prompt are both enabled by default -- an ON/OFF toggle was rejected as unrealistic, see docs/engine-performance-plan.md). query_first breaks the cache for everything after the query since prefix caching matches from the start of the sequence. Unlike a pure cache toggle, this CAN affect correctness (position bias / lost-in-the-middle), so it is required in both accuracy and latency manifests, not latency-only. transformers_hf has no serving-level cache, so its latency should be ~layout-invariant -- that null result is itself the control point."
+        },
+        "concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Number of requests fired concurrently for a latency pass. 1 = serialized (the attribution-safe default). >1 is only meaningful for engines with request-level batching (vllm; possibly ollama/llama_cpp/transformers_hf naively queue instead) and must be reported as its own result, not averaged into the serialized number."
+        }
+      }
+    },
+    "hardware": {
+      "type": "object",
+      "required": ["instance_type", "gpu", "vram_gb", "region"],
+      "additionalProperties": false,
+      "properties": {
+        "instance_type": { "type": "string", "description": "e.g. 'g6.xlarge'. Fixed across all cells in this plan so hardware is never a confound -- see docs/engine-performance-plan.md." },
+        "gpu": { "type": "string" },
+        "vram_gb": { "type": "number" },
+        "region": { "type": "string" }
+      }
+    },
+    "repetition": {
+      "type": "object",
+      "description": "Required when pass_type == accuracy; mirrors eval_bench.repetition.aggregate_repeated's shape.",
+      "required": ["n", "seed_base"],
+      "additionalProperties": false,
+      "properties": {
+        "n": { "type": "integer", "minimum": 2 },
+        "seed_base": { "type": "integer" }
+      }
+    },
+    "results": {
+      "type": "object",
+      "description": "Shape depends on pass_type; see the allOf below."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "pass_type": { "const": "accuracy" } } },
+      "then": {
+        "required": ["repetition"],
+        "properties": {
+          "cell": { "required": ["tool_stage"] },
+          "results": {
+            "type": "object",
+            "required": ["stage_size", "n_cases", "n_trials_per_case", "selection_mean", "selection_ci95", "arg_exact_mean", "arg_semantic_mean", "consistency"],
+            "additionalProperties": false,
+            "properties": {
+              "stage_size": { "type": "integer" },
+              "n_cases": { "type": "integer" },
+              "n_trials_per_case": { "type": "integer" },
+              "selection_mean": { "type": "number" },
+              "selection_ci95": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+              "arg_exact_mean": { "type": ["number", "null"], "description": "Null iff no case in this stage/model had exact-scored fields to evaluate. Computed by eval_bench.repetition.aggregate_repeated, pooled over only the trials where the metric was applicable (selection succeeded on a positive case with scoreable fields of this kind)." },
+              "arg_semantic_mean": { "type": ["number", "null"] },
+              "consistency": { "type": "number" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "query_first is an ablation, not the accuracy baseline: docs/engine-performance-plan.md scopes it to the largest tool_stage only, to keep the layout axis one-factor-at-a-time instead of tripling the full accuracy sweep.",
+      "if": {
+        "properties": {
+          "pass_type": { "const": "accuracy" },
+          "cell": { "properties": { "prompt_layout": { "const": "query_first" } } }
+        },
+        "required": ["cell"]
+      },
+      "then": { "properties": { "cell": { "properties": { "tool_stage": { "const": 100 } } } } }
+    },
+    {
+      "if": { "properties": { "pass_type": { "const": "latency" } } },
+      "then": {
+        "properties": {
+          "cell": { "required": ["concurrency", "tool_stage"] },
+          "results": {
+            "type": "object",
+            "required": ["warmup_excluded", "n_requests", "ttft_ms", "total_latency_ms", "tokens_per_sec"],
+            "additionalProperties": false,
+            "properties": {
+              "warmup_excluded": { "type": "boolean", "const": true, "description": "Warmup requests must always be excluded from reported percentiles." },
+              "n_requests": { "type": "integer" },
+              "ttft_ms": { "$ref": "#/$defs/percentiles" },
+              "total_latency_ms": { "$ref": "#/$defs/percentiles" },
+              "tokens_per_sec": { "$ref": "#/$defs/percentiles" }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "percentiles": {
+      "type": "object",
+      "required": ["p50", "p95", "p99"],
+      "additionalProperties": false,
+      "properties": {
+        "p50": { "type": "number" },
+        "p95": { "type": "number" },
+        "p99": { "type": "number" }
+      }
+    }
+  }
+}

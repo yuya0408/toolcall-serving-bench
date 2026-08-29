@@ -18,7 +18,7 @@ CI needs -- no extra model calls.
 from __future__ import annotations
 import random
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 from eval_bench.dataset.toolsets import build_tool_set
 from eval_bench.scorers.separated import CaseScore, Prediction, SemanticJudge, score_case
@@ -152,17 +152,34 @@ def _cluster_bootstrap_selection_ci(
     return (means[lo_idx], means[hi_idx])
 
 
+def _applicable_mean(values: list[Optional[bool]]) -> Optional[float]:
+    """Mean over the trials where the metric was applicable (non-None),
+    or None if it was never applicable -- matches the run manifest schema's
+    'null iff no case had scoreable fields' contract for arg_exact/arg_semantic.
+    """
+    applicable = [1.0 if v else 0.0 for v in values if v is not None]
+    if not applicable:
+        return None
+    return sum(applicable) / len(applicable)
+
+
 def aggregate_repeated(results: list[RepeatedCaseResult]) -> dict[str, Any]:
     """Aggregate across cases at one stage size: mean + cluster-bootstrap CI
-    for selection, plus the case-level consistency rate.
+    for selection, arg_exact/arg_semantic means, plus the case-level
+    consistency rate.
 
     Metrics are pooled across all (case x trial) pairs -- this is the
-    tool-count/degradation number. Consistency is computed per case (it is
-    only meaningful within a case, across its own trials) and then averaged.
+    tool-count/degradation number. arg_exact/arg_semantic are averaged only
+    over trials where they were applicable (selection succeeded on a
+    positive case and the case has scoreable fields of that kind); see
+    CaseScore/score_case in scorers/separated.py. Consistency is computed
+    per case (it is only meaningful within a case, across its own trials)
+    and then averaged.
     """
     if not results:
         return {"stage_size": None, "n_cases": 0, "n_trials_per_case": 0,
                 "selection_mean": float("nan"), "selection_ci95": (float("nan"), float("nan")),
+                "arg_exact_mean": None, "arg_semantic_mean": None,
                 "consistency": float("nan")}
 
     all_trials = [s for r in results for s in r.trials]
@@ -175,5 +192,7 @@ def aggregate_repeated(results: list[RepeatedCaseResult]) -> dict[str, Any]:
         "n_trials_per_case": len(results[0].trials),
         "selection_mean": sum(selection_vals) / len(selection_vals),
         "selection_ci95": _cluster_bootstrap_selection_ci(results),
+        "arg_exact_mean": _applicable_mean([s.arg_exact for s in all_trials]),
+        "arg_semantic_mean": _applicable_mean([s.arg_semantic for s in all_trials]),
         "consistency": sum(consistency_vals) / len(consistency_vals),
     }
