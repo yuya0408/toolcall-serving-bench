@@ -90,8 +90,11 @@ vLLMのcontinuous batchingを正しく評価できる設計**という方法論�
 - **インスタンス**: g6.xlarge（NVIDIA L4, 22GB VRAM）、ap-northeast-1オンデマンド
   **$1.1672/hr**（2026-08-29、WSL2側`aws pricing get-products`で一次情報確認済み。
   SKU `ZEHXGXZKA86RDSNK`、価格改定日2026-08-01。Web検索での$1.167/hrとほぼ一致）
-- 8Bクラスなら4bit量子化で重み約5GB、L4 22GBならKVキャッシュ＋複数リクエスト分の
-  バッチング余地も十分確保できる
+- **VRAM試算（2026-08-30改訂、レイヤー1がbf16基準になったため）**：8Bクラスbf16で重み約16GB、
+  L4 22GBだと残り約5-6GBがKVキャッシュ＋バッチング余地。ラフ計算（GQA前提、tool_stage=100の
+  長いプロンプトを想定）では同時実行数十程度までは収まりそうだが、実際のトークン数依存なので
+  GPUインスタンス起動時に要検証（収まらない場合はモデルクラスを3-4Bに落とすことも検討）。
+  レイヤー2（vLLM単体、AWQ 4bit）はこの制約が緩む
 
 ## 比較可能性の規律
 
@@ -101,6 +104,17 @@ vLLMのcontinuous batchingを正しく評価できる設計**という方法論�
 
 - quantization形式・サンプリングパラメータをセル単位で明示的に固定する
 - 揃えられないengineが出た場合は、こっそり調整せずそのセルを除外する
+- **chat templateはharness側では使わない（2026-08-30追加）**：`transformers_hf`の
+  `apply_chat_template`、vLLMのchat補完エンドポイント、`llama_cpp` serverのテンプレート処理は
+  それぞれ実装が異なり、空白1文字の差でもprefix cachingのヒット判定（先頭からの完全一致）に
+  影響する。`prompt_layout`（`stable_first`/`query_first`）を軸にしている以上、テンプレートが
+  勝手に文字列を組み替えると並び順の制御自体が効かなくなる。そのため**harness側でプロンプト
+  文字列を直接組み立て、3engineとも生の補完エンドポイント**（vLLM `/v1/completions`、
+  `llama_cpp` `/completion`、`transformers_hf`は直接`generate`）**を叩く**。既存の
+  「Adapterが出力を整形しない」方針（`eval_bench/adapters/base.py`）とも整合する
+- **`engine_version`はコミットハッシュ単位で固定する（2026-08-30追加）**：特に`llama_cpp`は
+  バージョンタグの粒度が粗く、カーネル・量子化まわりの挙動がコミット間で変わりうるため、
+  run manifestの`engine_version`にはビルド元のコミットハッシュを記録する
 - **結果JSONに run manifest を必ず持たせる**：スキーマを
   [`schema/run_manifest.schema.json`](../schema/run_manifest.schema.json) として確定済み。
   `cell`（engine/engine_version/model/quantization/sampling_params/tool_stage/
@@ -122,6 +136,11 @@ n=5 × 4段階の精度スイープ自体が負荷生成源になり、レイテ
 （ウォームアップ・並行実行・熱の影響）。そのため：
 
 - 精度パスとレイテンシパスは同じセルに対する**別々の実行**として設計する
+- **精度パスは全engine`concurrency=1`（直列）固定とする（2026-08-30明記）**：
+  `vllm`のcontinuous batchingはバッチ構成次第で数値がわずかに変わりうるため、精度パスで
+  並行リクエストを許すと`consistency`（`RepeatedCaseResult.consistent`のunanimity判定）の
+  差が「engineの違い」ではなく「バッチ構成というノイズ」由来になってしまう。`concurrency>1`は
+  レイテンシパス専用の軸として扱う
 - レイテンシパスはウォームアップを除外し、まず`concurrency=1`（直列）で
   帰属可能な素の値を取る。`concurrency>1`（同時リクエスト）は別結果として
   追加測定し、直列の値と混ぜて平均しない
@@ -270,29 +289,60 @@ Qwen3-8Bは、Qwen2.5より新しくtool-callingがネイティブ設計され�
 レイテンシ計測に無関係なノイズを乗せる。non-thinkingモード時の推奨サンプリング値
 （temperature=0.7, top_p=0.8, top_k=20, min_p=0）を`sampling_params`のベースラインにする。
 
-### engineごとのチェックポイント・quantization
+### レイヤー構成（2026-08-30改訂）— quantization比較可能性のため2層に分離
 
-| engine | チェックポイント | quantization | 備考 |
-|---|---|---|---|
-| `transformers_hf` | `Qwen/Qwen3-8B` | `bf16-none` | ナイーブベースラインなので無量子化 |
-| `llama_cpp` | `Qwen/Qwen3-8B-GGUF`（または`unsloth/Qwen3-8B-GGUF`） | `gguf-q4_k_m` | |
-| `vllm` | `Qwen/Qwen3-8B-AWQ`（公式prequantized） | `awq-4bit` | |
+当初「`llama_cpp`と`vllm`を4bit同士で比較する」としていたが、GGUF Q4_K_MとAWQ 4bitは
+**別アルゴリズムで数値も別物**であり、この2つの精度差・速度差が「engineの違い」によるものか
+「量子化アルゴリズムの違い」によるものか区別できない、という指摘（ユーザー+advisor、
+2026-08-30）を受けて2層構成に変更する。
 
-`transformers_hf`のみ無量子化（bf16）である点は「quantizationをengine間で揃える」規律に対する
-意図的な例外——ナイーブベースラインの定義上、量子化という最適化そのものを持たせない。
-`llama_cpp`と`vllm`の2本を4bit同士で比較するペアが、この計画の主目的（配信スタックの差分）
-に対する主たる比較軸になる。
+- **レイヤー1（engine比較、主軸）**：3engineとも**bf16無量子化**で統一。同一の重みを
+  読ませることで、観測される精度差・速度差を「サービングエンジンの実装差」だけに帰属できる
+- **レイヤー2（quantization探索、vLLM単体）**：`vllm`のみに絞り、bf16 vs 公式AWQ 4bitを比較。
+  比較対象がvLLM単体（engineを跨がない）なので、「quantizationをengine間で揃える」規律の
+  対象外になる。この計画の主目的（本番想定の配信スタックが量子化でどう変わるか）はここで示す
+
+### engineごとのチェックポイント・quantization（改訂）
+
+| レイヤー | engine | チェックポイント | quantization | 備考 |
+|---|---|---|---|---|
+| 1 | `transformers_hf` | `Qwen/Qwen3-8B` | `bf16-none` | |
+| 1 | `llama_cpp` | `Qwen/Qwen3-8B`から自前変換（後述） | `gguf-bf16` | 量子化ではなくGGUFへの詰め替えのみ |
+| 1 | `vllm` | `Qwen/Qwen3-8B` | `bf16-none` | quantized checkpointではなく素のsafetensorsを直接ロード |
+| 2 | `vllm` | `Qwen/Qwen3-8B-AWQ`（公式prequantized） | `awq-4bit` | レイヤー1のvLLM bf16結果との対比。engine間比較ではない |
+
+当初案の`llama_cpp`のQ4_K_Mはレイヤー1から外した。`llama_cpp`単体でbf16 vs Q4_K_Mを比較する
+第3のレイヤーとして将来追加する余地はあるが、今回のスコープでは扱わない。
+
+### llama_cppのBF16 GGUF変換手順（自前変換、2026-08-30追加）
+
+第三者配布のGGUF（`unsloth/Qwen3-8B-GGUF`等）は使わず、`transformers_hf`/`vllm`に渡すのと
+**同じ`Qwen/Qwen3-8B`のsafetensorsから自前で変換**する。配布元のツール・バージョン・設定が
+不明なGGUFだと、重みが本当に同一である保証がなく、帰属可能性が損なわれるため。
+
+```
+Qwen/Qwen3-8B (safetensors, bf16)
+  │ llama.cppリポジトリ同梱の convert_hf_to_gguf.py --outtype bf16
+  │   （量子化ではなく、GGUFフォーマットへの詰め替えのみ。数値劣化なし）
+  ▼
+Qwen3-8B-bf16.gguf   ← レイヤー1で使用
+```
+
+真の量子化（4bit圧縮）が将来必要になった場合は、このBF16 GGUFを起点に`llama-quantize`で
+追加変換する（今回のスコープ外）。
 
 ### 依存パッケージ・起動フラグ（Web検索で確認、実際のセットアップ時に再確認要）
 
 - **`transformers_hf`**: `transformers>=4.51.0`（Qwen3対応の最小版、[HF Transformers Qwen3 docs](https://huggingface.co/docs/transformers/model_doc/qwen3)）、`torch`（CUDA 12.x系）、`accelerate`
-- **`vllm`**: `vllm>=0.19.0`目安（[Qwen公式vLLMガイド](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)がQwen3.6向けに言及した数字を流用しており、Qwen3-8B向けの正確な下限は起動時に再確認する）、CUDA 12.8以上。
+- **`vllm`**: レイヤー1は`Qwen/Qwen3-8B`（bf16）、レイヤー2は`Qwen/Qwen3-8B-AWQ`に切り替えるのみで
+  起動フラグは共通。`vllm>=0.19.0`目安（[Qwen公式vLLMガイド](https://qwen.readthedocs.io/en/latest/deployment/vllm.html)がQwen3.6向けに言及した数字を流用しており、Qwen3-8B向けの正確な下限は起動時に再確認する）、CUDA 12.8以上。
   起動フラグに`--enable-auto-tool-choice --tool-call-parser hermes`が必要（Qwen系はHermes形式の
   tool-calling出力のため）。prefix cachingはV1エンジンでデフォルトON（既述）
 - **`llama_cpp`**: `llama.cpp`をCUDA対応でビルド（L4向け）。**`--jinja`フラグが必須**——
   これが無いとtools付きリクエストが`tools param requires --jinja flag`で拒否され、
   agentic tool callingが機能しない（[llama.cpp server README](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)）。
-  `cache_prompt`は既定でtrueのためフラグ不要（既述）
+  `cache_prompt`は既定でtrueのためフラグ不要（既述）。加えて`convert_hf_to_gguf.py`実行用に
+  `llama.cpp`リポジトリのPython依存（`requirements/requirements-convert_hf_to_gguf.txt`）が必要
 
 **再確認が必要な項目**：vLLMの正確なバージョン下限とtool-call-parser名（`hermes`）は
 Qwen3.6向けの情報から類推したもので、Qwen3-8B specificに検証できていない。実際の
@@ -366,6 +416,15 @@ Article2の拡張100ツールカタログは、これらに触れない**純粋�
   構成し、Article1のstage=10と完全に同一の値になる（唯一残るオーバーレイ比較点）。
   段階50/100は既存40＋新規60（ERP同一ドメインの追加業務機能、近縁機能設計までは
   求めないが実在感は担保）の拡張100ツールカタログでpaddingする
+- **quantizationはレイヤー1（3engine bf16比較）とレイヤー2（vLLM単体、bf16 vs AWQ 4bit）に
+  分離（2026-08-30）**：GGUF Q4_K_MとAWQ 4bitを異なるengine間で直接比較すると、差分が
+  「engineの違い」か「量子化アルゴリズムの違い」か区別できないため。`llama_cpp`はレイヤー1で
+  無量子化のBF16 GGUFを自前変換して使う（詳細は上述セクション参照）
+- **harnessはchat APIを使わない（2026-08-30）**：3engineのchat template実装差がprefix
+  caching・`prompt_layout`比較を汚染するため、harness側でプロンプト文字列を組み立て、
+  3engineとも生の補完エンドポイントを叩く
+- **精度パスは全engine`concurrency=1`固定（2026-08-30）**：vLLMのcontinuous batchingが
+  `consistency`指標にノイズを持ち込むのを避けるため
 
 ## 残る未決定事項（実装着手前に解消する）
 
