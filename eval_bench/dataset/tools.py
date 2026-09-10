@@ -28,25 +28,48 @@ def scoring_split(tool: dict[str, Any]) -> tuple[set[str], set[str]]:
     return exact, semantic
 
 
-def to_openai_tools(tools: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """Render tool definitions in the common 'tools' array shape for adapters.
+def _to_openai_tool(t: dict[str, Any]) -> dict[str, Any]:
+    """Render one tool definition in the OpenAI 'tools' array entry shape.
     x-scoring is stripped: it is harness metadata, not something the model sees.
     """
-    out = []
-    for t in tools.values():
-        props = {
-            k: {kk: vv for kk, vv in v.items() if not kk.startswith("x-")}
-            for k, v in t["parameters"]["properties"].items()
-        }
-        out.append({
-            "type": "function",
-            "function": {
-                "name": t["name"],
-                "description": t["description"],
-                "parameters": {**t["parameters"], "properties": props},
-            },
-        })
-    return out
+    props = {
+        k: {kk: vv for kk, vv in v.items() if not kk.startswith("x-")}
+        for k, v in t["parameters"]["properties"].items()
+    }
+    return {
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": {**t["parameters"], "properties": props},
+        },
+    }
+
+
+def to_openai_tools(tools: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """Render every tool in `tools`, in the dict's own (catalog) order.
+
+    Only useful when the whole catalog should be presented as-is. A trial
+    that presents a stage-sized, shuffled subset (eval_bench/repetition.py's
+    build_tool_set output) must use to_openai_tools_subset instead --
+    iterating tools.values() here would silently discard both the subset
+    and the shuffle, which is the entire point of that experiment.
+    """
+    return [_to_openai_tool(t) for t in tools.values()]
+
+
+def to_openai_tools_subset(tools: dict[str, dict[str, Any]],
+                           names: list[str]) -> list[dict[str, Any]]:
+    """Render only `names`, in that exact order.
+
+    This is the variant a trial must use: build_tool_set returns a shuffled,
+    stage-sized subset of tool names, and the model-facing tool array has to
+    preserve that order (it's what run_repeated_case's consistency measure
+    and the prompt_layout/prefix-caching axis both depend on) and that
+    subset (an unfiltered to_openai_tools call would leak every tool in the
+    catalog into every trial, defeating the tool-count experiment).
+    """
+    return [_to_openai_tool(tools[name]) for name in names]
 
 
 def validate_case_against_tools(case: dict[str, Any], tools: dict[str, dict[str, Any]]) -> None:

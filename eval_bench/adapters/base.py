@@ -36,7 +36,10 @@ class ModelAdapter(ABC):
 
 
 class EchoAdapter(ModelAdapter):
-    """Placeholder adapter for wiring/tests. Replace with real backends."""
+    """Stub adapter kept for wiring/tests -- README advertises stub-testability
+    as a feature (repetition.py's PredictFn can be exercised with no backend
+    at all). Real backends live alongside it: openai_compatible.py
+    (vllm/llama_cpp) and transformers_hf.py."""
     name = "echo-stub"
 
     def generate(self, query, tool_set) -> str:

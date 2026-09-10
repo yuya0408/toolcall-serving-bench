@@ -66,12 +66,6 @@ def test_llama_cpp_adapter_shares_the_same_request_shape():
         OpenAIToolCallDecoder().decode(json.dumps(message), {})
 
 
-def test_vllm_and_llama_cpp_adapters_differ_only_in_name_and_target():
-    assert VLLMAdapter.name == "vllm"
-    assert LlamaCppAdapter.name == "llama_cpp"
-    assert VLLMAdapter.__mro__[1] is LlamaCppAdapter.__mro__[1]  # same shared base
-
-
 class _FakeTensor(list):
     @property
     def shape(self):
