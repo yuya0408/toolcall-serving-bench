@@ -3,10 +3,20 @@ inconsistency, order-insensitivity does not, and the aggregate is sane."""
 import pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+import pytest
+
 from eval_bench.dataset.loader import load_cases
 from eval_bench.dataset.tools import load_tools
 from eval_bench.scorers.separated import CaseScore, Prediction
-from eval_bench.repetition import RepeatedCaseResult, aggregate_repeated, bootstrap_ci, run_repeated_case
+from eval_bench.repetition import (
+    RepeatedCaseResult,
+    aggregate_repeated,
+    bootstrap_ci,
+    equivalence_verdict,
+    half_width,
+    run_repeated_case,
+)
+from eval_bench.repetition import _paired_cluster_bootstrap_diff_ci
 
 
 def _judge(exp, pred):  # trivial semantic judge, mirrors tests/test_smoke.py
@@ -152,6 +162,62 @@ def test_arg_means_pool_only_applicable_trials():
     assert agg["arg_semantic_mean"] == 0.5
 
 
+def _fake_selection_result(case_id, selection_vals):
+    trials = [
+        CaseScore(case_id=case_id, selection=sel, arg_exact=None, arg_semantic=None, e2e=False)
+        for sel in selection_vals
+    ]
+    predictions = [Prediction(tool="t" if sel else None, args={}) for sel in selection_vals]
+    return RepeatedCaseResult(case_id=case_id, stage_size=10, trials=trials, predictions=predictions)
+
+
+def test_paired_diff_ci_rejects_mismatched_case_count():
+    baseline = [_fake_selection_result("c1", [True, True])]
+    loaded = [_fake_selection_result("c1", [True, True]), _fake_selection_result("c2", [True, True])]
+    try:
+        _paired_cluster_bootstrap_diff_ci(baseline, loaded)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_paired_diff_ci_rejects_mismatched_case_order():
+    baseline = [_fake_selection_result("c1", [True, True])]
+    loaded = [_fake_selection_result("c2", [True, True])]
+    try:
+        _paired_cluster_bootstrap_diff_ci(baseline, loaded)
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_paired_diff_ci_is_exactly_zero_when_conditions_are_identical():
+    # Same underlying results in both arms: every paired resample must
+    # produce a difference of exactly 0, so the CI collapses to a point.
+    results = [_fake_selection_result(f"c{i}", [True, True, False, True, True]) for i in range(14)]
+    lo, hi = _paired_cluster_bootstrap_diff_ci(results, results)
+    assert lo == hi == 0.0
+
+
+def test_paired_diff_ci_detects_a_real_degradation():
+    baseline = [_fake_selection_result(f"c{i}", [True] * 5) for i in range(14)]
+    loaded = [_fake_selection_result(f"c{i}", [False] * 5) for i in range(14)]
+    lo, hi = _paired_cluster_bootstrap_diff_ci(baseline, loaded)
+    assert lo == hi == -1.0  # loaded always wrong, baseline always right -> diff is always -1
+
+
+def test_half_width():
+    assert half_width((0.3, 0.7)) == pytest.approx(0.2)
+
+
+def test_equivalence_verdict_three_way():
+    assert equivalence_verdict((-0.05, 0.05), margin=0.1) == "equivalent"
+    assert equivalence_verdict((0.2, 0.3), margin=0.1) == "not_equivalent"
+    assert equivalence_verdict((-0.3, -0.2), margin=0.1) == "not_equivalent"
+    assert equivalence_verdict((-0.05, 0.15), margin=0.1) == "inconclusive"
+    assert equivalence_verdict((-0.15, 0.05), margin=0.1) == "inconclusive"
+
+
 if __name__ == "__main__":
     test_order_insensitive_predictor_is_perfectly_consistent()
     test_order_sensitive_predictor_is_detected_as_inconsistent()
@@ -159,3 +225,9 @@ if __name__ == "__main__":
     test_bootstrap_ci_is_non_degenerate_for_mixed_accuracy()
     test_arg_means_are_null_when_never_applicable()
     test_arg_means_pool_only_applicable_trials()
+    test_paired_diff_ci_rejects_mismatched_case_count()
+    test_paired_diff_ci_rejects_mismatched_case_order()
+    test_paired_diff_ci_is_exactly_zero_when_conditions_are_identical()
+    test_paired_diff_ci_detects_a_real_degradation()
+    test_half_width()
+    test_equivalence_verdict_three_way()

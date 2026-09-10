@@ -152,6 +152,94 @@ def _cluster_bootstrap_selection_ci(
     return (means[lo_idx], means[hi_idx])
 
 
+def _paired_cluster_bootstrap_diff_ci(
+    baseline: list[RepeatedCaseResult],
+    loaded: list[RepeatedCaseResult],
+    n_resamples: int = 2000,
+    alpha: float = 0.05,
+    seed: int = 0,
+) -> tuple[float, float]:
+    """Bootstrap CI for the *paired difference* in pooled selection rate
+    between two conditions measured over the same case set (e.g. the
+    accuracy_under_load probe's concurrency=1 baseline vs. concurrency=16;
+    see docs/engine-performance-plan.md's equivalence-margin section).
+
+    Resamples case INDICES once per iteration and reuses that same index set
+    for both `baseline` and `loaded` -- referencing both conditions from a
+    single bootstrap draw is what makes this "paired" rather than two
+    independent CIs whose overlap gets eyeballed, the mistake that section
+    calls out by name (the same one vlm-vs-yolo's default-threshold critique
+    was about). `baseline[i]` and `loaded[i]` must be the same case in the
+    same order; this is checked, not re-derived from case_id.
+    """
+    if len(baseline) != len(loaded):
+        raise ValueError(
+            f"baseline has {len(baseline)} cases, loaded has {len(loaded)}: "
+            "paired resampling requires the same case set, same order"
+        )
+    if not baseline:
+        return (float("nan"), float("nan"))
+    mismatched = [(b.case_id, l.case_id) for b, l in zip(baseline, loaded) if b.case_id != l.case_id]
+    if mismatched:
+        raise ValueError(f"baseline/loaded case order mismatch, e.g. {mismatched[0]}")
+
+    rng = random.Random(seed)
+    n = len(baseline)
+    diffs = []
+    for _ in range(n_resamples):
+        idx = [rng.randrange(n) for _ in range(n)]
+        base_vals = [1.0 if s.selection else 0.0 for i in idx for s in baseline[i].trials]
+        load_vals = [1.0 if s.selection else 0.0 for i in idx for s in loaded[i].trials]
+        diffs.append(sum(load_vals) / len(load_vals) - sum(base_vals) / len(base_vals))
+    diffs.sort()
+    lo_idx = int((alpha / 2) * n_resamples)
+    hi_idx = min(int((1 - alpha / 2) * n_resamples), n_resamples - 1)
+    return (diffs[lo_idx], diffs[hi_idx])
+
+
+def half_width(ci: tuple[float, float]) -> float:
+    """(hi - lo) / 2 -- the equivalence margin X is defined as this applied
+    to the serialized baseline's own selection_ci95, per
+    docs/engine-performance-plan.md (2026-09-11: corrected from full width,
+    which had silently doubled the margin relative to the doc's own '±X pt'
+    framing).
+    """
+    lo, hi = ci
+    return (hi - lo) / 2
+
+
+def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
+    """Classify a paired difference CI (from _paired_cluster_bootstrap_diff_ci)
+    against equivalence margin X, TOST-style: the entire CI must sit inside
+    (-margin, +margin) to call the two conditions equivalent -- not just the
+    point estimate (docs/engine-performance-plan.md's option (a), chosen
+    2026-09-11 specifically to avoid the weaker, direction-blind version
+    where a wide, uncertain difference could pass just because its center
+    happened to be small).
+
+    Three outcomes, not two, because with a small case count (e.g. this
+    project's n=14) "not equivalent" and "not detected" are genuinely
+    different claims:
+      - "equivalent":     the whole CI fits inside (-margin, +margin).
+      - "not_equivalent": the whole CI is outside (-margin, +margin), in
+                           either direction -- confidently more different
+                           than the shuffle-order noise floor already is.
+      - "inconclusive":   the CI straddles a margin boundary. Cannot rule
+                           out a difference bigger than margin, but cannot
+                           confirm one either. This is an expected, legitimate,
+                           reportable outcome at n=14 (confirmed with the user
+                           2026-09-11) -- it is not license to loosen margin
+                           after seeing the data; the margin was pre-declared
+                           as a rule, not a number, for exactly this reason.
+    """
+    lo, hi = diff_ci
+    if lo >= -margin and hi <= margin:
+        return "equivalent"
+    if lo > margin or hi < -margin:
+        return "not_equivalent"
+    return "inconclusive"
+
+
 def _applicable_mean(values: list[Optional[bool]]) -> Optional[float]:
     """Mean over the trials where the metric was applicable (non-None),
     or None if it was never applicable -- matches the run manifest schema's
