@@ -50,7 +50,7 @@
         "prompt_layout": {
           "type": "string",
           "enum": ["stable_first", "query_first"],
-          "description": "Ordering of the stable prefix (system prompt + tool schema + few-shot) versus the variable query within the prompt. stable_first (query last) maximizes prefix-cache hit rate under each engine's default-on caching (vLLM V1 and llama.cpp server's cache_prompt are both enabled by default -- an ON/OFF toggle was rejected as unrealistic, see docs/engine-performance-plan.md). query_first breaks the cache for everything after the query since prefix caching matches from the start of the sequence. Unlike a pure cache toggle, this CAN affect correctness (position bias / lost-in-the-middle), so it is required in both accuracy and latency manifests, not latency-only. transformers_hf has no serving-level cache, so its latency should be ~layout-invariant -- that null result is itself the control point."
+          "description": "Ordering of the stable prefix (system prompt + tool schema + few-shot) versus the variable query within the prompt. stable_first (query last) maximizes prefix-cache hit rate under each engine's default-on caching (vLLM V1 and llama.cpp server's cache_prompt are both enabled by default -- an ON/OFF toggle was rejected as unrealistic, see docs/engine-performance-plan.md). query_first breaks the cache for everything after the query since prefix caching matches from the start of the sequence. Unlike a pure cache toggle, this CAN affect correctness (position bias / lost-in-the-middle). 2026-09-10: the harness switched from raw completion endpoints to each engine's chat/tools API (see docs/engine-performance-plan.md's '比較可能性の規律' section) -- chat templates render system(tools)-then-user(query) by structural contract, so query_first can no longer be produced and is out of scope. The enum keeps both values for record-keeping/forward-compatibility, but every manifest this project writes will have prompt_layout=stable_first."
         },
         "concurrency": {
           "type": "integer",
@@ -98,17 +98,6 @@
           }
         }
       }
-    },
-    {
-      "$comment": "query_first is an ablation, not the accuracy baseline: docs/engine-performance-plan.md scopes it to the largest tool_stage only, to keep the layout axis one-factor-at-a-time instead of tripling the full accuracy sweep.",
-      "if": {
-        "properties": {
-          "pass_type": { "const": "accuracy" },
-          "cell": { "properties": { "prompt_layout": { "const": "query_first" } } }
-        },
-        "required": ["cell"]
-      },
-      "then": { "properties": { "cell": { "properties": { "tool_stage": { "const": 100 } } } } }
     },
     {
       "$comment": "Plain accuracy manifests are concurrency=1 by convention (docs/engine-performance-plan.md: 'accuracy pass is concurrency=1 for all engines'). Forbid stating cell.concurrency at all here so a concurrency-under-load data point can never be mistaken for -- or silently pooled with -- the plain sweep's baseline; that probe is pass_type accuracy_under_load instead.",
