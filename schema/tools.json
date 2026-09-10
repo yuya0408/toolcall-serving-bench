@@ -1,5 +1,5 @@
 {
-  "$comment": "Canonical tool definitions for tool-call-bench. Generic-ERP vocabulary only, expanded from the standard ERP module set (master/sales/purchase/inventory/accounting/hr/report). Near-duplicate functions are placed WITHIN each module on purpose so that selection difficulty grows with tool-set size. Argument scoring mode is carried by x-scoring and is stripped from the model-facing view.",
+  "$comment": "Canonical tool definitions for toolcall-serving-bench. Generic-ERP vocabulary only, expanded from the standard ERP module set (master/sales/purchase/inventory/accounting/hr/report). Near-duplicate functions are placed WITHIN each module on purpose so that selection difficulty grows with tool-set size. Argument scoring mode is carried by x-scoring and is stripped from the model-facing view.",
   "version": "2.0.0",
   "scoring_convention": {
     "exact": [

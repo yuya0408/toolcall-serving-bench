@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/tool-call-bench/case.schema.json",
+  "$id": "https://example.org/toolcall-serving-bench/case.schema.json",
   "title": "ToolCallEvalCase",
   "description": "A single evaluation case. Separates tool-selection ground truth from argument ground truth, and splits arguments into exact- vs semantic-scored fields.",
   "type": "object",

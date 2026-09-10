@@ -1,4 +1,4 @@
-# tool-call-bench
+# toolcall-serving-bench
 
 小型ローカルLLMに function calling（ツール呼び出し）を任せられるかを、**再現可能な形で測る**評価ハーネス。日本語 function calling は学習用の翻訳/合成データはあっても、公開された評価セットがほぼ存在しない。その空白を、公開実データに接地した評価セットと分離採点で埋める。
 

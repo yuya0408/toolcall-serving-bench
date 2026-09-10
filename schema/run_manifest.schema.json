@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://example.org/tool-call-bench/run_manifest.schema.json",
+  "$id": "https://example.org/toolcall-serving-bench/run_manifest.schema.json",
   "title": "EngineRunManifest",
   "description": "One (engine, model) cell's execution record for the engine-performance layer (docs/engine-performance-plan.md). Every accuracy or latency result row must carry one of these so a delta can be attributed to engine/quantization/sampling/hardware rather than left ambiguous. Accuracy and latency passes for the same cell are two separate manifests (separate runs), never one.",
   "type": "object",
