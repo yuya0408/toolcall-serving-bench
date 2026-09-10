@@ -11,8 +11,8 @@
     "created_at": { "type": "string", "format": "date-time" },
     "pass_type": {
       "type": "string",
-      "enum": ["accuracy", "latency"],
-      "description": "Which pass produced this manifest. An accuracy sweep and a latency pass over the same cell are never the same run (eval_bench/repetition.py's n=5 shuffle sweep is itself a load generator and would corrupt its own timing numbers)."
+      "enum": ["accuracy", "latency", "accuracy_under_load"],
+      "description": "Which pass produced this manifest. An accuracy sweep and a latency pass over the same cell are never the same run (eval_bench/repetition.py's n=5 shuffle sweep is itself a load generator and would corrupt its own timing numbers). accuracy_under_load is the concurrency-vs-correctness probe (docs/engine-performance-plan.md 'なぜこの層を足すのか' > 並行負荷下でのツールコーリング精度維持) -- kept as its own pass_type rather than reusing 'accuracy' with cell.concurrency set, so its concurrency=1 control point and high-concurrency point are never silently pooled with the plain accuracy sweep's implicit concurrency=1 baseline."
     },
     "cell": {
       "type": "object",
@@ -55,7 +55,7 @@
         "concurrency": {
           "type": "integer",
           "minimum": 1,
-          "description": "Number of requests fired concurrently for a latency pass. 1 = serialized (the attribution-safe default). >1 is only meaningful for engines with request-level batching (vllm; possibly ollama/llama_cpp/transformers_hf naively queue instead) and must be reported as its own result, not averaged into the serialized number."
+          "description": "Number of requests fired concurrently. 1 = serialized (the attribution-safe default). >1 is only meaningful for engines with request-level batching (vllm; llama_cpp's --parallel slots are a fixed-reservation approximation; transformers_hf has no request scheduler or shared KV at all and is excluded from the concurrency axis entirely, reported at concurrency=1 only as the no-serving-optimization control point -- see docs/engine-performance-plan.md). Required for pass_type latency and accuracy_under_load; must be absent for plain pass_type accuracy, which is concurrency=1 by convention and never states it explicitly (see the allOf rule forbidding it below)."
         }
       }
     },
@@ -93,19 +93,8 @@
         "properties": {
           "cell": { "required": ["tool_stage"] },
           "results": {
-            "type": "object",
-            "required": ["stage_size", "n_cases", "n_trials_per_case", "selection_mean", "selection_ci95", "arg_exact_mean", "arg_semantic_mean", "consistency"],
-            "additionalProperties": false,
-            "properties": {
-              "stage_size": { "type": "integer" },
-              "n_cases": { "type": "integer" },
-              "n_trials_per_case": { "type": "integer" },
-              "selection_mean": { "type": "number" },
-              "selection_ci95": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
-              "arg_exact_mean": { "type": ["number", "null"], "description": "Null iff no case in this stage/model had exact-scored fields to evaluate. Computed by eval_bench.repetition.aggregate_repeated, pooled over only the trials where the metric was applicable (selection succeeded on a positive case with scoreable fields of this kind)." },
-              "arg_semantic_mean": { "type": ["number", "null"] },
-              "consistency": { "type": "number" }
-            }
+            "allOf": [{ "$ref": "#/$defs/accuracy_results_base" }],
+            "unevaluatedProperties": false
           }
         }
       }
@@ -122,6 +111,11 @@
       "then": { "properties": { "cell": { "properties": { "tool_stage": { "const": 100 } } } } }
     },
     {
+      "$comment": "Plain accuracy manifests are concurrency=1 by convention (docs/engine-performance-plan.md: 'accuracy pass is concurrency=1 for all engines'). Forbid stating cell.concurrency at all here so a concurrency-under-load data point can never be mistaken for -- or silently pooled with -- the plain sweep's baseline; that probe is pass_type accuracy_under_load instead.",
+      "if": { "properties": { "pass_type": { "const": "accuracy" } } },
+      "then": { "properties": { "cell": { "not": { "required": ["concurrency"] } } } }
+    },
+    {
       "if": { "properties": { "pass_type": { "const": "latency" } } },
       "then": {
         "properties": {
@@ -135,14 +129,51 @@
               "n_requests": { "type": "integer" },
               "ttft_ms": { "$ref": "#/$defs/percentiles" },
               "total_latency_ms": { "$ref": "#/$defs/percentiles" },
-              "tokens_per_sec": { "$ref": "#/$defs/percentiles" }
+              "tokens_per_sec": { "$ref": "#/$defs/percentiles" },
+              "vllm_diagnostics": { "$ref": "#/$defs/vllm_diagnostics" }
             }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "The concurrency-vs-correctness probe (docs/engine-performance-plan.md > 並行負荷下でのツールコーリング精度維持). Scoped to vllm + awq-4bit (layer 2): bf16 (layer 1) leaves too little VRAM headroom under non-shared-prefix conditions to reach a meaningful high-concurrency point, see docs 'KVキャッシュブロッカーの解消'. Both the concurrency=1 control point and the high-concurrency point for this probe use this same pass_type, distinguished from each other only by cell.concurrency -- never pooled with plain accuracy's implicit concurrency=1 baseline.",
+      "if": { "properties": { "pass_type": { "const": "accuracy_under_load" } } },
+      "then": {
+        "required": ["repetition"],
+        "properties": {
+          "cell": {
+            "required": ["tool_stage", "concurrency"],
+            "properties": {
+              "engine": { "const": "vllm" },
+              "quantization": { "const": "awq-4bit" }
+            }
+          },
+          "results": {
+            "allOf": [{ "$ref": "#/$defs/accuracy_results_base" }],
+            "properties": { "vllm_diagnostics": { "$ref": "#/$defs/vllm_diagnostics" } },
+            "unevaluatedProperties": false
           }
         }
       }
     }
   ],
   "$defs": {
+    "accuracy_results_base": {
+      "description": "Shared by pass_type accuracy and accuracy_under_load -- both are eval_bench.repetition.aggregate_repeated output, differing only in which cell fields are legal (see the allOf branches above) and in whether vllm_diagnostics is a defined property.",
+      "type": "object",
+      "required": ["stage_size", "n_cases", "n_trials_per_case", "selection_mean", "selection_ci95", "arg_exact_mean", "arg_semantic_mean", "consistency"],
+      "properties": {
+        "stage_size": { "type": "integer" },
+        "n_cases": { "type": "integer" },
+        "n_trials_per_case": { "type": "integer" },
+        "selection_mean": { "type": "number" },
+        "selection_ci95": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+        "arg_exact_mean": { "type": ["number", "null"], "description": "Null iff no case in this stage/model had exact-scored fields to evaluate. Computed by eval_bench.repetition.aggregate_repeated, pooled over only the trials where the metric was applicable (selection succeeded on a positive case with scoreable fields of this kind)." },
+        "arg_semantic_mean": { "type": ["number", "null"] },
+        "consistency": { "type": "number" }
+      }
+    },
     "percentiles": {
       "type": "object",
       "required": ["p50", "p95", "p99"],
@@ -151,6 +182,16 @@
         "p50": { "type": "number" },
         "p95": { "type": "number" },
         "p99": { "type": "number" }
+      }
+    },
+    "vllm_diagnostics": {
+      "type": "object",
+      "description": "Populated whenever cell.engine == 'vllm' and cell.concurrency > 1. vLLM does not OOM when KV capacity is exceeded -- it queues excess requests -- so a concurrency>1 manifest without this cannot be trusted to reflect true concurrent batching rather than serialized queueing delay reported as if it were throughput (docs/engine-performance-plan.md 'KVキャッシュブロッカーの解消'). Not schema-required (transformers_hf/llama_cpp never populate it, and it would be vacuous at concurrency=1) -- the execution harness is responsible for refusing to write a concurrency>1 vllm manifest without it, and for discarding a run where observed_max_concurrency < cell.concurrency.",
+      "required": ["gpu_blocks_reported", "observed_max_concurrency"],
+      "additionalProperties": false,
+      "properties": {
+        "gpu_blocks_reported": { "type": "integer", "description": "vLLM startup log's '# GPU blocks', for audit." },
+        "observed_max_concurrency": { "type": "number", "description": "vLLM startup log's 'Maximum concurrency for N tokens per request', evaluated at this cell's tool_stage context length. Must be >= cell.concurrency or the run measured queueing delay, not concurrent batching, and must be discarded rather than reported." }
       }
     }
   }
