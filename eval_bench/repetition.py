@@ -231,6 +231,13 @@ def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
                            2026-09-11) -- it is not license to loosen margin
                            after seeing the data; the margin was pre-declared
                            as a rule, not a number, for exactly this reason.
+
+    Boundary convention (a CI bound landing exactly on +-margin, which 2000
+    resamples make unlikely in practice but should still be unambiguous):
+    both comparisons are closed at margin, i.e. touching it without crossing
+    is "still within" -- so a CI equal to exactly [-margin, +margin] is
+    "equivalent", and a CI that merely touches margin from outside while
+    still containing points inside it is "inconclusive", not "not_equivalent".
     """
     lo, hi = diff_ci
     if lo >= -margin and hi <= margin:

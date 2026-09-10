@@ -206,6 +206,54 @@ def test_paired_diff_ci_detects_a_real_degradation():
     assert lo == hi == -1.0  # loaded always wrong, baseline always right -> diff is always -1
 
 
+def _unpaired_diff_ci(baseline, loaded, n_resamples=2000, alpha=0.05, seed=0):
+    """Test-only stand-in for the mistake _paired_cluster_bootstrap_diff_ci
+    exists to avoid: draws independent case-index resamples for each arm
+    per iteration, instead of sharing one resampled index set across both.
+    Used only to demonstrate that the paired version is narrower when cases
+    are correlated -- see test_paired_diff_ci_is_narrower_than_unpaired_*.
+    """
+    import random
+    rng = random.Random(seed)
+    n = len(baseline)
+    diffs = []
+    for _ in range(n_resamples):
+        base_idx = [rng.randrange(n) for _ in range(n)]
+        load_idx = [rng.randrange(n) for _ in range(n)]
+        base_vals = [1.0 if s.selection else 0.0 for i in base_idx for s in baseline[i].trials]
+        load_vals = [1.0 if s.selection else 0.0 for i in load_idx for s in loaded[i].trials]
+        diffs.append(sum(load_vals) / len(load_vals) - sum(base_vals) / len(base_vals))
+    diffs.sort()
+    lo_idx = int((alpha / 2) * n_resamples)
+    hi_idx = min(int((1 - alpha / 2) * n_resamples), n_resamples - 1)
+    return diffs[lo_idx], diffs[hi_idx]
+
+
+def test_paired_diff_ci_is_narrower_than_unpaired_when_cases_are_correlated():
+    """The degenerate identical/all-flipped tests above pass whether or not
+    resample indices are actually shared between arms -- they don't exercise
+    pairing at all. This is the test that does: construct 14 cases with a
+    large *between-case* spread (bimodal hard/easy) but a small, consistent
+    *within-case* effect (one trial flipped per case). Pairing cancels the
+    between-case composition noise out of the difference; not pairing lets
+    it leak in. If this regressed to two independently-resampled index sets,
+    this assertion -- not the degenerate ones above -- is what would fail.
+    """
+    baseline = []
+    loaded = []
+    for i in range(14):
+        base_vals = [True, True, True, True, False] if i % 2 == 0 else [False, False, False, False, True]
+        load_vals = list(base_vals)
+        load_vals[0] = not load_vals[0]  # one trial flipped: same small effect on every case
+        baseline.append(_fake_selection_result(f"c{i}", base_vals))
+        loaded.append(_fake_selection_result(f"c{i}", load_vals))
+
+    paired_lo, paired_hi = _paired_cluster_bootstrap_diff_ci(baseline, loaded, seed=0)
+    unpaired_lo, unpaired_hi = _unpaired_diff_ci(baseline, loaded, seed=0)
+
+    assert (paired_hi - paired_lo) < (unpaired_hi - unpaired_lo)
+
+
 def test_half_width():
     assert half_width((0.3, 0.7)) == pytest.approx(0.2)
 
@@ -229,5 +277,6 @@ if __name__ == "__main__":
     test_paired_diff_ci_rejects_mismatched_case_order()
     test_paired_diff_ci_is_exactly_zero_when_conditions_are_identical()
     test_paired_diff_ci_detects_a_real_degradation()
+    test_paired_diff_ci_is_narrower_than_unpaired_when_cases_are_correlated()
     test_half_width()
     test_equivalence_verdict_three_way()
