@@ -7,6 +7,7 @@ import pytest
 
 from eval_bench.dataset.loader import load_cases
 from eval_bench.dataset.tools import load_tools
+from eval_bench.dataset.toolsets import build_tool_set
 from eval_bench.scorers.separated import CaseScore, Prediction
 from eval_bench.repetition import (
     RepeatedCaseResult,
@@ -193,6 +194,58 @@ def test_concurrent_driver_actually_overlaps_in_time():
     assert max_in_flight > 1, "requests never overlapped -- driver is not actually concurrent"
 
 
+def test_concurrent_driver_preserves_trial_order_even_when_completion_order_is_reversed():
+    """Not a regression test for a live bug: ThreadPoolExecutor.map already
+    guarantees its return order matches submission order regardless of
+    completion order, so this passes against both the current
+    trial-index-tracking implementation and the earlier version that
+    grouped by return order without carrying the trial index explicitly
+    (verified empirically by reverting the fix and re-running this test --
+    it still passed, since map()'s ordering guarantee was already doing the
+    work). Kept anyway as a property check that doesn't rely on the reader
+    knowing that guarantee, and because carrying the trial index explicitly
+    is more robust to a future change in how work_items gets built.
+    Interleaving cases (trial-major instead of case-major submission order)
+    would still be safe under the old return-order grouping, since map()'s
+    guarantee keeps each case's own trials in ascending order wherever they
+    fall in the stream -- but *shuffling* work_items (plausible, e.g. to
+    avoid bursty per-case submission patterns hitting the server) would not
+    be, since that can reorder one case's own trials relative to each
+    other. Explicit trial tracking is immune to that; the old approach
+    was not.
+    """
+    import random as stdlib_random
+    import time
+
+    case = load_cases("data")[0]
+    tools = load_tools()
+    stage_size = 10
+    n = 5
+    tool_set = build_tool_set(case, tools, stage_size, seed=0)
+
+    # Ground truth, computed independently of the driver: which trial
+    # produces which shuffled first tool.
+    expected_first_tool_by_trial = {}
+    for trial in range(n):
+        order = list(tool_set)
+        stdlib_random.Random(f"order:{case['id']}:{stage_size}:{trial}").shuffle(order)
+        expected_first_tool_by_trial[trial] = order[0]
+    first_tool_to_trial = {v: k for k, v in expected_first_tool_by_trial.items()}
+
+    def predict_with_reversed_delay(c, ts):
+        trial = first_tool_to_trial[ts[0]]
+        time.sleep((n - trial) * 0.03)  # trial 0 sleeps longest -> finishes last
+        return Prediction(tool=ts[0], args={})
+
+    [result] = run_repeated_cases_concurrent(
+        [case], tools, stage_size=stage_size, predict=predict_with_reversed_delay,
+        judge=_judge, n=n, max_workers=n,
+    )
+    actual = [p.tool for p in result.predictions]
+    expected = [expected_first_tool_by_trial[t] for t in range(n)]
+    assert actual == expected, "predictions came out in completion order, not trial order"
+
+
 def test_concurrent_driver_drops_no_work_items():
     cases = load_cases("data")
     tools = load_tools()
@@ -361,6 +414,7 @@ if __name__ == "__main__":
     test_paired_diff_ci_is_narrower_than_unpaired_when_cases_are_correlated()
     test_concurrent_driver_matches_the_serialized_driver_trial_for_trial()
     test_concurrent_driver_actually_overlaps_in_time()
+    test_concurrent_driver_preserves_trial_order_even_when_completion_order_is_reversed()
     test_concurrent_driver_drops_no_work_items()
     test_half_width()
     test_equivalence_verdict_three_way()

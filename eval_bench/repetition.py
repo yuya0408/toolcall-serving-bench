@@ -144,26 +144,32 @@ def run_repeated_cases_concurrent(
     tool_sets = {c["id"]: build_tool_set(c, tools, stage_size, seed=0) for c in cases}
     work_items = [(c, trial) for c in cases for trial in range(n)]
 
-    def _dispatch(item: tuple[dict[str, Any], int]) -> tuple[str, Prediction, CaseScore]:
+    def _dispatch(item: tuple[dict[str, Any], int]) -> tuple[str, int, Prediction, CaseScore]:
         case, trial = item
         pred, score = _run_one_trial(case, tool_sets[case["id"]], stage_size, trial, predict, judge)
-        return case["id"], pred, score
+        return case["id"], trial, pred, score
 
-    # Executor.map returns results in submission order regardless of
-    # completion order, and work_items groups each case's trials together
-    # (in trial order) within that submission order -- so grouping by
-    # case_id below reconstructs each case's trials in the right sequence.
-    by_case: dict[str, list[tuple[Prediction, CaseScore]]] = {c["id"]: [] for c in cases}
+    # Trial index travels with each result explicitly and results are
+    # sorted by it below, rather than trusting return order to already
+    # match trial order. Executor.map does guarantee return order matches
+    # submission order regardless of completion timing -- so this isn't
+    # fixing a live bug against today's case-major work_items -- but that
+    # guarantee is only as good as work_items' own construction. A future
+    # change that shuffles work_items (plausible, e.g. to avoid bursty
+    # per-case submission patterns hitting the server) would silently
+    # reorder one case's own trials relative to each other; explicit
+    # tracking is immune to that, implicit return-order trust is not.
+    by_case: dict[str, list[tuple[int, Prediction, CaseScore]]] = {c["id"]: [] for c in cases}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for case_id, pred, score in pool.map(_dispatch, work_items):
-            by_case[case_id].append((pred, score))
+        for case_id, trial, pred, score in pool.map(_dispatch, work_items):
+            by_case[case_id].append((trial, pred, score))
 
     results = []
     for c in cases:
-        pairs = by_case[c["id"]]
+        triples = sorted(by_case[c["id"]], key=lambda t: t[0])
         results.append(RepeatedCaseResult(
             case_id=c["id"], stage_size=stage_size,
-            predictions=[p for p, _ in pairs], trials=[s for _, s in pairs],
+            predictions=[p for _, p, _ in triples], trials=[s for _, _, s in triples],
         ))
     return results
 
