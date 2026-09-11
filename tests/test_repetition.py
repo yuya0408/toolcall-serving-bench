@@ -15,6 +15,7 @@ from eval_bench.repetition import (
     equivalence_verdict,
     half_width,
     run_repeated_case,
+    run_repeated_cases_concurrent,
 )
 from eval_bench.repetition import _paired_cluster_bootstrap_diff_ci
 
@@ -128,6 +129,86 @@ def test_bootstrap_ci_is_non_degenerate_for_mixed_accuracy():
     lo, hi = agg["selection_ci95"]
     assert hi - lo > 0, "CI must be non-degenerate when accuracy is not 0 or 1"
     print("repetition ok")
+
+
+def test_concurrent_driver_matches_the_serialized_driver_trial_for_trial():
+    """The accuracy_under_load probe's paired difference CI is only
+    meaningful if a concurrent run and a serialized run over the same
+    cases/n are trial-for-trial paired -- i.e. produce identical
+    predictions when the predict function itself doesn't depend on
+    concurrency. If run_repeated_cases_concurrent's shuffle seeds ever
+    diverged from run_repeated_case's, this would catch it (the pairing
+    tested in test_paired_diff_ci_is_narrower_than_unpaired_* assumes this
+    holds; it doesn't re-verify it against the real driver)."""
+    cases = load_cases("data")
+    tools = load_tools()
+
+    def predict_first_in_list(c, tool_set):
+        return Prediction(tool=tool_set[0], args={})
+
+    serialized = [
+        run_repeated_case(c, tools, stage_size=10, predict=predict_first_in_list, judge=_judge, n=5)
+        for c in cases
+    ]
+    concurrent = run_repeated_cases_concurrent(
+        cases, tools, stage_size=10, predict=predict_first_in_list, judge=_judge, n=5, max_workers=4,
+    )
+
+    serialized_by_id = {r.case_id: r for r in serialized}
+    concurrent_by_id = {r.case_id: r for r in concurrent}
+    assert set(serialized_by_id) == set(concurrent_by_id)
+    for case_id in serialized_by_id:
+        assert [p.tool for p in serialized_by_id[case_id].predictions] == \
+               [p.tool for p in concurrent_by_id[case_id].predictions]
+
+
+def test_concurrent_driver_actually_overlaps_in_time():
+    """Correctness alone (the test above) would also pass for an
+    accidentally-serial implementation of run_repeated_cases_concurrent.
+    This checks the thing that test can't: that requests are genuinely
+    in flight at the same time, not dispatched one at a time under the
+    hood."""
+    import threading
+    import time
+
+    max_in_flight = 0
+    current_in_flight = 0
+    lock = threading.Lock()
+
+    def predict_slow(c, tool_set):
+        nonlocal max_in_flight, current_in_flight
+        with lock:
+            current_in_flight += 1
+            max_in_flight = max(max_in_flight, current_in_flight)
+        time.sleep(0.05)
+        with lock:
+            current_in_flight -= 1
+        return Prediction(tool=None, args={})
+
+    cases = load_cases("data")[:4]
+    tools = load_tools()
+    run_repeated_cases_concurrent(
+        cases, tools, stage_size=10, predict=predict_slow, judge=_judge, n=2, max_workers=4,
+    )
+    assert max_in_flight > 1, "requests never overlapped -- driver is not actually concurrent"
+
+
+def test_concurrent_driver_drops_no_work_items():
+    cases = load_cases("data")
+    tools = load_tools()
+
+    def predict_always_correct(c, tool_set):
+        if c["expected_tool"] is None:
+            return Prediction(tool=None, args={})
+        exact = c["expected_args"].get("exact", {})
+        semantic = c["expected_args"].get("semantic", {})
+        return Prediction(tool=c["expected_tool"], args={**exact, **semantic})
+
+    results = run_repeated_cases_concurrent(
+        cases, tools, stage_size=10, predict=predict_always_correct, judge=_judge, n=5, max_workers=8,
+    )
+    assert len(results) == len(cases)
+    assert all(len(r.trials) == 5 for r in results)
 
 
 def _fake_result(case_id, arg_exact_vals, arg_semantic_vals):
@@ -278,5 +359,8 @@ if __name__ == "__main__":
     test_paired_diff_ci_is_exactly_zero_when_conditions_are_identical()
     test_paired_diff_ci_detects_a_real_degradation()
     test_paired_diff_ci_is_narrower_than_unpaired_when_cases_are_correlated()
+    test_concurrent_driver_matches_the_serialized_driver_trial_for_trial()
+    test_concurrent_driver_actually_overlaps_in_time()
+    test_concurrent_driver_drops_no_work_items()
     test_half_width()
     test_equivalence_verdict_three_way()

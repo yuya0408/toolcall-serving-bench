@@ -59,6 +59,28 @@ class RepeatedCaseResult:
         return all(p.tool == first.tool and p.args == first.args for p in self.predictions[1:])
 
 
+def _run_one_trial(
+    case: dict[str, Any],
+    tool_set: list[str],
+    stage_size: int,
+    trial: int,
+    predict: PredictFn,
+    judge: SemanticJudge,
+) -> tuple[Prediction, CaseScore]:
+    """One (case, trial) unit of work: deterministically shuffle `tool_set`
+    for this trial, call predict, score. Factored out of run_repeated_case
+    so the serialized path and the concurrent load driver
+    (run_repeated_cases_concurrent) derive their trial order from the exact
+    same seed formula -- if they diverged, a baseline run and a loaded run
+    over "the same" cases would no longer be trial-for-trial paired, and
+    _paired_cluster_bootstrap_diff_ci's pairing would be nominal only.
+    """
+    order = list(tool_set)
+    random.Random(f"order:{case['id']}:{stage_size}:{trial}").shuffle(order)
+    pred = predict(case, order)
+    return pred, score_case(case, pred, judge)
+
+
 def run_repeated_case(
     case: dict[str, Any],
     tools: dict[str, dict[str, Any]],
@@ -85,12 +107,65 @@ def run_repeated_case(
     trials: list[CaseScore] = []
     predictions: list[Prediction] = []
     for trial in range(n):
-        order = list(tool_set)
-        random.Random(f"order:{case['id']}:{stage_size}:{trial}").shuffle(order)
-        pred = predict(case, order)
+        pred, score = _run_one_trial(case, tool_set, stage_size, trial, predict, judge)
         predictions.append(pred)
-        trials.append(score_case(case, pred, judge))
+        trials.append(score)
     return RepeatedCaseResult(case_id=case["id"], stage_size=stage_size, trials=trials, predictions=predictions)
+
+
+def run_repeated_cases_concurrent(
+    cases: list[dict[str, Any]],
+    tools: dict[str, dict[str, Any]],
+    stage_size: int,
+    predict: PredictFn,
+    judge: SemanticJudge,
+    n: int,
+    max_workers: int,
+) -> list[RepeatedCaseResult]:
+    """Same total workload as calling run_repeated_case once per case (what
+    the serialized baseline does), but dispatches every (case, trial) unit
+    across *all* cases through a thread pool with up to `max_workers` in
+    flight at once. This is what "concurrency=N" means for the
+    accuracy_under_load probe (docs/engine-performance-plan.md): N requests
+    simultaneously in flight against the engine -- not N trials of one case.
+
+    ThreadPoolExecutor, not asyncio: a ModelAdapter's generate() is a
+    synchronous HTTP call (or an in-process transformers call), and HTTP I/O
+    releases the GIL while waiting on the response, so a thread pool already
+    achieves genuine concurrent requests against the server without an
+    async rewrite of the adapter layer.
+
+    Every trial's shuffle uses the exact same seed formula as
+    run_repeated_case (via _run_one_trial), so this arm and a serialized
+    run over the same cases/n/stage_size are trial-for-trial paired.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    tool_sets = {c["id"]: build_tool_set(c, tools, stage_size, seed=0) for c in cases}
+    work_items = [(c, trial) for c in cases for trial in range(n)]
+
+    def _dispatch(item: tuple[dict[str, Any], int]) -> tuple[str, Prediction, CaseScore]:
+        case, trial = item
+        pred, score = _run_one_trial(case, tool_sets[case["id"]], stage_size, trial, predict, judge)
+        return case["id"], pred, score
+
+    # Executor.map returns results in submission order regardless of
+    # completion order, and work_items groups each case's trials together
+    # (in trial order) within that submission order -- so grouping by
+    # case_id below reconstructs each case's trials in the right sequence.
+    by_case: dict[str, list[tuple[Prediction, CaseScore]]] = {c["id"]: [] for c in cases}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        for case_id, pred, score in pool.map(_dispatch, work_items):
+            by_case[case_id].append((pred, score))
+
+    results = []
+    for c in cases:
+        pairs = by_case[c["id"]]
+        results.append(RepeatedCaseResult(
+            case_id=c["id"], stage_size=stage_size,
+            predictions=[p for p, _ in pairs], trials=[s for _, s in pairs],
+        ))
+    return results
 
 
 def bootstrap_ci(

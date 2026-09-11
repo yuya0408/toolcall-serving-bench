@@ -16,7 +16,7 @@ from eval_bench.dataset.loader import load_cases
 from eval_bench.dataset.tools import load_tools
 from eval_bench.decoders.base import IdentityDecoder
 from eval_bench.pipeline import make_predict_fn
-from eval_bench.runner import build_manifest, run_accuracy_cell, write_manifest
+from eval_bench.runner import build_manifest, parse_vllm_diagnostics, run_accuracy_cell, write_manifest
 from eval_bench.scorers.separated import Prediction
 
 _HARDWARE = {"instance_type": "g6.xlarge", "gpu": "L4", "vram_gb": 22, "region": "ap-northeast-1"}
@@ -138,6 +138,86 @@ def test_llama_cpp_accepts_a_real_commit_hash():
         pass_type="accuracy", predict=_always_correct_predict, judge=_judge, n=2,
     )
     assert results["n_cases"] == len(cases)
+
+
+def test_parse_vllm_diagnostics_happy_path():
+    log = (
+        "INFO some other startup noise\n"
+        "INFO # GPU blocks: 12345\n"
+        "INFO Maximum concurrency for 2048 tokens per request: 24.50x\n"
+    )
+    diagnostics = parse_vllm_diagnostics(log)
+    assert diagnostics == {"gpu_blocks_reported": 12345, "observed_max_concurrency": 24.5}
+
+
+def test_parse_vllm_diagnostics_raises_when_lines_are_absent():
+    with pytest.raises(ValueError, match="GPU blocks"):
+        parse_vllm_diagnostics("INFO nothing relevant in this log\n")
+
+
+def _accuracy_under_load_cell(**overrides):
+    return _base_cell(engine="vllm", quantization="awq-4bit", tool_stage=10, concurrency=16, **overrides)
+
+
+def test_build_manifest_rejects_vllm_concurrency_without_diagnostics():
+    cases = load_cases("data")
+    tools = load_tools()
+    cell = _accuracy_under_load_cell()
+    results = run_accuracy_cell(
+        cases, tools, cell, pass_type="accuracy_under_load",
+        predict=_always_correct_predict, judge=_judge, n=2,
+    )
+    with pytest.raises(ValueError, match="vllm_diagnostics"):
+        build_manifest(
+            run_id="run-test-noviag", pass_type="accuracy_under_load", cell=cell,
+            hardware=_HARDWARE, results=results, repetition={"n": 2, "seed_base": 0},
+        )
+
+
+def test_build_manifest_rejects_vllm_when_observed_concurrency_is_too_low():
+    cases = load_cases("data")
+    tools = load_tools()
+    cell = _accuracy_under_load_cell()
+    results = run_accuracy_cell(
+        cases, tools, cell, pass_type="accuracy_under_load",
+        predict=_always_correct_predict, judge=_judge, n=2,
+    )
+    results["vllm_diagnostics"] = {"gpu_blocks_reported": 5000, "observed_max_concurrency": 8}
+    with pytest.raises(ValueError, match="measured queueing delay"):
+        build_manifest(
+            run_id="run-test-lowconc", pass_type="accuracy_under_load", cell=cell,
+            hardware=_HARDWARE, results=results, repetition={"n": 2, "seed_base": 0},
+        )
+
+
+def test_build_manifest_accepts_vllm_when_observed_concurrency_is_sufficient():
+    cases = load_cases("data")
+    tools = load_tools()
+    cell = _accuracy_under_load_cell()
+    results = run_accuracy_cell(
+        cases, tools, cell, pass_type="accuracy_under_load",
+        predict=_always_correct_predict, judge=_judge, n=2,
+    )
+    results["vllm_diagnostics"] = {"gpu_blocks_reported": 5000, "observed_max_concurrency": 20}
+    manifest = build_manifest(
+        run_id="run-test-okconc", pass_type="accuracy_under_load", cell=cell,
+        hardware=_HARDWARE, results=results, repetition={"n": 2, "seed_base": 0},
+    )
+    assert manifest["results"]["vllm_diagnostics"]["observed_max_concurrency"] == 20
+
+
+def test_build_manifest_does_not_require_diagnostics_when_concurrency_is_1():
+    cases = load_cases("data")
+    tools = load_tools()
+    manifest = build_manifest(
+        run_id="run-test-serial", pass_type="accuracy", cell=_base_cell(), hardware=_HARDWARE,
+        results=run_accuracy_cell(
+            cases, tools, _base_cell(), pass_type="accuracy",
+            predict=_always_correct_predict, judge=_judge, n=5,
+        ),
+        repetition={"n": 5, "seed_base": 0},
+    )
+    assert manifest["run_id"] == "run-test-serial"
 
 
 def test_build_manifest_validates_against_schema():
