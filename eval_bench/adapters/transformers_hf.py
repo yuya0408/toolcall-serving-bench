@@ -33,7 +33,16 @@ class TransformersHFAdapter(ModelAdapter):
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
         tokenizer = AutoTokenizer.from_pretrained(model_id)
-        model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype="auto").to(device)
+        # g6.xlarge has 16GB host RAM vs. ~16GB of bf16 weights: a plain
+        # from_pretrained().to(device) materializes the model on the host
+        # before moving it, which OOMs. device_map loads weights straight
+        # onto the target device instead.
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype="auto",
+            low_cpu_mem_usage=True,
+            device_map={"": device},
+        )
         return cls(tokenizer, model, sampling_params)
 
     def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
