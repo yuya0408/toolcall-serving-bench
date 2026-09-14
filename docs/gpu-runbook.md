@@ -1,6 +1,6 @@
 # GPUインスタンス起動時の手順書
 
-`infra/gpu/`で`terraform apply`した後、SSH接続してから行う手順。`terminate`+6時間の自動
+[[docs/cloud-layer-plan|クラウド層の設計方針]]に基づき`infra/gpu/`で`terraform apply`した後、SSH接続してから行う手順。`terminate`+6時間の自動
 シャットダウン(`var.auto_shutdown_minutes`)で確実にインスタンスとEBSが消えるため、**復元不能な
 情報は取得した瞬間にscpでローカルへ回収する**（セル終了ごと・完了を待たない）。
 
@@ -52,7 +52,7 @@ scp ubuntu@<gpu_public_ip>:~/llama_cpp_commit.txt ./
 
 ## 4. 未検証3点の確認
 
-先に進む前にここで確定させる。結果はdocs/engine-performance-plan.mdに反映すること。
+先に進む前にここで確定させる。結果は[[docs/engine-performance-plan|エンジン性能観測層の設計方針]]に反映すること。
 
 **a. vLLMのバージョン下限**
 ```
