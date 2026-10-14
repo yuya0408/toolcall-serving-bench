@@ -109,6 +109,104 @@ latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に�
   計画書の該当箇所には、未検証の推定だったという訂正を書く。
 - 費用の数字（1件あたり約$0.001、1セル300件で全体約$2）と時間の見積もりは、L4の性能値からの概算である。パイロットの実測で置き換える。
 
+## 追記（2026-10-15）：実装で決めたこと
+
+latencyパスを実装する中で、次の6点を決めた（`eval_bench/latency.py`、`scripts/run_cell.py --pass-type latency`）。
+[Source: User, latencyパスの実装, 2026-10-15]
+
+### A. prefix cacheは有効のまま測り、セルの境目でリセットする
+
+- **セルの中では自然にキャッシュに当てる。** ツール定義はキャッシュに当たり、クエリの部分は一意の識別子があるので毎回新しく計算される（4節）。
+- **セルの初めに、キャッシュを空にする。** 前のセルのキャッシュが残ると、後に回したセルほど有利になり、結果が実行順で変わるためである。
+  - vLLMは `POST /reset_prefix_cache` を呼ぶ。このエンドポイントは `VLLM_SERVER_DEV_MODE=1` で起動したときだけ存在し、`{"success": bool}` を返す。
+    ブロックが使われている間は `false` になりうるので、3回まで再試行する（vLLMのソース `vllm/entrypoints/serve/dev/cache/api_router.py` で確認）。
+  - llama.cppには、ホストRAM側のキャッシュ（`--cache-ram`）まで含めて全部消すAPIが無いので、セルごとにサーバを再起動する。
+- **当たったトークン数を1件ごとに生出力のJSONLに記録する**（vLLM：`usage.prompt_tokens_details.cached_tokens`。`--enable-prompt-tokens-details` が必要。
+  llama.cpp：`timings.cache_n`）。セルの最初に同時に送った件（並行数の分）のうち、少なくとも1件が0でなければ、リセットできていないとみなしてセルを打ち切る。
+  マニフェストには、当たったトークンの割合を記録する。
+
+**検討した案**
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| キャッシュを無効にして測る | 却下 | ツール定義を毎回計算し直す本番は無く、誰も運用しない条件でエンジンを順位付けすることになる。エンジンの差がキャッシュの扱いに出る場合、その差も消してしまう |
+| **有効のまま、セルの境目でリセットする（採用）** | 採用 | vLLM `bench sweep serve`（各回の間に `/reset_*_cache` を全部呼ぶ）・SGLang `bench_serving --flush-cache` と同じやり方 |
+
+**MLPerfとの違い（意図して変えている点）**：MLPerfの現行ルールは、クエリをまたいだキャッシュを禁止している
+（inference_rules.adoc 5.1節「Caching of any other queries, query parameters, or intermediate results is prohibited」、
+LLMのFAQ「KVキャッシュはクエリをまたがない範囲で許可」）。mlcommons/inference PR #2445（2026-01-14マージ）は、
+これを「クエリをまたいだprefix cacheは許可されない」と明文化し、vLLMに `--no-enable-prefix-caching` を付けるよう求めている。
+ただし運用は一貫しておらず、prefix cacheの扱いを問うIssue（inference_policies #300、2024-10）は公開の回答無しで閉じられ、
+MLCommons自身のDeepSeek-R1・E2E-RAGの参照実装はprefix cacheを有効にしている。
+禁止の理由は、2019年の論文（IV-A節）によれば「評価を簡単にするため」と、データセットが小さく丸ごと覚えられてしまうことである。
+同じ箇所で「実際の推論システムはクエリをキャッシュする」とも書いている。丸ごと覚えることへの対策は、一意の識別子で済ませている。
+
+**結果の読み方への影響**：1節のレイテンシ基準はMLPerfから借りたもので、MLPerfはキャッシュ無しの条件で計測している。
+キャッシュを有効にするとprefillが軽くなるので、MLPerfより基準を満たしやすい条件で判定していることになる。
+入力の長さやタスクの違い（Consequences）と同じく、基準は「同じモデル規模に向けた参照線」として使う。
+
+**出典の確かさ**：標準化団体（MLCommons）の一次情報はMLPerfのルール文書とPRで、prefix cacheを禁止していることまでは確認できた。
+vLLM・SGLangはツールの動作の記述で、「こう測るべき」という規範ではない。InferenceX（SemiAnalysis、民間の調査会社）は、
+ランダムなデータセットではprefix cacheを無効にし、エージェント向けのAgentXでは有効にしてヒット率を報告している、
+と用語集に書いている。ただしこれは要約ツール越しに読んだだけで、実験の設定ファイルは確認していない。
+エージェント向けのワークロードでprefix cacheをどう扱うかを定めた、専門機関の基準は見つからなかった。
+有効にしたまま測る主な根拠は、本番と同じ条件で測るという理由づけであり、出典は同じ判断をしている例として補強するにとどまる。
+[Source: User, prefix cacheの扱いの確認, 2026-10-15]
+
+### B. ウォームアップの窓は「ケースセット1周分の件数」
+
+3節の「5秒ごとの計測窓」は、並行数1では成り立たない。1件に約2.5秒かかる（推定：出力約40トークン × TPOT約53ms ＋ prefill）ので、
+5秒の窓には2件か3件しか入らず、エンジンの状態が同じでも、窓の境目にかかるかどうかだけでスループットが33〜50%動く。
+Perf Analyzerは10窓（`--max-trials`）で安定しなければ打ち切るので、並行数1のセルは必ず失敗する。
+
+そこで、Perf Analyzerのもう1つのモード（`count_windows`：時間ではなく完了件数で窓を区切る）の形にする。
+
+- **1窓 = ケースセット1周分の件数**（今は14件）。並行数1では、どの窓にも同じクエリが1回ずつ入るので、窓どうしの差はエンジンの状態だけを反映する（導出）。
+  Perf Analyzerの`count_windows`の既定値（`--measurement-request-count=50`）は使わない。並行数1でウォームアップが最短でも約6分かかり、窓ごとのクエリの構成もそろわないためである。
+- 判定の規則はPerf Analyzerの既定のまま：直近3窓で、スループットと平均レイテンシのmax/minがそれぞれ10%以内（`--stability-percentage`、
+  レイテンシは`--percentile`未指定時の既定どおり平均）。10窓で安定しなければセルを打ち切る（`--max-trials`）。
+- **安定した時点の後に送ったリクエストから、n件を計測する。** 計測した件がすべて終わるまで同じ並行数で送り続け、
+  余分に送った件は「cooldown」として記録だけして数えない。終わり際に並行数が下がった状態の件を計測に混ぜないためである。
+- **未確認の点**：並行数が大きいと、窓の長さに「どの件がたまたま先に終わったか」による揺れが、おおよそ窓の件数分の1（14件で約7%）入る（推定）。
+  10%の基準に近いので、並行数16・32のセルが安定判定を通るかをパイロットで確かめる。通らなければ、窓を「ケースセット何周分か」に広げる（その時点で決める）。
+
+### C. エラーの扱いは種類で分ける
+
+vLLMもllama.cppも、混んでいるときにリクエストを断らず列に並ばせる。そのため、タイムアウト以外のエラーは「混んでいるから時々起きる」ものではなく、
+そのセルの設定では動かないことを示す。
+
+- **タイムアウト**（既定120秒）**→ 超過として数える。** 基準のTTFT 2秒を確実に超えているので、選ぶ余地が無い。パーセンタイルには含めず、件数を別に記録する。
+- **HTTPエラー・接続エラー・ストリーム中のエラー・thinkingの出力 → セルを打ち切る。** マニフェストではなく `<run_id>.aborted.json`
+  （`"outcome": "unsupported"`）を書き、2節の「対応していない」として扱う。設定の問題を、レイテンシの裾の問題と混ぜないためである。
+
+### D. TTFTと全体の時間の定義
+
+- **TTFT**：`choices`を含む最初のストリームのチャンクが届いた時刻（vLLM `bench serve` の `async_request_openai_chat_completions` と同じ。ソースで確認）。
+  ツール呼び出しのパーサは、関数名が読めるまで差分を送らないことがあるので、本文やツール呼び出しの断片を含む最初のチャンクの時刻も別に記録し、実機で両者を比べる。
+- **全体の時間**：`choices`を含む最後のチャンクまで（同じくvLLM `bench serve` に合わせる。末尾のusageだけのチャンクはトークンを運ばない）。
+- **transformers_hf**：サーバを持たないので、`generate()`が1トークンごとに呼ぶ停止条件のフックで時刻を取る（CUDAを同期してから記録する）。
+  TTFTは、チャットテンプレートを組み立てる前から測る（サーバのTTFTにはテンプレートの処理とトークン化が含まれるため）。
+
+### E. ツール定義はケースごとに固定する
+
+4節の「ツール定義の並び順は固定する」は、ケースごとのツール集合を、`build_tool_set`のseed=0の並びのまま毎回使う、という意味で実装した。
+ステージ10ではケースごとに正解ツールと紛らわしいツールが違い、1つの共通の10個に全ケースの正解を収められないためである。
+そのため、キャッシュに載るツール定義はケースの数だけ（今は14通り）ある。並行数が大きいときにキャッシュから追い出されるかは、
+当たったトークンの割合として結果に出る。
+
+### F. ケースの数（14件）は検討していない
+
+4節の「14ケース」は、`data/`に最初のコミット（2026-08-16）からある件数をそのまま使ったもので、件数の妥当性は検討していなかった
+（Article1用に、手作り5件・意図的に難しくした5件・有価証券報告書に接地した4件の3通りの作り方を見せるためのセット）。
+
+- **判定の精度には効かない。** Clopper-Pearsonの計算に入るのはリクエストの件数nと超過の件数だけで、ケースの数は「どんな混ざり方で測ったか」を決めるだけである。
+  ケースを1周ずつ均等に送るので、ケースによって超過しやすさが違っても、超過件数のばらつきはランダムに選ぶ場合より小さく、判定は安全側になる。
+- **条件1：本番の前に固定する。** 結果を見てからケースを入れ替えると、判定が偏る（3節の「件数を足さない」と同じ理由）。
+- **条件2：言える範囲は「そのケースセットを繰り返し送ったとき」に限られる。** 何件あれば本番のワークロードを代表できるかを決める統計の式は無い。記事に限界として書く。
+- **latencyパスは、第3パスと同じケースセットを使う。** ADR-0002で第3パスのケース数はパイロットで決めることになっており、ケースを増やすならlatencyパスも同じセットにそろえる。
+  実装は件数に依存しない（窓もケースセット1周分として決まる）。
+[Source: User, ケース数の出どころの確認, 2026-10-15]
+
 ## 参考
 
 - MLCommons, MLPerf Inference 5.1: Benchmarking Small LLMs with Llama3.1-8B (2025-09-09) — https://mlcommons.org/2025/09/small-llm-inference-5-1/
@@ -119,3 +217,10 @@ latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に�
 - Debian, llama-server(1) — https://manpages.debian.org/unstable/llama.cpp-tools/llama-server.1.en.html
 - ggml-org/llama.cpp Discussion #4130 — https://github.com/ggml-org/llama.cpp/discussions/4130
 - Penn State STAT 415, Lesson 19: Distribution-Free Confidence Intervals for Percentiles — https://online.stat.psu.edu/stat415/lesson/19
+- （追記）vLLM, Parameter Sweeps — https://docs.vllm.ai/en/latest/benchmarking/sweeps.html
+- （追記）vLLM, `vllm/entrypoints/serve/dev/cache/api_router.py`（`/reset_prefix_cache`）・`vllm/benchmarks/lib/endpoint_request_func.py`（TTFTの定義） — https://github.com/vllm-project/vllm
+- （追記）vLLM, vllm serve CLI（`--enable-prompt-tokens-details`） — https://docs.vllm.ai/en/latest/cli/serve.html
+- （追記）mlcommons/inference PR #2445 — https://github.com/mlcommons/inference/pull/2445
+- （追記）mlcommons/inference_policies Issue #300 — https://github.com/mlcommons/inference_policies/issues/300
+- （追記）Reddi et al., MLPerf Inference Benchmark, arXiv 1911.02549（IV-A節） — https://arxiv.org/abs/1911.02549
+- （追記）InferenceX, Prefix caching（用語集） — https://inferencex.semianalysis.com/glossary/prefix-caching
