@@ -28,13 +28,24 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
     def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
         import requests  # lazy: decoder-only / transformers_hf-only users don't need this
 
+        # Every sampling knob is sent explicitly, never left to the server:
+        # unset knobs fall back to per-engine defaults that differ (llama.cpp
+        # server: top_k=40/min_p=0.05; vLLM: the model's generation_config,
+        # top_k=20/min_p=0), which would make "engine delta" partly a
+        # sampling-config delta. Same for thinking: Qwen3's chat template
+        # defaults to thinking ON, and transformers_hf passes
+        # enable_thinking=False, so this side must too
+        # (tests/test_adapters.py's parity test pins all three engines).
         payload = {
             "model": self.model,
             "messages": [{"role": "user", "content": query}],
             "tools": tool_set,
             "temperature": self.sampling_params["temperature"],
             "top_p": self.sampling_params["top_p"],
+            "top_k": self.sampling_params["top_k"],
+            "min_p": self.sampling_params["min_p"],
             "max_tokens": self.sampling_params["max_tokens"],
+            "chat_template_kwargs": {"enable_thinking": False},
         }
         if self.sampling_params.get("seed") is not None:
             payload["seed"] = self.sampling_params["seed"]

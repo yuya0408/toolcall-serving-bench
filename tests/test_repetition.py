@@ -228,7 +228,7 @@ def test_concurrent_driver_preserves_trial_order_even_when_completion_order_is_r
     expected_first_tool_by_trial = {}
     for trial in range(n):
         order = list(tool_set)
-        stdlib_random.Random(f"order:{case['id']}:{stage_size}:{trial}").shuffle(order)
+        stdlib_random.Random(f"order:0:{case['id']}:{stage_size}:{trial}").shuffle(order)  # seed_base=0
         expected_first_tool_by_trial[trial] = order[0]
     first_tool_to_trial = {v: k for k, v in expected_first_tool_by_trial.items()}
 
@@ -400,6 +400,25 @@ def test_equivalence_verdict_three_way():
     assert equivalence_verdict((-0.15, 0.05), margin=0.1) == "inconclusive"
 
 
+def test_seed_base_reorders_but_keeps_the_presented_tool_set():
+    """repetition.seed_base used to be recorded in the manifest without
+    affecting anything (the shuffle seed ignored it). It now shifts every
+    trial's order, while the presented tool set -- fixed by build_tool_set --
+    stays the same, so runs differing only in seed_base are order-only
+    variants of each other."""
+    from eval_bench.repetition import trial_order
+
+    case = load_cases("data")[0]
+    tool_set = build_tool_set(case, load_tools(), 10, seed=0)
+
+    same = trial_order(case["id"], tool_set, 10, trial=0, seed_base=0)
+    assert same == trial_order(case["id"], tool_set, 10, trial=0, seed_base=0)
+
+    orders = [trial_order(case["id"], tool_set, 10, trial=0, seed_base=b) for b in range(5)]
+    assert len({tuple(o) for o in orders}) > 1
+    assert all(sorted(o) == sorted(tool_set) for o in orders)
+
+
 if __name__ == "__main__":
     test_order_insensitive_predictor_is_perfectly_consistent()
     test_order_sensitive_predictor_is_detected_as_inconsistent()
@@ -418,3 +437,5 @@ if __name__ == "__main__":
     test_concurrent_driver_drops_no_work_items()
     test_half_width()
     test_equivalence_verdict_three_way()
+    test_seed_base_reorders_but_keeps_the_presented_tool_set()
+

@@ -51,7 +51,7 @@ def test_predict_fn_preserves_shuffled_subset_order_in_the_actual_request():
     # Deliberately not catalog order, and deliberately a subset (3 of 4).
     shuffled_subset = ["get_purchase", "get_inventory", "get_hr"]
     adapter = VLLMAdapter(base_url="http://localhost:8000", model="Qwen/Qwen3-8B",
-                          sampling_params={"temperature": 0.0, "top_p": 1.0, "max_tokens": 64, "seed": 0})
+                          sampling_params={"temperature": 0.0, "top_p": 1.0, "top_k": 20, "min_p": 0.0, "max_tokens": 64, "seed": 0})
     predict = make_predict_fn(adapter, OpenAIToolCallDecoder(), _TOOLS)
 
     message = {"role": "assistant", "content": None, "tool_calls": [

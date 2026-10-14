@@ -142,6 +142,7 @@ def run_accuracy_cell(
     predict: PredictFn,
     judge: SemanticJudge,
     n: int,
+    seed_base: int = 0,
 ) -> dict[str, Any]:
     """Run every case x n trials at cell['tool_stage'] and aggregate -- the
     accuracy_results_base shape both 'accuracy' and 'accuracy_under_load'
@@ -157,10 +158,11 @@ def run_accuracy_cell(
     if concurrency > 1:
         results = run_repeated_cases_concurrent(
             cases, tools, cell["tool_stage"], predict, judge, n=n, max_workers=concurrency,
+            seed_base=seed_base,
         )
     else:
         results = [
-            run_repeated_case(c, tools, cell["tool_stage"], predict, judge, n=n)
+            run_repeated_case(c, tools, cell["tool_stage"], predict, judge, n=n, seed_base=seed_base)
             for c in cases
         ]
     return aggregate_repeated(results)
