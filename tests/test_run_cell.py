@@ -15,6 +15,7 @@ import pytest
 from eval_bench.adapters.base import ModelAdapter
 from eval_bench.dataset.loader import load_cases
 from eval_bench.decoders.base import IdentityDecoder
+from eval_bench.latency import TimedResult
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("run_cell", _ROOT / "scripts" / "run_cell.py")
@@ -94,6 +95,86 @@ def test_argument_guards(bad):
     if pairs.get("--engine") == "llama_cpp":
         base.pop("--base-url")
     merged = {**base, **pairs}
+    argv = [tok for kv in merged.items() for tok in kv]
+    with pytest.raises(SystemExit):
+        run_cell._parse_args(argv)
+
+
+# ------------------------------------------------------------- latency pass
+
+class _TimedOracle:
+    """Answers instantly; the first request after the (faked) cache reset is cold."""
+
+    def __init__(self):
+        self.calls: list[tuple[str, list[str]]] = []
+
+    def generate_timed(self, query, tool_set, timeout):
+        self.calls.append((query, [t["function"]["name"] for t in tool_set]))
+        cached = 0 if len(self.calls) == 1 else 2000
+        return TimedResult(status="ok", total_s=1.0, ttft_s=0.2, output_tokens=21,
+                                    prompt_tokens=2200, cached_tokens=cached, content="")
+
+
+@pytest.fixture
+def fake_latency_backend(monkeypatch):
+    oracle = _TimedOracle()
+    resets = []
+    monkeypatch.setattr(run_cell, "_build_backend", lambda args, sampling: (oracle, None))
+    monkeypatch.setattr(run_cell, "_query_gpu", lambda: ("NVIDIA L4", 22.5))
+    monkeypatch.setattr(run_cell, "_reset_vllm_prefix_cache", resets.append)
+    return oracle, resets
+
+
+def _run_latency(tmp_path, *extra):
+    argv = ["--pass-type", "latency", "--engine", "vllm", "--base-url", "http://x",
+            "--model", "Qwen/Qwen3-8B", "--quantization", "bf16-none", "--engine-version", "0.0.0",
+            "--tool-stage", "10", "--n-requests", "28", "--run-id-prefix", "smoke-",
+            "--out-dir", str(tmp_path), *extra]
+    return run_cell.main(argv)
+
+
+def test_latency_cell_resets_the_cache_and_writes_a_valid_manifest(tmp_path, fake_latency_backend):
+    oracle, resets = fake_latency_backend
+    assert _run_latency(tmp_path) == 0
+    assert resets == ["http://x"]
+
+    manifest = json.loads(next(tmp_path.glob("*Z.json")).read_text(encoding="utf-8"))
+    assert manifest["pass_type"] == "latency" and manifest["cell"]["concurrency"] == 1
+    assert manifest["results"]["n_requests"] == 28
+    rows = [json.loads(line) for line in next(tmp_path.glob("*.raw.jsonl")).read_text(encoding="utf-8").splitlines()]
+    assert sum(r["phase"] == "measured" for r in rows) == 28
+
+    # Same case -> same tools in the same order every time; the query is never repeated.
+    by_case: dict[str, set] = {}
+    for query, names in oracle.calls:
+        by_case.setdefault(query.split("\n\n[request-id")[0], set()).add(tuple(names))
+    assert all(len(orders) == 1 for orders in by_case.values())
+    assert len({q for q, _ in oracle.calls}) == len(oracle.calls)
+
+
+def test_aborted_latency_cell_is_recorded_as_unsupported(tmp_path, fake_latency_backend, monkeypatch):
+    oracle, _ = fake_latency_backend
+
+    def fail(query, tool_set, timeout):
+        raise RuntimeError("HTTP 400: context length exceeded")
+    monkeypatch.setattr(oracle, "generate_timed", fail)
+    assert _run_latency(tmp_path) == 2
+    aborted = json.loads(next(tmp_path.glob("*.aborted.json")).read_text(encoding="utf-8"))
+    assert aborted["outcome"] == "unsupported" and "context length" in aborted["reason"]
+    assert not list(tmp_path.glob("*Z.json"))
+
+
+@pytest.mark.parametrize("bad", [
+    ["--n-requests", "100", "--run-id-prefix", ""],                    # main runs need >= 299
+    ["--engine", "transformers_hf", "--concurrency", "2"],             # control point is c=1 only
+    [],                                                                # --n-requests is required
+])
+def test_latency_argument_guards(bad):
+    base = {"--pass-type": "latency", "--engine": "vllm", "--base-url": "http://x", "--model": "m",
+            "--quantization": "q", "--engine-version": "v", "--tool-stage": "10"}
+    if bad:
+        base["--n-requests"] = "299"
+    merged = {**base, **dict(zip(bad[::2], bad[1::2]))}
     argv = [tok for kv in merged.items() for tok in kv]
     with pytest.raises(SystemExit):
         run_cell._parse_args(argv)
