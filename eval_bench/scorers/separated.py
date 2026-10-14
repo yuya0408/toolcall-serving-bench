@@ -5,13 +5,18 @@ folded together. E2E is a derived convenience metric only.
 
   - selection:   did the model pick the right tool (incl. correctly picking
                  "no tool" for negative cases)?
-  - arg_exact:   for exact-scored fields (enums/numbers/dates), all match?
-  - arg_semantic: for free-text fields, similarity/judge above threshold?
+  - arg_exact:   for exact-scored fields (enums/numbers/dates, and free-text
+                 search terms after NFKC normalization), all match?
+  - arg_semantic: for semantic-scored fields, similarity/judge above threshold?
 
 The semantic judge is injected (dependency), not hard-coded, so it can be an
 embedding-similarity check or an LLM-as-Judge without touching this module.
+As of schema/tools.json 2.1.0 no field is semantic-scored, so arg_semantic is
+always None (N/A) and scoring needs no judge model; the slot is kept so a
+semantic field can be reintroduced without changing this module.
 """
 from __future__ import annotations
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
@@ -42,10 +47,22 @@ def score_selection(expected_tool: Optional[str], pred_tool: Optional[str]) -> b
     return expected_tool == pred_tool
 
 
+def _normalize(value: Any) -> Any:
+    """NFKC + strip for strings, identity otherwise. Absorbs full-/half-width
+    and similar presentation variants (ｽﾃﾝﾚｽ == ステンレス, ２０２３ == 2023)
+    while still failing synonyms (SUS != ステンレス) -- the free-text search
+    fields are scored as "extracted the right term", not "meant the same thing"
+    (schema/tools.json 2.1.0 scoring_convention).
+    """
+    if isinstance(value, str):
+        return unicodedata.normalize("NFKC", value).strip()
+    return value
+
+
 def score_arg_exact(expected_exact: dict[str, Any], pred_args: dict[str, Any]) -> Optional[bool]:
     if not expected_exact:
         return None
-    return all(pred_args.get(k) == v for k, v in expected_exact.items())
+    return all(_normalize(pred_args.get(k)) == _normalize(v) for k, v in expected_exact.items())
 
 
 def score_arg_semantic(
