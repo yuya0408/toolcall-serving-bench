@@ -22,4 +22,6 @@ jobs:
       # so the test suite needs only the harness's own requirements.
       - run: pip install -r requirements.txt pytest
 
-      - run: pytest -q
+      # python -m puts the repo root on sys.path (as local runs do), so the
+      # tests can import eval_bench without packaging it.
+      - run: python -m pytest -q
