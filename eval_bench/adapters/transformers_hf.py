@@ -14,9 +14,29 @@ model_id, so tests can inject fakes without installing torch/transformers.
 Real callers should go through from_pretrained().
 """
 from __future__ import annotations
+import time
 from typing import Any
 
 from eval_bench.adapters.base import ModelAdapter
+from eval_bench.latency import TimedResult
+
+
+class _StepClock:
+    """A stopping criterion that never stops: generate() calls it once per
+    new token, so its call times are the token times. It synchronizes CUDA
+    first -- kernels launch asynchronously, and without the sync a timestamp
+    could precede the token it claims to time. (generate() already syncs
+    every step to check for finished sequences, so this adds no stall.)"""
+
+    def __init__(self):
+        self.times: list[float] = []
+
+    def __call__(self, input_ids, scores, **kwargs):
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        self.times.append(time.perf_counter())
+        return torch.zeros(input_ids.shape[0], dtype=torch.bool, device=input_ids.device)
 
 
 class TransformersHFAdapter(ModelAdapter):
@@ -45,7 +65,7 @@ class TransformersHFAdapter(ModelAdapter):
         )
         return cls(tokenizer, model, sampling_params)
 
-    def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
+    def _prepare(self, query: str, tool_set: list[dict[str, Any]]):
         messages = [{"role": "user", "content": query}]
         prompt = self.tokenizer.apply_chat_template(
             messages,
@@ -77,8 +97,37 @@ class TransformersHFAdapter(ModelAdapter):
         if seed is not None:
             import torch
             torch.manual_seed(seed)
+        return inputs, gen_kwargs
 
-        output_ids = self.model.generate(**inputs, **gen_kwargs)
+    def _decode_new(self, inputs, output_ids) -> str:
         prompt_len = inputs["input_ids"].shape[1]
-        generated = output_ids[0][prompt_len:]
-        return self.tokenizer.decode(generated, skip_special_tokens=True)
+        return self.tokenizer.decode(output_ids[0][prompt_len:], skip_special_tokens=True)
+
+    def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
+        inputs, gen_kwargs = self._prepare(query, tool_set)
+        return self._decode_new(inputs, self.model.generate(**inputs, **gen_kwargs))
+
+    def generate_timed(self, query: str, tool_set: list[dict[str, Any]],
+                       timeout: float) -> TimedResult:
+        """The latency pass's request (concurrency 1 only). TTFT runs from
+        before the chat template is rendered -- a server's TTFT includes its
+        own templating and tokenization -- to the first generated token.
+        `timeout` is not enforced in-process; a request past it is still
+        counted as a timeout."""
+        from transformers import StoppingCriteriaList
+
+        started = time.perf_counter()
+        inputs, gen_kwargs = self._prepare(query, tool_set)
+        clock = _StepClock()
+        output_ids = self.model.generate(**inputs, **gen_kwargs,
+                                         stopping_criteria=StoppingCriteriaList([clock]))
+        total = time.perf_counter() - started
+        text = self._decode_new(inputs, output_ids)
+        if total > timeout:
+            return TimedResult(status="timeout", total_s=total)
+        ttft = clock.times[0] - started if clock.times else None
+        return TimedResult(
+            status="ok", total_s=total, ttft_s=ttft, first_delta_s=ttft,
+            output_tokens=len(clock.times), prompt_tokens=inputs["input_ids"].shape[1],
+            cached_tokens=None, content=text,
+        )

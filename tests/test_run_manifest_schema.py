@@ -13,6 +13,8 @@ import pathlib
 import jsonschema
 import pytest
 
+from eval_bench.latency import TimedResult, summarize
+
 _SCHEMA_PATH = pathlib.Path(__file__).resolve().parents[1] / "schema" / "run_manifest.schema.json"
 _SCHEMA = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
@@ -66,6 +68,41 @@ def test_plain_accuracy_manifest_rejects_concurrency():
         _validate(manifest)
 
 
+def _latency_results(cached: bool = True) -> dict:
+    """What eval_bench.latency.summarize actually emits, so this schema test
+    breaks if the code and the schema drift apart."""
+    measured = [TimedResult(status="ok", total_s=1.0 + i / 1000, ttft_s=0.2, output_tokens=40,
+                            prompt_tokens=2200, cached_tokens=2000 if cached else None)
+                for i in range(299)]
+    measured[0] = TimedResult(status="timeout", total_s=120.0)
+    warmup = {"window_requests": 14, "windows": [{"throughput_rps": 1.0, "mean_latency_s": 1.0}] * 3,
+              "warmup_requests": 42, "stability_pct": 10.0}
+    return summarize(measured, warmup)
+
+
+def test_latency_results_without_prefix_cache_are_valid():
+    manifest = {
+        "run_id": "run-2b",
+        "created_at": "2026-10-15T00:00:00Z",
+        "pass_type": "latency",
+        "cell": {
+            "engine": "transformers_hf",
+            "engine_version": "4.56.0",
+            "model": "Qwen/Qwen3-8B",
+            "quantization": "bf16-none",
+            "sampling_params": _SAMPLING,
+            "prompt_layout": "stable_first",
+            "tool_stage": 10,
+            "tool_catalog_version": "2.1.0",
+            "concurrency": 1,
+        },
+        "hardware": _HARDWARE,
+        "results": _latency_results(cached=False),
+    }
+    assert "prefix_cache" not in manifest["results"]
+    _validate(manifest)
+
+
 def test_latency_manifest_requires_concurrency_and_accepts_vllm_diagnostics():
     manifest = {
         "run_id": "run-2",
@@ -84,11 +121,7 @@ def test_latency_manifest_requires_concurrency_and_accepts_vllm_diagnostics():
         },
         "hardware": _HARDWARE,
         "results": {
-            "warmup_excluded": True,
-            "n_requests": 100,
-            "ttft_ms": {"p50": 10, "p95": 20, "p99": 30},
-            "total_latency_ms": {"p50": 100, "p95": 200, "p99": 300},
-            "tokens_per_sec": {"p50": 50, "p95": 60, "p99": 70},
+            **_latency_results(),
             "vllm_diagnostics": {"gpu_blocks_reported": 1000, "observed_max_concurrency": 8},
         },
     }
@@ -111,13 +144,7 @@ def test_latency_manifest_without_concurrency_is_invalid():
             "tool_catalog_version": "1.0.0",
         },
         "hardware": _HARDWARE,
-        "results": {
-            "warmup_excluded": True,
-            "n_requests": 100,
-            "ttft_ms": {"p50": 10, "p95": 20, "p99": 30},
-            "total_latency_ms": {"p50": 100, "p95": 200, "p99": 300},
-            "tokens_per_sec": {"p50": 50, "p95": 60, "p99": 70},
-        },
+        "results": _latency_results(),
     }
     with pytest.raises(jsonschema.ValidationError):
         _validate(manifest)

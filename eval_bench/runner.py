@@ -98,7 +98,7 @@ def _require_vllm_diagnostics_if_needed(cell: dict[str, Any], results: dict[str,
         )
 
 
-def _validate_cell_invariants(pass_type: str, cell: dict[str, Any],
+def validate_cell_invariants(pass_type: str, cell: dict[str, Any],
                               tools: dict[str, dict[str, Any]]) -> None:
     """Three rules docs/engine-performance-plan.md states but nothing in
     code enforced until now. Runs before any model call (inside
@@ -153,7 +153,7 @@ def run_accuracy_cell(
     that function's docstring for why this is required, not optional, for
     the accuracy_under_load probe to measure what it claims to.
     """
-    _validate_cell_invariants(pass_type, cell, tools)
+    validate_cell_invariants(pass_type, cell, tools)
     concurrency = cell.get("concurrency", 1)
     if concurrency > 1:
         results = run_repeated_cases_concurrent(

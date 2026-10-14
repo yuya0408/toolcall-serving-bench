@@ -10,9 +10,11 @@ OpenAIToolCallDecoder (decoders/base.py) is what turns it into a Prediction.
 """
 from __future__ import annotations
 import json
-from typing import Any
+import time
+from typing import Any, Optional
 
 from eval_bench.adapters.base import ModelAdapter
+from eval_bench.latency import TimedResult
 
 
 class OpenAICompatibleChatAdapter(ModelAdapter):
@@ -25,9 +27,9 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
         self.sampling_params = sampling_params
         self.timeout = timeout
 
-    def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
-        import requests  # lazy: decoder-only / transformers_hf-only users don't need this
-
+    def build_payload(self, query: str, tool_set: list[dict[str, Any]]) -> dict[str, Any]:
+        """The request body both generate() and generate_timed() send, so the
+        accuracy and latency passes cannot drift apart in what they ask for."""
         # Every sampling knob is sent explicitly, never left to the server:
         # unset knobs fall back to per-engine defaults that differ (llama.cpp
         # server: top_k=40/min_p=0.05; vLLM: the model's generation_config,
@@ -49,7 +51,12 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
         }
         if self.sampling_params.get("seed") is not None:
             payload["seed"] = self.sampling_params["seed"]
+        return payload
 
+    def generate(self, query: str, tool_set: list[dict[str, Any]]) -> str:
+        import requests  # lazy: decoder-only / transformers_hf-only users don't need this
+
+        payload = self.build_payload(query, tool_set)
         response = requests.post(
             f"{self.base_url}/v1/chat/completions", json=payload, timeout=self.timeout,
         )
@@ -58,9 +65,104 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
         return json.dumps(message)
 
 
+    def generate_timed(self, query: str, tool_set: list[dict[str, Any]],
+                       timeout: float) -> TimedResult:
+        """The latency pass's request: the same body as generate(), streamed,
+        timed on arrival of each server-sent event.
+
+        `timeout` bounds the whole request. Past it the request is a timeout
+        (an exceedance, eval_bench/latency.py); any other failure raises, and
+        the driver aborts the cell.
+        """
+        import requests
+
+        payload = self.build_payload(query, tool_set)
+        payload["stream"] = True
+        payload["stream_options"] = {"include_usage": True}
+        started = time.perf_counter()
+        ttft = first_delta = last_choice_at = None
+        usage: Optional[dict[str, Any]] = None
+        timings: Optional[dict[str, Any]] = None
+        content: list[str] = []
+        reasoning: list[str] = []
+
+        def timed_out() -> TimedResult:
+            return TimedResult(status="timeout", total_s=time.perf_counter() - started,
+                               ttft_s=ttft, first_delta_s=first_delta)
+
+        try:
+            with requests.post(f"{self.base_url}/v1/chat/completions", json=payload,
+                               stream=True, timeout=(10, timeout)) as response:
+                response.raise_for_status()
+                # chunk_size=None: hand over each chunk as it arrives. The
+                # default (512 bytes) would hold early, short events back
+                # until 512 bytes accumulate and inflate TTFT.
+                for line in response.iter_lines(chunk_size=None):
+                    now = time.perf_counter()
+                    if now - started > timeout:
+                        return timed_out()
+                    if not line.startswith(b"data:"):
+                        continue
+                    data = line[len(b"data:"):].strip()
+                    if data == b"[DONE]":
+                        break
+                    event = json.loads(data)
+                    if "error" in event:
+                        raise RuntimeError(f"engine error mid-stream: {event['error']}")
+                    choices = event.get("choices") or []
+                    if choices:
+                        last_choice_at = now
+                        if ttft is None:
+                            ttft = now - started
+                        delta = choices[0].get("delta") or {}
+                        if delta.get("content"):
+                            content.append(delta["content"])
+                        if delta.get("reasoning_content"):
+                            reasoning.append(delta["reasoning_content"])
+                        if first_delta is None and (delta.get("content") or delta.get("tool_calls")
+                                                    or delta.get("reasoning_content")):
+                            first_delta = now - started
+                    usage = event.get("usage") or usage
+                    timings = event.get("timings") or timings
+        except requests.exceptions.Timeout:
+            return timed_out()
+        except requests.exceptions.ConnectionError as exc:
+            # A read timeout while streaming surfaces as ConnectionError
+            # (requests wraps urllib3's ReadTimeoutError), not as Timeout.
+            if "timed out" in str(exc).lower():
+                return timed_out()
+            raise
+        # The request ends at its last choice-bearing event, as in vllm bench
+        # serve: the trailing usage-only event carries no token.
+        total = (last_choice_at or time.perf_counter()) - started
+        if usage is None or "completion_tokens" not in usage:
+            raise RuntimeError("the stream ended without a usage block (stream_options.include_usage)")
+        return TimedResult(
+            status="ok", total_s=total, ttft_s=ttft, first_delta_s=first_delta,
+            output_tokens=usage["completion_tokens"], prompt_tokens=usage.get("prompt_tokens"),
+            cached_tokens=self.cached_tokens(usage, timings),
+            content="".join(content), reasoning="".join(reasoning),
+        )
+
+    def cached_tokens(self, usage: dict[str, Any], timings: Optional[dict[str, Any]]) -> int:
+        raise NotImplementedError
+
+
 class VLLMAdapter(OpenAICompatibleChatAdapter):
     name = "vllm"
+
+    def cached_tokens(self, usage, timings) -> int:
+        details = usage.get("prompt_tokens_details") or {}
+        if details.get("cached_tokens") is None:
+            raise RuntimeError("vLLM reported no prompt_tokens_details.cached_tokens; "
+                               "start the server with --enable-prompt-tokens-details")
+        return details["cached_tokens"]
 
 
 class LlamaCppAdapter(OpenAICompatibleChatAdapter):
     name = "llama_cpp"
+
+    def cached_tokens(self, usage, timings) -> int:
+        if not timings or timings.get("cache_n") is None:
+            raise RuntimeError("llama-server reported no timings.cache_n")
+        return timings["cache_n"]

@@ -43,7 +43,7 @@ cat ~/llama_cpp_commit.txt
 
 **このハッシュはdestroy後は二度と取得できない。** `schema/run_manifest.schema.json`が
 `engine_version`にコミットハッシュ形式(`^[0-9a-f]{7,40}$`)を要求し、
-`eval_bench/runner.py`の`_validate_cell_invariants`が強制する。取得したら即ローカルへ回収:
+`eval_bench/runner.py`の`validate_cell_invariants`が強制する。取得したら即ローカルへ回収:
 
 ```
 # ローカル(WSL)側で実行

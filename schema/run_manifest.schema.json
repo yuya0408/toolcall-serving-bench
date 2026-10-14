@@ -114,14 +114,56 @@
           "cell": { "required": ["concurrency", "tool_stage"] },
           "results": {
             "type": "object",
-            "required": ["warmup_excluded", "n_requests", "ttft_ms", "total_latency_ms", "tokens_per_sec"],
+            "required": ["warmup_excluded", "n_requests", "n_timeouts", "ttft_ms", "tpot_ms", "total_latency_ms", "tokens_per_sec", "slo", "warmup"],
             "additionalProperties": false,
+            "description": "eval_bench.latency.summarize output (docs/adr/0003-latency-pass-verdict.md). Percentiles are over the measured requests that completed; timeouts are counted in n_timeouts and as exceedances in slo, never in the percentiles.",
             "properties": {
               "warmup_excluded": { "type": "boolean", "const": true, "description": "Warmup requests must always be excluded from reported percentiles." },
-              "n_requests": { "type": "integer" },
+              "n_requests": { "type": "integer", "minimum": 1, "description": "Measured requests, fixed before the run (>= 299 for a main run)." },
+              "n_timeouts": { "type": "integer", "minimum": 0 },
               "ttft_ms": { "$ref": "#/$defs/percentiles" },
+              "tpot_ms": { "oneOf": [{ "$ref": "#/$defs/percentiles" }, { "type": "null" }], "description": "(total - TTFT) / (output tokens - 1). Null only if no request produced 2+ tokens." },
               "total_latency_ms": { "$ref": "#/$defs/percentiles" },
-              "tokens_per_sec": { "$ref": "#/$defs/percentiles" },
+              "tokens_per_sec": { "$ref": "#/$defs/percentiles", "description": "Per request: output tokens / total latency." },
+              "slo": {
+                "type": "object",
+                "required": ["conversational", "interactive"],
+                "additionalProperties": false,
+                "properties": {
+                  "conversational": { "$ref": "#/$defs/slo_verdict" },
+                  "interactive": { "$ref": "#/$defs/slo_verdict" }
+                }
+              },
+              "warmup": {
+                "type": "object",
+                "required": ["window_requests", "windows", "warmup_requests", "stability_pct"],
+                "additionalProperties": false,
+                "description": "Perf Analyzer's stability rule in count_windows form: one window = one cycle of the case set.",
+                "properties": {
+                  "window_requests": { "type": "integer", "minimum": 1 },
+                  "windows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["throughput_rps", "mean_latency_s"],
+                      "additionalProperties": false,
+                      "properties": { "throughput_rps": { "type": "number" }, "mean_latency_s": { "type": "number" } }
+                    }
+                  },
+                  "warmup_requests": { "type": "integer", "minimum": 0 },
+                  "stability_pct": { "type": "number" }
+                }
+              },
+              "prefix_cache": {
+                "type": "object",
+                "required": ["cached_tokens_mean", "hit_token_ratio"],
+                "additionalProperties": false,
+                "description": "Absent for transformers_hf (no prefix cache). The cache is on, as in production, and reset at the cell boundary (docs/adr/0003).",
+                "properties": {
+                  "cached_tokens_mean": { "type": "number" },
+                  "hit_token_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
+                }
+              },
               "vllm_diagnostics": { "$ref": "#/$defs/vllm_diagnostics" }
             }
           }
@@ -164,6 +206,21 @@
         "arg_exact_mean": { "type": ["number", "null"], "description": "Null iff no case in this stage/model had exact-scored fields to evaluate. Computed by eval_bench.repetition.aggregate_repeated, pooled over only the trials where the metric was applicable (selection succeeded on a positive case with scoreable fields of this kind)." },
         "arg_semantic_mean": { "type": ["number", "null"] },
         "consistency": { "type": "number" }
+      }
+    },
+    "slo_verdict": {
+      "type": "object",
+      "required": ["ttft_ms", "tpot_ms", "n", "exceeded", "rate_lower", "rate_upper", "verdict"],
+      "additionalProperties": false,
+      "description": "One latency class (MLPerf's Llama 3.1 8B limits). A request exceeds if it timed out or its TTFT or TPOT is over the limit; the exceedance rate is judged against 1% with one-sided 95% Clopper-Pearson bounds.",
+      "properties": {
+        "ttft_ms": { "type": "number" },
+        "tpot_ms": { "type": "number" },
+        "n": { "type": "integer" },
+        "exceeded": { "type": "integer" },
+        "rate_lower": { "type": "number" },
+        "rate_upper": { "type": "number" },
+        "verdict": { "enum": ["meets", "fails", "indeterminate"] }
       }
     },
     "percentiles": {
