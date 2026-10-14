@@ -1,0 +1,25 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # torch/transformers/requests are imported lazily inside the adapters,
+      # so the test suite needs only the harness's own requirements.
+      - run: pip install -r requirements.txt pytest
+
+      - run: pytest -q
