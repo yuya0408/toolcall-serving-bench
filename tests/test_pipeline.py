@@ -17,7 +17,9 @@ from unittest.mock import MagicMock, patch
 from eval_bench.adapters.base import EchoAdapter
 from eval_bench.adapters.openai_compatible import VLLMAdapter
 from eval_bench.decoders.base import IdentityDecoder, OpenAIToolCallDecoder
-from eval_bench.pipeline import make_predict_fn
+import pytest
+
+from eval_bench.pipeline import assert_no_thinking, make_predict_fn
 
 _TOOLS = {
     "get_inventory": {
@@ -74,3 +76,39 @@ def test_predict_fn_works_with_the_echo_stub_for_backend_free_testing():
     predict = make_predict_fn(EchoAdapter(), IdentityDecoder(), _TOOLS)
     pred = predict(_CASE, ["get_inventory", "get_sales"])
     assert pred.tool is None  # EchoAdapter always returns "{}"
+
+
+@pytest.mark.parametrize("raw", [
+    json.dumps({"role": "assistant", "content": None, "tool_calls": []}),
+    json.dumps({"role": "assistant", "content": "<think>\n\n</think>\n\nok", "reasoning_content": ""}),
+    "<think>\n\n</think>\n\n<tool_call>{\"name\": \"x\", \"arguments\": {}}</tool_call>",
+])
+def test_thinking_guard_accepts_empty_or_absent_reasoning(raw):
+    assert_no_thinking(raw)  # does not raise
+
+
+@pytest.mark.parametrize("raw", [
+    json.dumps({"role": "assistant", "content": None, "reasoning_content": "まず在庫を…"}),
+    json.dumps({"role": "assistant", "content": "<think>在庫を見るべき</think>ok"}),
+    "<think>在庫を見るべき</think><tool_call>{\"name\": \"x\", \"arguments\": {}}</tool_call>",
+])
+def test_thinking_guard_rejects_actual_reasoning(raw):
+    """tests/test_adapters.py proves thinking-off is *sent*; this is the
+    runtime check that the engine *honored* it. Raising (not logging) is the
+    point: a silently-thinking engine invalidates the engine comparison."""
+    with pytest.raises(ValueError):
+        assert_no_thinking(raw)
+
+
+def test_recorder_sees_the_raw_output_before_decoding():
+    calls = []
+    predict = make_predict_fn(EchoAdapter(), IdentityDecoder(), _TOOLS,
+                              recorder=lambda *args: calls.append(args))
+    predict(_CASE, ["get_sales", "get_inventory"])
+
+    (case, tool_names, raw, pred, elapsed), = calls
+    assert case is _CASE
+    assert tool_names == ["get_sales", "get_inventory"]
+    assert raw == "{}"
+    assert pred.tool is None
+    assert elapsed >= 0
