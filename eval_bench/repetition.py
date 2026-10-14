@@ -59,6 +59,25 @@ class RepeatedCaseResult:
         return all(p.tool == first.tool and p.args == first.args for p in self.predictions[1:])
 
 
+def trial_order(case_id: str, tool_set: list[str], stage_size: int, trial: int,
+                seed_base: int = 0) -> list[str]:
+    """The presentation order of `tool_set` for one (case, trial). The single
+    source of the shuffle seed formula: the serialized path, the concurrent
+    driver, and anything that later needs to re-associate a logged request
+    with its trial (scripts/run_cell.py's raw-output log) all call this.
+
+    `seed_base` shifts every order at once (the manifest's
+    repetition.seed_base). It only reorders: which tools are presented is
+    fixed by build_tool_set's own seed, so two runs that differ only in
+    seed_base present the same tools in different orders. Two runs with the
+    same seed_base (e.g. an A/A pair, or the third pass's serialized vs
+    loaded arms) present identical orders, trial for trial.
+    """
+    order = list(tool_set)
+    random.Random(f"order:{seed_base}:{case_id}:{stage_size}:{trial}").shuffle(order)
+    return order
+
+
 def _run_one_trial(
     case: dict[str, Any],
     tool_set: list[str],
@@ -66,6 +85,7 @@ def _run_one_trial(
     trial: int,
     predict: PredictFn,
     judge: SemanticJudge,
+    seed_base: int = 0,
 ) -> tuple[Prediction, CaseScore]:
     """One (case, trial) unit of work: deterministically shuffle `tool_set`
     for this trial, call predict, score. Factored out of run_repeated_case
@@ -75,8 +95,7 @@ def _run_one_trial(
     over "the same" cases would no longer be trial-for-trial paired, and
     _paired_cluster_bootstrap_diff_ci's pairing would be nominal only.
     """
-    order = list(tool_set)
-    random.Random(f"order:{case['id']}:{stage_size}:{trial}").shuffle(order)
+    order = trial_order(case["id"], tool_set, stage_size, trial, seed_base)
     pred = predict(case, order)
     return pred, score_case(case, pred, judge)
 
@@ -88,6 +107,7 @@ def run_repeated_case(
     predict: PredictFn,
     judge: SemanticJudge,
     n: int = 5,
+    seed_base: int = 0,
 ) -> RepeatedCaseResult:
     """Run `n` trials of one case at one stage size, varying *only* the
     presentation order across trials.
@@ -107,7 +127,7 @@ def run_repeated_case(
     trials: list[CaseScore] = []
     predictions: list[Prediction] = []
     for trial in range(n):
-        pred, score = _run_one_trial(case, tool_set, stage_size, trial, predict, judge)
+        pred, score = _run_one_trial(case, tool_set, stage_size, trial, predict, judge, seed_base)
         predictions.append(pred)
         trials.append(score)
     return RepeatedCaseResult(case_id=case["id"], stage_size=stage_size, trials=trials, predictions=predictions)
@@ -121,6 +141,7 @@ def run_repeated_cases_concurrent(
     judge: SemanticJudge,
     n: int,
     max_workers: int,
+    seed_base: int = 0,
 ) -> list[RepeatedCaseResult]:
     """Same total workload as calling run_repeated_case once per case (what
     the serialized baseline does), but dispatches every (case, trial) unit
@@ -146,7 +167,8 @@ def run_repeated_cases_concurrent(
 
     def _dispatch(item: tuple[dict[str, Any], int]) -> tuple[str, int, Prediction, CaseScore]:
         case, trial = item
-        pred, score = _run_one_trial(case, tool_sets[case["id"]], stage_size, trial, predict, judge)
+        pred, score = _run_one_trial(case, tool_sets[case["id"]], stage_size, trial, predict, judge,
+                                     seed_base)
         return case["id"], trial, pred, score
 
     # Trial index travels with each result explicitly and results are
@@ -279,11 +301,14 @@ def _paired_cluster_bootstrap_diff_ci(
 
 
 def half_width(ci: tuple[float, float]) -> float:
-    """(hi - lo) / 2 -- the equivalence margin X is defined as this applied
-    to the serialized baseline's own selection_ci95, per
-    docs/engine-performance-plan.md (2026-09-11: corrected from full width,
-    which had silently doubled the margin relative to the doc's own '±X pt'
-    framing).
+    """(hi - lo) / 2 -- a CI's distance from its center.
+
+    History: this was the equivalence margin X (applied to the serialized
+    baseline's own selection_ci95) until docs/adr/0002-equivalence-margin.md
+    replaced that rule with a fixed X = 0.026. A CI-derived X shrinks at the
+    same 1/sqrt(n) rate as the paired diff CI it is compared against, so
+    adding cases could not raise the third pass's power. Kept as a reporting
+    helper (e.g. the A/A noise floor's width).
     """
     lo, hi = ci
     return (hi - lo) / 2
@@ -291,7 +316,9 @@ def half_width(ci: tuple[float, float]) -> float:
 
 def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
     """Classify a paired difference CI (from _paired_cluster_bootstrap_diff_ci)
-    against equivalence margin X, TOST-style: the entire CI must sit inside
+    against equivalence margin X (fixed at 0.026 = one Qwen3 model tier on
+    BFCL v3, declared before any data: docs/adr/0002-equivalence-margin.md),
+    TOST-style: the entire CI must sit inside
     (-margin, +margin) to call the two conditions equivalent -- not just the
     point estimate (docs/engine-performance-plan.md's option (a), chosen
     2026-09-11 specifically to avoid the weaker, direction-blind version
@@ -304,14 +331,14 @@ def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
       - "equivalent":     the whole CI fits inside (-margin, +margin).
       - "not_equivalent": the whole CI is outside (-margin, +margin), in
                            either direction -- confidently more different
-                           than the shuffle-order noise floor already is.
+                           than the margin allows.
       - "inconclusive":   the CI straddles a margin boundary. Cannot rule
                            out a difference bigger than margin, but cannot
                            confirm one either. This is an expected, legitimate,
-                           reportable outcome at n=14 (confirmed with the user
+                           reportable outcome (confirmed with the user
                            2026-09-11) -- it is not license to loosen margin
-                           after seeing the data; the margin was pre-declared
-                           as a rule, not a number, for exactly this reason.
+                           after seeing the data; ADR-0002 fixes the number in
+                           advance and sizes the case set from a pilot instead.
 
     Boundary convention (a CI bound landing exactly on +-margin, which 2000
     resamples make unlikely in practice but should still be unambiguous):

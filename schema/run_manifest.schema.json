@@ -33,11 +33,14 @@
         "quantization": { "type": "string", "description": "e.g. 'gguf-q4_k_m', 'awq-4bit', 'fp16-none'. Must be held equivalent across engines being compared in the same cell pair; if an engine can't match, exclude that cell rather than silently adjusting." },
         "sampling_params": {
           "type": "object",
-          "required": ["temperature", "top_p", "max_tokens", "seed"],
+          "required": ["temperature", "top_p", "top_k", "min_p", "max_tokens", "seed"],
           "additionalProperties": true,
+          "description": "Every knob the adapters send is recorded. top_k/min_p are required because engine defaults for them differ (llama.cpp server top_k=40/min_p=0.05 vs the model generation_config's top_k=20/min_p=0), so an unrecorded value cannot be assumed equal across engines.",
           "properties": {
             "temperature": { "type": "number" },
             "top_p": { "type": "number" },
+            "top_k": { "type": "integer" },
+            "min_p": { "type": "number" },
             "max_tokens": { "type": "integer" },
             "seed": { "type": ["integer", "null"] }
           }

@@ -20,7 +20,7 @@ from eval_bench.runner import build_manifest, parse_vllm_diagnostics, run_accura
 from eval_bench.scorers.separated import Prediction
 
 _HARDWARE = {"instance_type": "g6.xlarge", "gpu": "L4", "vram_gb": 22, "region": "ap-northeast-1"}
-_SAMPLING = {"temperature": 0.0, "top_p": 1.0, "max_tokens": 256, "seed": 0}
+_SAMPLING = {"temperature": 0.0, "top_p": 1.0, "top_k": 20, "min_p": 0.0, "max_tokens": 256, "seed": 0}
 
 
 def _judge(exp, pred):

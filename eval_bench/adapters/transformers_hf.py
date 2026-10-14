@@ -57,12 +57,22 @@ class TransformersHFAdapter(ModelAdapter):
         )
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
-        gen_kwargs: dict[str, Any] = {
-            "max_new_tokens": self.sampling_params["max_tokens"],
-            "temperature": self.sampling_params["temperature"],
-            "top_p": self.sampling_params["top_p"],
-            "do_sample": self.sampling_params["temperature"] > 0,
-        }
+        # top_k/min_p are passed explicitly rather than inherited from the
+        # model's generation_config, matching openai_compatible.py's "send
+        # every knob" rule. Greedy (temperature == 0) sends do_sample=False
+        # only: the sampling knobs are inert then, and HF rejects
+        # temperature=0.0 combined with sampling.
+        gen_kwargs: dict[str, Any] = {"max_new_tokens": self.sampling_params["max_tokens"]}
+        if self.sampling_params["temperature"] > 0:
+            gen_kwargs.update(
+                do_sample=True,
+                temperature=self.sampling_params["temperature"],
+                top_p=self.sampling_params["top_p"],
+                top_k=self.sampling_params["top_k"],
+                min_p=self.sampling_params["min_p"],
+            )
+        else:
+            gen_kwargs["do_sample"] = False
         seed = self.sampling_params.get("seed")
         if seed is not None:
             import torch

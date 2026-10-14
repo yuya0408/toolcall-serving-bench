@@ -17,7 +17,7 @@ _SCHEMA_PATH = pathlib.Path(__file__).resolve().parents[1] / "schema" / "run_man
 _SCHEMA = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 _HARDWARE = {"instance_type": "g6.xlarge", "gpu": "L4", "vram_gb": 22, "region": "ap-northeast-1"}
-_SAMPLING = {"temperature": 0.0, "top_p": 1.0, "max_tokens": 256, "seed": 0}
+_SAMPLING = {"temperature": 0.0, "top_p": 1.0, "top_k": 20, "min_p": 0.0, "max_tokens": 256, "seed": 0}
 _ACCURACY_RESULTS = {
     "stage_size": 10,
     "n_cases": 20,

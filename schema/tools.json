@@ -1,18 +1,17 @@
 {
   "$comment": "Canonical tool definitions for toolcall-serving-bench. Generic-ERP vocabulary only, expanded from the standard ERP module set (master/sales/purchase/inventory/accounting/hr/report). Near-duplicate functions are placed WITHIN each module on purpose so that selection difficulty grows with tool-set size. Argument scoring mode is carried by x-scoring and is stripped from the model-facing view.",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "scoring_convention": {
     "exact": [
       "enum",
       "integer",
       "boolean",
       "string-with-pattern",
-      "plain string identifiers"
+      "plain string identifiers",
+      "free_text (search keywords / query text)"
     ],
-    "semantic": [
-      "free_text"
-    ],
-    "note": "A field is scored semantically iff x-scoring == 'semantic'. Everything else is exact."
+    "semantic": [],
+    "note": "A field is scored semantically iff x-scoring == 'semantic'. Everything else is exact. String values are NFKC-normalized and stripped on both sides before the exact comparison, so full-width/half-width variants match but synonyms do not. 2.1.0: no field is semantic any more -- attribute/section names became enums, and free-text search terms are scored normalized-exact, so scoring is fully mechanical with no judge model."
   },
   "tool_set_stages": {
     "$comment": "Tool count is an experiment variable: the same cases are run under each stage to produce a selection-accuracy degradation curve. Stage sizes must be large enough to hold the correct tool plus all declared distractors (max 3 here), so the smallest usable stage is 5, not 3. The top stage equals the full catalogue.",
@@ -60,8 +59,24 @@
           },
           "field": {
             "type": "string",
-            "description": "取得したい属性の自由記述",
-            "x-scoring": "semantic"
+            "enum": [
+              "registered_address",
+              "shipping_address",
+              "phone_number",
+              "email",
+              "contact_person",
+              "payment_terms",
+              "credit_limit",
+              "unit_price",
+              "unit_of_measure",
+              "item_category",
+              "parent_department",
+              "manager",
+              "hire_date",
+              "position"
+            ],
+            "description": "取得したい属性",
+            "x-scoring": "exact"
           }
         }
       }
@@ -111,7 +126,7 @@
           "query_text": {
             "type": "string",
             "description": "文書内で探したい内容の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -227,7 +242,7 @@
           "keyword": {
             "type": "string",
             "description": "検索条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -378,7 +393,7 @@
           "keyword": {
             "type": "string",
             "description": "検索条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -529,7 +544,7 @@
           "keyword": {
             "type": "string",
             "description": "検索条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -680,7 +695,7 @@
           "keyword": {
             "type": "string",
             "description": "検索条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -831,7 +846,7 @@
           "keyword": {
             "type": "string",
             "description": "検索条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -965,7 +980,7 @@
           "keyword": {
             "type": "string",
             "description": "絞り込み条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -1038,7 +1053,7 @@
           "keyword": {
             "type": "string",
             "description": "文書の絞り込み条件の自由記述",
-            "x-scoring": "semantic"
+            "x-scoring": "exact"
           }
         }
       }
@@ -1608,8 +1623,22 @@
           },
           "section": {
             "type": "string",
-            "description": "セクションの自由記述",
-            "x-scoring": "semantic"
+            "enum": [
+              "business_overview",
+              "management_policy",
+              "sustainability",
+              "business_risks",
+              "md_and_a",
+              "research_and_development",
+              "capex",
+              "employees",
+              "dividend_policy",
+              "major_shareholders",
+              "officers",
+              "corporate_governance"
+            ],
+            "description": "有価証券報告書の記載項目。report_type が yuho のときに使う",
+            "x-scoring": "exact"
           }
         }
       }
