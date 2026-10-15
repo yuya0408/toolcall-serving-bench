@@ -9,17 +9,16 @@ human decisions, one line per reviewed id:
 
     {"id": "case_1042", "decision": "keep" | "fix" | "drop",
      "query": "<corrected query, decision fix only>",
-     "gold_add": {"<arg>": "<value>"},   # optional, decision fix only
+     "gold": {"expected_tool": "<name>", "exact": {...}},   # optional, decision fix only
      "note": "<why>"}
 
 and blind_recheck.jsonl, the blind check (same shape as blind_calls.jsonl)
 rerun on the corrected queries only.
 
 Every flagged or sampled case must have a decision. A fix rewrites the query
-and may add gold arguments that the corrected query states, but never
-changes or removes a value the seeded script chose; anything else wrong with
-a gold call is a drop. Every fixed case must pass the blind check again
-against its corrected gold call. Each case records how far it was checked
+and may replace the gold call with the one the corrected query determines.
+Every fixed case must pass the blind check again against its corrected gold
+call, so the query alone still pins the answer. Each case records how far it was checked
 (generation.review) and what a human changed (generation.human_edit), so
 metrics can be restricted to human-reviewed or unedited cases.
 """
@@ -75,12 +74,16 @@ def main() -> int:
         fixed = decision["decision"] == "fix"
         query = decision["query"] if fixed else queries[case_id]["query"]
         g = gold.get(case_id)
-        added = decision.get("gold_add", {}) if fixed else {}
-        if added:
-            if g is None or set(added) & set(g["expected_args"]["exact"]):
-                raise SystemExit(f"{case_id}: gold_add may only add arguments to a gold call, not change them")
-            g = {**g, "expected_args": {**g["expected_args"],
-                                        "exact": {**g["expected_args"]["exact"], **added}}}
+        new_gold = decision.get("gold") if fixed else None
+        if new_gold:
+            if g is None:
+                raise SystemExit(f"{case_id}: a negative cannot be given a gold call; drop it instead")
+            old_tool, tool = g["expected_tool"], new_gold["expected_tool"]
+            # A tool the human moved away from is the natural distractor for the new one.
+            distractors = g["distractor_tools"] if tool == old_tool else \
+                ([old_tool] + [d for d in g["distractor_tools"] if d != tool])[:len(g["distractor_tools"])]
+            g = {**g, "expected_tool": tool, "distractor_tools": distractors,
+                 "expected_args": {**g["expected_args"], "exact": new_gold["exact"]}}
         if fixed:
             if case_id not in recheck:
                 raise SystemExit(f"{case_id}: fixed but not in blind_recheck.jsonl")
@@ -104,7 +107,7 @@ def main() -> int:
             "provenance": "generated",
             "generation": {"gold_seed": SEED, "query_model": QUERY_MODEL,
                            "check_model": CHECK_MODEL, "review": status,
-                           "human_edit": "query_and_gold" if added else "query" if fixed else "none"},
+                           "human_edit": "query_and_gold" if new_gold else "query" if fixed else "none"},
         }
         validate_case_against_tools(case, tools)
         cases.append(case)

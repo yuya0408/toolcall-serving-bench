@@ -55,7 +55,7 @@
         },
         "human_edit": {
           "enum": ["none", "query", "query_and_gold"],
-          "description": "What a human changed after review. query: the query was rewritten. query_and_gold: the query was rewritten and gold arguments that the new query states were added; no value the seeded script chose was changed or removed. Every edited case passed the blind check again."
+          "description": "What a human changed after review. query: the query was rewritten. query_and_gold: the query was rewritten and the gold call replaced with the one the new query determines. Every edited case passed the blind check again."
         }
       }
     }
