@@ -274,6 +274,11 @@ def _paired_cluster_bootstrap_diff_ci(
     calls out by name (the same one vlm-vs-yolo's default-threshold critique
     was about). `baseline[i]` and `loaded[i]` must be the same case in the
     same order; this is checked, not re-derived from case_id.
+
+    Not for the third pass's equivalence verdict as is: with rare or
+    case-concentrated discordance this interval is too narrow, and calls
+    "equivalent" at a true difference of +-margin well above 2.5% of the
+    time (docs/adr/0002, 2026-10-15 addendum; scripts/power_simulation.py).
     """
     if len(baseline) != len(loaded):
         raise ValueError(

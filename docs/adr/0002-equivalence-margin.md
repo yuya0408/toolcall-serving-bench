@@ -74,6 +74,52 @@ Qwen2.5-7B-Instruct 55.8（Table 18）。モデルを半分のサイズにして
 - 等価性の主張は「シャッフルのブレより小さい」から「モデル1段階分の差より小さい」に変わる。
   シャッフルによるブレそのものは、直列を2回回すA/A比較で実測し、ノイズの下限として別に報告する。
 
+## 追記（2026-10-15）：検出力シミュレーションの結果
+
+Decisionの2（ケース数はパイロットで決める）に向けて、必要なケース数と、今の解析方法が誤りの率を守れるかをシミュレーションで調べた
+（`scripts/power_simulation.py`。Morris, White & Crowther 2019 のADEMPの形で設計）。
+[Source: User, 検出力シミュレーション, 2026-10-15]
+
+**データの形**：ケースごとに5回の試行を2つの条件で回し、試行ごとに正誤の組ができる。統計では「クラスターのある対応のある2値データ」
+（clustered matched-pair binary data）と呼ばれる形で、ケースがクラスター、試行がその中のペアにあたる。
+条件の間で正誤が入れ替わる割合（不一致率 p_d）と、入れ替わりやすさのケース間の偏り（ケース内の相関 ρ）を変えて、偽のデータを作った。
+
+**検出力の水準**：80%に固定せず、80%と90%の両方の件数を見て決める。80%はCohen（1992）が一般用に提案した慣行で、
+ICH E9は第2種の過誤を「慣例として10〜20%」としている（検出力80〜90%）。
+
+**結果**（マージン±2.6pt、各点2,000回。シミュレーション自体の誤差は2.5%付近で±0.35%程度）：
+
+| 不一致率 p_d | 検出力80%に必要なケース数 | 90% | 本当の差が±2.6ptのとき「等価」と出る確率（上限2.5%） |
+| --- | --- | --- | --- |
+| 3% | 100〜120 | 150〜200 | 3.9〜11.5% |
+| 5% | 200 | 250 | 2.4〜7.4% |
+| 10% | 400 | 400〜500 | 2.2〜4.4% |
+| 20% | 700 | 1,000 | 2.1〜4.1% |
+
+（範囲はρ=0・0.3・0.6と方法の違いによる。件数は候補の刻みで探した粗い値。）
+必要なケース数はおおよそ 3,100 × p_d になる。差が0のとき、ケースごとの差の分散は p_d/5 で、ρに依存しないためである（導出）。
+
+**今の解析方法は、件数が現実的な範囲で誤りの率を守れない。** パーセンタイル・ブートストラップ（`_paired_cluster_bootstrap_diff_ci`）に加えて、
+ケース単位のt区間（SchuirmannのTOST。試行数がそろっているときはObuchowski 1998のクラスター補正した分散と同じ）、
+分散を帰無仮説の値の周りで計算する2つの形（Obuchowski 1998・Yang, Sun & Hardin 2010 の差0の検定を±マージンにずらしたもの。
+ずらした形は自分で導いたもので、論文では確認していない）を同じデータで比べた。どれも、不一致率が小さいとき（3〜5%）やケース内の相関が強いときに、
+誤って「等価」とする確率が2.5%を大きく超えた。不一致が少数のケースに集中すると、実効的なデータが数件分しかなく、正規近似が成り立たないためと考えられる（推定）。
+Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、クラスターの数とクラスター内の相関に左右されると報告している。
+
+**そのため、今の方法をそのまま本番の判定に使わない。** 方法は、パイロットで不一致の実際の値を見てから、次のどれかに決める。
+
+| 案 | 内容 | 必要なケース数 |
+| --- | --- | --- |
+| A. 入れ替わりの割合に上限を付ける | 精度の差は入れ替わったペアからしか生まれないので、差の大きさは不一致率を超えない。さらに不一致率は「1回でも入れ替わったケースの割合」を超えない。後者にClopper-Pearsonの片側97.5%上限を付け、2.6%以下なら等価とする（導出）。正規近似を使わず、ケースを単位に数えるので相関の影響も受けない | 入れ替わったケースが0件なら141件、1件なら212件、2件なら276件 |
+| B. 近似の方法の信頼度を、シミュレーションで補正する | 誤りの率が2.5%以下に収まるまで区間を広げる。FDAは解析で示せない場合のシミュレーションによる評価を認めているが、EMAはそれだけに頼るには特別な理由が要るとしている | 数百件以上。パイロットの p_d と ρ に依存する |
+| C. 等価性は判定しない | Consequencesの「必要件数が非現実的な場合」のとおり、推定値とCIを参照線と並べて報告する。CIが狭く出る傾向があることも限界として書く | 制約なし |
+
+**パイロットの後の分岐（データを見る前に決めておく）**：入れ替わったケースが0件ならAを候補にし、ケースを約140件まで増やすかを判断する。
+入れ替わりが複数あれば、AもBも数百件になるのでCにする。いずれの場合も、マージン（±2.6pt）は動かさない。
+
+**ケース数そのものの問題**：今のケースセットは14件で、どの案でも等価性を言うには少なくとも約140件が要る。
+同じ問題は、精度パスのエンジン間の比較にも当てはまる（こちらは判定方法自体がまだ決まっていない）。ケースをどう増やすかは、別に決める。
+
 ## 参考
 
 - Qwen3 Technical Report, arXiv 2505.09388, Table 14・16・18 — https://arxiv.org/abs/2505.09388
@@ -81,3 +127,10 @@ Qwen2.5-7B-Instruct 55.8（Table 18）。モデルを半分のサイズにして
 - Atil et al., Non-Determinism of "Deterministic" LLM Settings, arXiv 2408.04667 — https://arxiv.org/abs/2408.04667
 - Ma et al., (Why) Is My Prompt Getting Worse? Rethinking Regression Testing for Evolving LLM APIs, arXiv 2311.11123 — https://arxiv.org/abs/2311.11123
 - Red Hat Developer, Deployment-ready reasoning with quantized DeepSeek-R1 models — https://developers.redhat.com/articles/2025/03/03/deployment-ready-reasoning-quantized-deepseek-r1-models
+- （追記）Morris, White & Crowther, Using simulation studies to evaluate statistical methods, Statistics in Medicine 38(11), 2019 — https://pmc.ncbi.nlm.nih.gov/articles/PMC6492164
+- （追記）Cohen, A power primer, Psychological Bulletin 112(1), 1992 — https://www.ece.uvic.ca/~bctill/papers/mocap/Cohen_1992.pdf
+- （追記）ICH E9, Statistical Principles for Clinical Trials — https://database.ich.org/sites/default/files/E9_Guideline.pdf
+- （追記）Schuirmann, A comparison of the Two One-Sided Tests Procedure and the Power Approach for assessing the equivalence of average bioavailability, J Pharmacokinet Biopharm 15, 1987（原典は未確認。TOSTと区間による判定の関係は arXiv 2306.06698 で確認）
+- （追記）Obuchowski, On the comparison of correlated proportions for clustered data, Statistics in Medicine 17(13), 1998、Yang, Sun & Hardin, A note on the tests for clustered matched-pair binary data, Biometrical Journal 52(5), 2010（式はRパッケージ clust.bin.pair の実装で確認） — https://cran.r-project.org/web/packages/clust.bin.pair/readme/README.html
+- （追記）Yang, Sun & Hardin, Testing non-inferiority for clustered matched-pair binary data in diagnostic medicine, CSDA 56(5), 2012（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v56y2012i5p1301-1320.html
+- （追記）Nam, Power and sample size requirements for non-inferiority in studies comparing two matched proportions where the events are correlated, CSDA 55(10), 2011（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v55y2011i10p2880-2887.html
