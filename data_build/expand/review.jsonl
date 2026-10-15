@@ -1,5 +1,6 @@
 {"id": "case_1001", "decision": "keep", "note": ""}
 {"id": "case_1002", "decision": "drop", "note": ""}
+{"id": "case_1003", "decision": "keep", "note": ""}
 {"id": "case_1004", "decision": "keep", "note": ""}
 {"id": "case_1006", "decision": "keep", "note": ""}
 {"id": "case_1007", "decision": "fix", "query": "人事社員が何人か教えて", "note": ""}
@@ -10,6 +11,7 @@
 {"id": "case_1013", "decision": "drop", "note": "品目指定しないと意味ないと思う"}
 {"id": "case_1014", "decision": "drop", "note": "上に同じ"}
 {"id": "case_1015", "decision": "drop", "note": ""}
+{"id": "case_1016", "decision": "fix", "query": "前四半期の作業時間の部門別の最小値を出して", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}}, "note": ""}
 {"id": "case_1018", "decision": "fix", "query": "前年度の仕入額の最小値はいくら？", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}, "note": "期間の引数加えてほしい"}
 {"id": "case_1019", "decision": "drop", "note": "クエリに現実味がない"}
 {"id": "case_1020", "decision": "keep", "note": "前の版（期間なし）に「今年度」を足す修正が付いていた。期間の規則で前年度が足されたので、今の版を採る"}
@@ -17,7 +19,23 @@
 {"id": "case_1024", "decision": "fix", "query": "今年度の請求書の額の平均を部門別に見せて", "note": "額なのか数量なのかがわからない"}
 {"id": "case_1025", "decision": "fix", "query": "個別の請求書じゃなくて、今月の平均額を出して", "note": ""}
 {"id": "case_1026", "decision": "keep", "note": ""}
+{"id": "case_1027", "decision": "keep", "note": ""}
 {"id": "case_1028", "decision": "keep", "note": ""}
+{"id": "case_1029", "decision": "keep", "note": ""}
+{"id": "case_1031", "decision": "keep", "note": ""}
+{"id": "case_1038", "decision": "keep", "note": ""}
+{"id": "case_1056", "decision": "fix", "query": "従業員E-4560の登録情報の変更履歴を教えて", "note": ""}
+{"id": "case_1059", "decision": "keep", "note": ""}
+{"id": "case_1060", "decision": "keep", "note": ""}
+{"id": "case_1063", "decision": "keep", "note": ""}
+{"id": "case_1064", "decision": "keep", "note": ""}
+{"id": "case_1068", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：キーワードで絞るのはどうなのか。カテゴリを事前にデータ側で定義しておいて、その中から引数で選ぶ方式の方が良いのでは"}
+{"id": "case_1070", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
+{"id": "case_1073", "decision": "keep", "note": ""}
+{"id": "case_1074", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：引数おかしくない？滞留の判別がこれじゃできないと思う"}
+{"id": "case_1082", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：滞留の判別ができない"}
+{"id": "case_1083", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
+{"id": "case_1085", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
 {"id": "case_1116", "decision": "fix", "query": "今年度の在庫で現在「移動中」のものを出して", "note": "クエリが抽象的すぎた"}
 {"id": "case_1119", "decision": "keep", "note": ""}
 {"id": "case_1121", "decision": "fix", "query": "西海フーズ株式会社の出荷先住所を教えて", "gold": {"expected_tool": "search_master", "exact": {"entity": "customer", "field": "shipping_address", "name": "西海フーズ株式会社"}}, "note": "顧客指定すれば良いのでは？"}

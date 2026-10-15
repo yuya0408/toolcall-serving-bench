@@ -68,14 +68,14 @@
 {"id": "case_1068", "tool": "list_master_records", "args": {"entity": "supplier", "active_only": true, "keyword": "物流"}, "note": ""}
 {"id": "case_1069", "tool": "list_master_records", "args": {"entity": "department", "keyword": "樹脂"}, "note": ""}
 {"id": "case_1070", "tool": "list_master_records", "args": {"entity": "department", "active_only": true, "keyword": "樹脂"}, "note": ""}
-{"id": "case_1071", "tool": "list_open_hr_items", "args": {"entity": "headcount", "overdue_only": false}, "note": ""}
+{"id": "case_1071", "tool": "list_open_hr_items", "args": {"entity": "payroll", "overdue_only": true}, "note": "「処理が止まったまま」は承認待ち(list_pending_hr_approvals)とも読めるが、期限超過の絞り込み(overdue_only)を持つのは未処理一覧の方なのでlist_open_hr_itemsを選んだ。"}
 {"id": "case_1072", "tool": "list_open_hr_items", "args": {"entity": "attendance", "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1073", "tool": "list_open_hr_items", "args": {"entity": "attendance", "overdue_only": true}, "note": ""}
 {"id": "case_1074", "tool": "list_open_hr_items", "args": {"entity": "attendance", "period": "last_month"}, "note": ""}
 {"id": "case_1075", "tool": "list_open_inventory_items", "args": {"entity": "movement", "period": "this_month"}, "note": ""}
 {"id": "case_1076", "tool": "list_open_inventory_items", "args": {"entity": "movement"}, "note": ""}
-{"id": "case_1077", "tool": "list_open_inventory_items", "args": {"entity": "stock", "overdue_only": true}, "note": ""}
-{"id": "case_1078", "tool": "list_open_inventory_items", "args": {"entity": "warehouse", "period": "last_quarter"}, "note": ""}
+{"id": "case_1077", "tool": "list_open_inventory_items", "args": {"entity": "movement", "overdue_only": true}, "note": ""}
+{"id": "case_1078", "tool": "list_open_inventory_items", "args": {"entity": "movement", "overdue_only": true, "period": "last_month"}, "note": ""}
 {"id": "case_1079", "tool": "list_open_purchase_items", "args": {"entity": "receipt", "overdue_only": false, "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1080", "tool": "list_open_purchase_items", "args": {"entity": "purchase_order", "overdue_only": false, "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1081", "tool": "list_open_purchase_items", "args": {"entity": "receipt"}, "note": ""}

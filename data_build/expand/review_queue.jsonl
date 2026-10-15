@@ -51,7 +51,7 @@
 {"id": "case_1051", "query": "在庫ST-2021-15344の詳細を、明細なしで", "flags": [], "sampled": false}
 {"id": "case_1052", "query": "在庫のST-2024-95811の詳細を出して", "flags": [], "sampled": false}
 {"id": "case_1053", "query": "倉庫WH-2022-90189の詳細を明細行まで見せて", "flags": [], "sampled": false}
-{"id": "case_1054", "query": "品目ITM-81481の変更履歴を見せて", "flags": [], "sampled": false}
+{"id": "case_1054", "query": "品目ITM-81481の変更履歴を見せて", "flags": [], "sampled": true}
 {"id": "case_1055", "query": "仕入先S-6283の変更履歴を出してください", "flags": [], "sampled": false}
 {"id": "case_1056", "query": "従業員E-4560の変更履歴を教えて", "flags": [], "sampled": true}
 {"id": "case_1057", "query": "従業員E-8900の今年度の変更履歴を見せて", "flags": [], "sampled": false}
@@ -68,14 +68,14 @@
 {"id": "case_1068", "query": "有効な仕入先を「物流」で絞って一覧にして", "flags": [], "sampled": true}
 {"id": "case_1069", "query": "部門マスタを「樹脂」で絞って一覧にして", "flags": [], "sampled": false}
 {"id": "case_1070", "query": "無効なものは除いて、「樹脂」に関する部門を一覧にして", "flags": [], "sampled": true}
-{"id": "case_1071", "query": "人員の未処理分を、期限切れかどうかは問わず全部出して", "flags": [], "sampled": true}
+{"id": "case_1071", "query": "給与関連で処理が止まったままになっているもののうち、期限を過ぎたものだけ一覧にしてください。", "flags": ["blind note: 「処理が止まったまま」は承認待ち(list_pending_hr_approvals)とも読めるが、期限超過の絞り込み(overdue_only)を持つのは未処理一覧の方なのでlist_open_hr_itemsを選んだ。"], "sampled": false}
 {"id": "case_1072", "query": "今年度の未処理の勤怠を一覧にして", "flags": [], "sampled": false}
 {"id": "case_1073", "query": "未処理の勤怠で、期限切れのものだけ出して", "flags": [], "sampled": true}
 {"id": "case_1074", "query": "先月の勤怠の未処理分を見せて", "flags": [], "sampled": true}
 {"id": "case_1075", "query": "今月の在庫移動で、まだ処理されていないものを教えて", "flags": [], "sampled": false}
 {"id": "case_1076", "query": "未処理の在庫移動を一覧にして", "flags": [], "sampled": false}
-{"id": "case_1077", "query": "在庫の未処理のうち、期限切れのものだけ", "flags": [], "sampled": true}
-{"id": "case_1078", "query": "前四半期の倉庫の未処理レコードを出して", "flags": [], "sampled": false}
+{"id": "case_1077", "query": "在庫の移動伝票で未処理のものを、期限を過ぎているものだけ出してもらえますか。", "flags": [], "sampled": true}
+{"id": "case_1078", "query": "先月分の在庫移動で、まだ処理が終わっていなくて期限も過ぎているものを教えて。", "flags": [], "sampled": false}
 {"id": "case_1079", "query": "今年度の未処理の入荷を、期限超過に限らず全部見せて", "flags": [], "sampled": false}
 {"id": "case_1080", "query": "前年度の発注で滞留しているもの。期限切れだけに絞らなくていい", "flags": [], "sampled": false}
 {"id": "case_1081", "query": "未処理の入荷を一覧にして", "flags": [], "sampled": false}

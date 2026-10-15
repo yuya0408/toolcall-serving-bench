@@ -19,6 +19,12 @@ Rules:
     without one get a period afterwards, from a second seed (PERIOD_SEED),
     so the draws for every other case stay as they were. Aggregates of a
     point-in-time quantity (headcount, stock, warehouse) keep it optional.
+  - open-item and pending-approval lists only make sense for documents that
+    move through a process (orders, invoices, attendance, ...): "unprocessed
+    headcount" or "warehouses awaiting approval" mean nothing. The catalog
+    offers every module the same tool families and every entity in each, so
+    such calls are drawn; they are redrawn afterwards from a third seed
+    (OPEN_ITEM_SEED), again leaving every other case's draw unchanged.
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -51,7 +57,8 @@ NEGATIVES = 30
 MIN_PER_TOOL = 4
 FIRST_NEW_ID = 1001
 PERIOD_SEED = 20261016
-SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period
+OPEN_ITEM_SEED = 20261017
+SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period; never "unprocessed"
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
 FISCAL_YEARS = range(2018, 2026)
@@ -237,6 +244,29 @@ def sample_args(rng: random.Random, tool: dict[str, Any]) -> dict[str, Any]:
     return args
 
 
+def snapshot_open_items(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    """An open-item or pending-approval list over something that has no workflow."""
+    return (family_of(tool["name"]) == "list_open" or tool["name"].startswith("list_pending_"))         and args.get("entity") in SNAPSHOT_ENTITIES
+
+
+def redraw_snapshot_open_items(rng: random.Random, tools: dict[str, dict[str, Any]],
+                               rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not snapshot_open_items(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(200):
+            candidate = sample_args(rng, tool)
+            if not snapshot_open_items(tool, candidate) and plausible(tool, candidate)                     and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -337,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
             next_id += 1
 
     add_required_periods(random.Random(PERIOD_SEED), tools, rows, seen)
+    redraw_snapshot_open_items(random.Random(OPEN_ITEM_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:

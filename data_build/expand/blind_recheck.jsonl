@@ -8,3 +8,5 @@
 {"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "month", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}, "note": ""}
 {"id": "case_1157", "tool": "trend_sales", "args": {"entity": "sales_order", "metric": "quantity", "interval": "month", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1016", "tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}, "note": "aggregate_hr(entity=attendance)でも作業時間を集約できる可能性があるが、作業時間はaggregate_metricのmetric=work_hoursとして明示されているためこちらを選んだ。"}
+{"id": "case_1056", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-4560"}, "note": ""}

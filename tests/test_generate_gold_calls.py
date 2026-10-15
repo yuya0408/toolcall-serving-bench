@@ -92,3 +92,8 @@ def test_document_numbers_follow_the_document_type():
 def test_flow_aggregates_and_trends_have_a_period(rows):
     missing = [r["id"] for r in rows if gen.needs_period(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
     assert missing == []
+
+
+def test_no_open_items_over_snapshot_entities(rows):
+    bad = [r["id"] for r in rows if gen.snapshot_open_items(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert bad == []

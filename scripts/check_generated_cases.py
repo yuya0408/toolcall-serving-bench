@@ -20,7 +20,8 @@ A case is flagged when
   - for a negative, the blind model called any tool;
   - its query is nearly identical to another one (character-bigram Jaccard).
 Of the unflagged cases, SAMPLE_SIZE are drawn at random (fixed seed) for
-human review, so the error rate among unreviewed cases can be bounded.
+human review, so the error rate among unreviewed cases can be bounded. A
+rebuild keeps the previous sample and only replaces cases that became flagged.
 """
 from __future__ import annotations
 import json
@@ -93,11 +94,16 @@ def main() -> int:
             reasons.append("blind note: " + blind[case_id]["note"])
         rows.append({"id": case_id, "query": queries[case_id]["query"], "flags": reasons, "sampled": False})
 
+    out = BUILD / "review_queue.jsonl"
+    # Keep the previous sample when the queue is rebuilt after cases were rewritten, so
+    # reviews already done stay valid; only cases that left it (now flagged) are replaced.
+    previous = {i for i, r in _jsonl(out).items() if r["sampled"]} if out.exists() else set()
     unflagged = [r for r in rows if not r["flags"]]
-    for r in random.Random(SAMPLE_SEED).sample(unflagged, min(SAMPLE_SIZE, len(unflagged))):
+    kept = [r for r in unflagged if r["id"] in previous]
+    rest = [r for r in unflagged if r["id"] not in previous]
+    for r in kept + random.Random(SAMPLE_SEED).sample(rest, min(SAMPLE_SIZE - len(kept), len(rest))):
         r["sampled"] = True
 
-    out = BUILD / "review_queue.jsonl"
     with out.open("w", encoding="utf-8", newline="\n") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
