@@ -43,7 +43,7 @@
     "generation": {
       "description": "For generated cases (docs/adr/0004-expand-case-set.md): the gold call was sampled by a seeded script, the query was written by an LLM from that call, and an LLM that never saw the gold call tried to recover it. Lets readers restrict metrics to human-reviewed cases.",
       "type": "object",
-      "required": ["gold_seed", "query_model", "check_model", "review"],
+      "required": ["gold_seed", "query_model", "check_model", "review", "human_edit"],
       "additionalProperties": false,
       "properties": {
         "gold_seed": { "type": "integer", "description": "Seed of scripts/generate_gold_calls.py that produced the gold call." },
@@ -52,6 +52,10 @@
         "review": {
           "enum": ["flagged_reviewed", "sampled_reviewed", "unreviewed"],
           "description": "flagged_reviewed: the blind check disagreed with the gold call and a human resolved it. sampled_reviewed: the check agreed and the case was in the random human-review sample. unreviewed: the check agreed and no human looked at it."
+        },
+        "human_edit": {
+          "enum": ["none", "query", "query_and_gold"],
+          "description": "What a human changed after review. query: the query was rewritten. query_and_gold: the query was rewritten and gold arguments that the new query states were added; no value the seeded script chose was changed or removed. Every edited case passed the blind check again."
         }
       }
     }

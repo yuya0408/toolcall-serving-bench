@@ -4,17 +4,24 @@ the reviewed build files into evaluation cases.
     python scripts/build_generated_cases.py    # writes data/generated/generated.jsonl
 
 Reads, from data_build/expand/: gold_calls.jsonl, queries.jsonl,
-review_queue.jsonl (scripts/check_generated_cases.py) and review.jsonl, the
+review_queue.jsonl (scripts/check_generated_cases.py), review.jsonl, the
 human decisions, one line per reviewed id:
 
     {"id": "case_1042", "decision": "keep" | "fix" | "drop",
-     "query": "<corrected query, decision fix only>", "note": "<why>"}
+     "query": "<corrected query, decision fix only>",
+     "gold_add": {"<arg>": "<value>"},   # optional, decision fix only
+     "note": "<why>"}
 
-Every flagged or sampled case must have a decision. A fix may only change
-the query text; a gold call that is wrong is dropped, never edited by hand,
-so every gold value still comes from the seeded script. Each case records
-how far it was checked (generation.review), so metrics can be restricted to
-human-reviewed cases.
+and blind_recheck.jsonl, the blind check (same shape as blind_calls.jsonl)
+rerun on the corrected queries only.
+
+Every flagged or sampled case must have a decision. A fix rewrites the query
+and may add gold arguments that the corrected query states, but never
+changes or removes a value the seeded script chose; anything else wrong with
+a gold call is a drop. Every fixed case must pass the blind check again
+against its corrected gold call. Each case records how far it was checked
+(generation.review) and what a human changed (generation.human_edit), so
+metrics can be restricted to human-reviewed or unedited cases.
 """
 from __future__ import annotations
 import json
@@ -44,12 +51,14 @@ def _jsonl(path: pathlib.Path) -> dict[str, dict]:
 def main() -> int:
     sys.path.insert(0, str(_ROOT / "scripts"))
     from generate_gold_calls import SEED  # the gold calls' seed, recorded on every case
+    from check_generated_cases import disagreement
 
     tools = load_tools(_ROOT / "schema" / "tools.json")
     gold = _jsonl(BUILD / "gold_calls.jsonl")
     queries = _jsonl(BUILD / "queries.jsonl")
     queue = _jsonl(BUILD / "review_queue.jsonl")
     review = _jsonl(BUILD / "review.jsonl")
+    recheck = _jsonl(BUILD / "blind_recheck.jsonl")
 
     needs_review = [i for i, r in queue.items() if r["flags"] or r["sampled"]]
     missing = [i for i in needs_review if i not in review]
@@ -63,14 +72,27 @@ def main() -> int:
         decision = review.get(case_id, {"decision": "keep"})
         if decision["decision"] == "drop":
             continue
-        query = decision["query"] if decision["decision"] == "fix" else queries[case_id]["query"]
+        fixed = decision["decision"] == "fix"
+        query = decision["query"] if fixed else queries[case_id]["query"]
+        g = gold.get(case_id)
+        added = decision.get("gold_add", {}) if fixed else {}
+        if added:
+            if g is None or set(added) & set(g["expected_args"]["exact"]):
+                raise SystemExit(f"{case_id}: gold_add may only add arguments to a gold call, not change them")
+            g = {**g, "expected_args": {**g["expected_args"],
+                                        "exact": {**g["expected_args"]["exact"], **added}}}
+        if fixed:
+            if case_id not in recheck:
+                raise SystemExit(f"{case_id}: fixed but not in blind_recheck.jsonl")
+            why = disagreement(g, recheck[case_id])
+            if why:
+                raise SystemExit(f"{case_id}: the blind recheck disagrees with the corrected case ({why})")
         if queue[case_id]["flags"]:
             status = "flagged_reviewed"
         elif queue[case_id]["sampled"]:
             status = "sampled_reviewed"
         else:
             status = "unreviewed"
-        g = gold.get(case_id)
         case = {
             "id": case_id,
             "query": query,
@@ -81,7 +103,8 @@ def main() -> int:
             "negative": g is None,
             "provenance": "generated",
             "generation": {"gold_seed": SEED, "query_model": QUERY_MODEL,
-                           "check_model": CHECK_MODEL, "review": status},
+                           "check_model": CHECK_MODEL, "review": status,
+                           "human_edit": "query_and_gold" if added else "query" if fixed else "none"},
         }
         validate_case_against_tools(case, tools)
         cases.append(case)
