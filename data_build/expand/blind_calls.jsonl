@@ -1,6 +1,6 @@
 {"id": "case_1001", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1002", "tool": "aggregate_accounting", "args": {"entity": "cost_center", "aggregation": "sum", "period": "last_quarter"}, "note": ""}
-{"id": "case_1003", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "sum"}, "note": ""}
+{"id": "case_1003", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "sum", "period": "this_month"}, "note": ""}
 {"id": "case_1004", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "group_by": "department", "period": "last_quarter"}, "note": ""}
 {"id": "case_1005", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "count", "period": "this_month"}, "note": ""}
 {"id": "case_1006", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "min", "period": "last_fiscal_year"}, "note": ""}
@@ -17,14 +17,14 @@
 {"id": "case_1017", "tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}, "note": ""}
 {"id": "case_1018", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "min"}, "note": "aggregate_purchase(entityはsupplier_invoice/purchase_order等で不定)も候補"}
 {"id": "case_1019", "tool": "aggregate_metric", "args": {"metric": "headcount", "aggregation": "min", "group_by": "department", "period": "last_fiscal_year"}, "note": "aggregate_hr(entity=headcount)も候補"}
-{"id": "case_1020", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "count", "group_by": "department"}, "note": ""}
-{"id": "case_1021", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "max"}, "note": ""}
-{"id": "case_1022", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "sum"}, "note": ""}
-{"id": "case_1023", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "sum", "group_by": "item"}, "note": ""}
-{"id": "case_1024", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "group_by": "department"}, "note": ""}
-{"id": "case_1025", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg"}, "note": ""}
-{"id": "case_1026", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count"}, "note": ""}
-{"id": "case_1027", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count", "group_by": "customer"}, "note": ""}
+{"id": "case_1020", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "count", "group_by": "department", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1021", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "max", "period": "this_fiscal_year"}, "note": ""}
+{"id": "case_1022", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1023", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}, "note": ""}
+{"id": "case_1024", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "group_by": "department", "period": "this_fiscal_year"}, "note": "「請求書」は販売の請求書(invoice)と解釈。購買の supplier_invoice の可能性もある。"}
+{"id": "case_1025", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "period": "this_month"}, "note": "「請求書」は販売の請求書(invoice)と解釈。"}
+{"id": "case_1026", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count", "period": "last_month"}, "note": "「請求書」は販売の請求書(invoice)と解釈。"}
+{"id": "case_1027", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count", "group_by": "customer", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1028", "tool": "compare_period_metric", "args": {"metric": "purchase_amount", "period_a": "this_month", "period_b": "last_month"}, "note": "period_a/period_bの順序は文中の語順に従った(逆順も可)"}
 {"id": "case_1029", "tool": "compare_period_metric", "args": {"metric": "sales", "period_a": "last_fiscal_year", "period_b": "this_fiscal_year"}, "note": ""}
 {"id": "case_1030", "tool": "compare_period_metric", "args": {"metric": "headcount", "period_a": "last_fiscal_year", "period_b": "this_fiscal_year"}, "note": ""}
@@ -136,26 +136,26 @@
 {"id": "case_1136", "tool": "search_sales_record", "args": {"entity": "sales_order", "period": "last_month"}, "note": ""}
 {"id": "case_1137", "tool": "search_sales_record", "args": {"entity": "invoice", "period": "this_fiscal_year", "status": "draft", "keyword": "ステンレス配管"}, "note": ""}
 {"id": "case_1138", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "day", "period": "this_month"}, "note": ""}
-{"id": "case_1139", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "quarter"}, "note": ""}
-{"id": "case_1140", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "count", "interval": "week"}, "note": ""}
+{"id": "case_1139", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "quarter", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1140", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "count", "interval": "week", "period": "this_month"}, "note": ""}
 {"id": "case_1141", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "quantity", "period": "last_month"}, "note": ""}
-{"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "week"}, "note": ""}
+{"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "week", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1143", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "quantity", "period": "this_month"}, "note": ""}
-{"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount"}, "note": ""}
+{"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "period": "last_quarter"}, "note": "粒度の指定なしのため interval は省略。"}
 {"id": "case_1145", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "interval": "day", "period": "last_month"}, "note": ""}
 {"id": "case_1146", "tool": "trend_inventory", "args": {"entity": "warehouse", "metric": "count", "period": "last_month"}, "note": ""}
-{"id": "case_1147", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "interval": "day"}, "note": ""}
+{"id": "case_1147", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "interval": "day", "period": "last_month"}, "note": ""}
 {"id": "case_1148", "tool": "trend_purchase", "args": {"entity": "supplier_invoice", "metric": "quantity", "period": "this_fiscal_year"}, "note": ""}
-{"id": "case_1149", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount"}, "note": ""}
-{"id": "case_1150", "tool": "trend_purchase", "args": {"entity": "purchase_order", "metric": "quantity", "interval": "week"}, "note": ""}
+{"id": "case_1149", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "period": "this_month"}, "note": "粒度の指定なしのため interval は省略。"}
+{"id": "case_1150", "tool": "trend_purchase", "args": {"entity": "purchase_order", "metric": "quantity", "interval": "week", "period": "last_month"}, "note": ""}
 {"id": "case_1151", "tool": "trend_purchase", "args": {"entity": "supplier_invoice", "metric": "count", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1152", "tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2022, "year_to": 2025}, "note": ""}
 {"id": "case_1153", "tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2023, "year_to": 2024}, "note": "隣接2年度なのでcompare_report_metricとも区別しにくい。「各年度の値を並べて」で系列と判断"}
 {"id": "case_1154", "tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2021, "year_to": 2025}, "note": ""}
 {"id": "case_1155", "tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2018, "year_to": 2020}, "note": ""}
-{"id": "case_1156", "tool": "trend_sales", "args": {"entity": "invoice", "metric": "quantity", "interval": "day"}, "note": ""}
-{"id": "case_1157", "tool": "trend_sales", "args": {"entity": "sales_order", "metric": "quantity"}, "note": ""}
-{"id": "case_1158", "tool": "trend_sales", "args": {"entity": "invoice", "metric": "count", "interval": "week"}, "note": ""}
+{"id": "case_1156", "tool": "trend_sales", "args": {"entity": "invoice", "metric": "quantity", "interval": "day", "period": "last_month"}, "note": "「請求書」は販売の請求書(invoice)と解釈。"}
+{"id": "case_1157", "tool": "trend_sales", "args": {"entity": "sales_order", "metric": "quantity", "period": "last_fiscal_year"}, "note": "粒度の指定なしのため interval は省略。"}
+{"id": "case_1158", "tool": "trend_sales", "args": {"entity": "invoice", "metric": "count", "interval": "week", "period": "this_fiscal_year"}, "note": "「請求書」は販売の請求書(invoice)と解釈。"}
 {"id": "case_1159", "tool": null, "args": {}, "note": ""}
 {"id": "case_1160", "tool": null, "args": {}, "note": ""}
 {"id": "case_1161", "tool": null, "args": {}, "note": ""}

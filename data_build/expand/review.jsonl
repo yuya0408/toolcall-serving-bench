@@ -1,5 +1,5 @@
 {"id": "case_1002", "decision": "drop", "note": ""}
-{"id": "case_1007", "decision": "fix", "query": "在籍している社員が何人いるか数えて", "note": ""}
+{"id": "case_1007", "decision": "fix", "query": "人事社員が何人か教えて", "note": ""}
 {"id": "case_1010", "decision": "drop", "note": ""}
 {"id": "case_1012", "decision": "keep", "note": ""}
 {"id": "case_1013", "decision": "drop", "note": "品目指定しないと意味ないと思う"}

@@ -87,3 +87,8 @@ def test_document_numbers_follow_the_document_type():
     tool = _TOOLS["get_purchase_detail"]
     spec = tool["parameters"]["properties"]["document_no"]
     assert gen._value(rng, tool, "document_no", spec, {"entity": "receipt"}).startswith("RC-")
+
+
+def test_flow_aggregates_and_trends_have_a_period(rows):
+    missing = [r["id"] for r in rows if gen.needs_period(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert missing == []

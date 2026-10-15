@@ -13,6 +13,12 @@ Rules:
     existing ones; the rest go to the confusable families (search / aggregate
     / trend across modules). Negatives are written in step 2 (no gold call).
   - required arguments always appear; optional ones with probability 1/2.
+  - except period, which an aggregate or a trend over a flow (sales,
+    purchases, journals, payroll, ...) needs to mean anything: "how many
+    invoices" over all time is not a question anyone asks. Calls drawn
+    without one get a period afterwards, from a second seed (PERIOD_SEED),
+    so the draws for every other case stay as they were. Aggregates of a
+    point-in-time quantity (headcount, stock, warehouse) keep it optional.
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -44,6 +50,8 @@ TOTAL = 200
 NEGATIVES = 30
 MIN_PER_TOOL = 4
 FIRST_NEW_ID = 1001
+PERIOD_SEED = 20261016
+SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
 FISCAL_YEARS = range(2018, 2026)
@@ -229,6 +237,36 @@ def sample_args(rng: random.Random, tool: dict[str, Any]) -> dict[str, Any]:
     return args
 
 
+def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    """An aggregate or a trend over a flow means nothing without a period."""
+    if "period" not in tool["parameters"]["properties"] or "period" in args:
+        return False
+    if family_of(tool["name"]) == "trend":
+        return True
+    if tool["name"] == "aggregate_metric" or family_of(tool["name"]) == "aggregate":
+        return args.get("entity") not in SNAPSHOT_ENTITIES
+    return False
+
+
+def add_required_periods(rng: random.Random, tools: dict[str, dict[str, Any]],
+                         rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool, args = tools[row["expected_tool"]], row["expected_args"]["exact"]
+        if not needs_period(tool, args):
+            continue
+        spec = tool["parameters"]["properties"]["period"]
+        seen.discard(_key(tool["name"], args))
+        for _attempt in range(200):
+            candidate = {**args, "period": _value(rng, tool, "period", spec, args)}
+            if plausible(tool, candidate) and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not add a distinct period to {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def distractors(rng: random.Random, name: str, tools: dict[str, dict[str, Any]]) -> list[str]:
     module = tools[name]["module"]
     fam = family_of(name)
@@ -297,6 +335,8 @@ def main(argv: list[str] | None = None) -> int:
             validate_case_against_tools(row, tools)
             rows.append(row)
             next_id += 1
+
+    add_required_periods(random.Random(PERIOD_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:
