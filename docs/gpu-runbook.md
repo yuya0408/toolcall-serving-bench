@@ -98,5 +98,5 @@ scp ubuntu@<gpu_public_ip>:~/toolcall-serving-bench/runs/<manifest>.json ./runs/
 ## 7. 実験終了後
 
 作業が全て終わったら、シャットダウンタイマーを待たずに手動で`terraform destroy`する
-（[[project_tool_call_bench_todo]]の合意済み運用方針: apply→run→確認→即destroy）。
+（合意済みの運用方針: apply→run→確認→即destroy）。
 [Source: User, GPUインスタンス起動手順書の整備, 2026-09-12]
