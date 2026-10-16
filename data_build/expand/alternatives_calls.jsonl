@@ -1,0 +1,161 @@
+{"id": "case_1001", "calls": [{"tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1003", "calls": [{"tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "sum", "period": "this_month"}}], "note": ""}
+{"id": "case_1004", "calls": [{"tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "group_by": "department", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1005", "calls": [{"tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "count", "period": "this_month"}}], "note": ""}
+{"id": "case_1006", "calls": [{"tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "min", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1007", "calls": [{"tool": "aggregate_hr", "args": {"entity": "headcount", "aggregation": "count"}}, {"tool": "aggregate_metric", "args": {"metric": "headcount", "aggregation": "count"}}], "note": "headcount aggregate is covered both by aggregate_hr(entity=headcount) and aggregate_metric(metric=headcount)"}
+{"id": "case_1008", "calls": [{"tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "avg", "period": "this_month"}}], "note": ""}
+{"id": "case_1009", "calls": [{"tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "avg", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1011", "calls": [{"tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, {"tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "last_fiscal_year"}}], "note": "\"移動回数の合計\" means the number of movements (count) but literally says 合計 (sum)"}
+{"id": "case_1012", "calls": [{"tool": "aggregate_inventory", "args": {"entity": "stock", "aggregation": "avg", "group_by": "item", "period": "last_fiscal_year"}}, {"tool": "aggregate_metric", "args": {"metric": "inventory_qty", "aggregation": "avg", "group_by": "item", "period": "last_fiscal_year"}}], "note": "inventory average is covered by aggregate_inventory(stock) and aggregate_metric(inventory_qty)"}
+{"id": "case_1016", "calls": [{"tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1017", "calls": [{"tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1018", "calls": [{"tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1020", "calls": [{"tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "count", "group_by": "department", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1021", "calls": [{"tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "max", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1022", "calls": [{"tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "sum", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1023", "calls": [{"tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1024", "calls": [{"tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "group_by": "department", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1025", "calls": [{"tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "period": "this_month"}}], "note": ""}
+{"id": "case_1026", "calls": [{"tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count", "period": "last_month"}}], "note": ""}
+{"id": "case_1027", "calls": [{"tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "count", "group_by": "customer", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1028", "calls": [{"tool": "compare_period_metric", "args": {"metric": "purchase_amount", "period_a": "last_month", "period_b": "this_month"}}, {"tool": "compare_period_metric", "args": {"metric": "purchase_amount", "period_a": "this_month", "period_b": "last_month"}}], "note": "wording order (今月と先月) conflicts with chronological base; which period is period_a is not determined"}
+{"id": "case_1029", "calls": [{"tool": "compare_period_metric", "args": {"metric": "sales", "period_a": "last_fiscal_year", "period_b": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1030", "calls": [{"tool": "compare_period_metric", "args": {"metric": "headcount", "period_a": "last_fiscal_year", "period_b": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1031", "calls": [{"tool": "compare_report_metric", "args": {"report_type": "yuho", "metric": "operating_income", "year_from": 2022, "year_to": 2024}}], "note": ""}
+{"id": "case_1032", "calls": [{"tool": "compare_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2018, "year_to": 2022}}], "note": ""}
+{"id": "case_1033", "calls": [{"tool": "compare_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2022, "year_to": 2025}}], "note": ""}
+{"id": "case_1034", "calls": [{"tool": "export_dataset", "args": {"format": "xlsx"}}], "note": ""}
+{"id": "case_1035", "calls": [{"tool": "export_dataset", "args": {"format": "xlsx", "scope": "full_table"}}], "note": ""}
+{"id": "case_1036", "calls": [{"tool": "export_dataset", "args": {"format": "json"}}], "note": ""}
+{"id": "case_1037", "calls": [{"tool": "export_dataset", "args": {"format": "csv", "scope": "full_table"}}], "note": ""}
+{"id": "case_1038", "calls": [{"tool": "get_accounting_detail", "args": {"entity": "journal", "document_no": "JE-2021-43184"}}], "note": ""}
+{"id": "case_1039", "calls": [{"tool": "get_accounting_detail", "args": {"entity": "account_balance", "document_no": "AB-2023-64959"}}], "note": ""}
+{"id": "case_1040", "calls": [{"tool": "get_accounting_detail", "args": {"entity": "cost_center", "document_no": "CC-2025-19474"}}], "note": ""}
+{"id": "case_1041", "calls": [{"tool": "get_accounting_detail", "args": {"entity": "cost_center", "document_no": "CC-2024-25924"}}], "note": ""}
+{"id": "case_1042", "calls": [{"tool": "get_fiscal_calendar", "args": {"fiscal_year": 2025}}], "note": ""}
+{"id": "case_1043", "calls": [{"tool": "get_fiscal_calendar", "args": {"fiscal_year": 2019}}], "note": ""}
+{"id": "case_1044", "calls": [{"tool": "get_fiscal_calendar", "args": {"fiscal_year": 2024}}], "note": ""}
+{"id": "case_1045", "calls": [{"tool": "get_fiscal_calendar", "args": {"fiscal_year": 2020}}], "note": ""}
+{"id": "case_1046", "calls": [{"tool": "get_hr_detail", "args": {"entity": "attendance", "document_no": "AT-2025-67882", "include_lines": false}}], "note": ""}
+{"id": "case_1047", "calls": [{"tool": "get_hr_detail", "args": {"entity": "headcount", "document_no": "HC-2023-17219", "include_lines": false}}], "note": ""}
+{"id": "case_1048", "calls": [{"tool": "get_hr_detail", "args": {"entity": "headcount", "document_no": "HC-2021-18768", "include_lines": true}}], "note": ""}
+{"id": "case_1049", "calls": [{"tool": "get_hr_detail", "args": {"entity": "payroll", "document_no": "PY-2019-37316"}}], "note": ""}
+{"id": "case_1050", "calls": [{"tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2020-28543"}}], "note": ""}
+{"id": "case_1051", "calls": [{"tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2021-15344", "include_lines": false}}], "note": ""}
+{"id": "case_1052", "calls": [{"tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2024-95811"}}], "note": ""}
+{"id": "case_1053", "calls": [{"tool": "get_inventory_detail", "args": {"entity": "warehouse", "document_no": "WH-2022-90189", "include_lines": true}}], "note": ""}
+{"id": "case_1054", "calls": [{"tool": "get_master_change_history", "args": {"entity": "item", "code": "ITM-81481"}}], "note": ""}
+{"id": "case_1055", "calls": [{"tool": "get_master_change_history", "args": {"entity": "supplier", "code": "S-6283"}}], "note": ""}
+{"id": "case_1056", "calls": [{"tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-4560"}}], "note": ""}
+{"id": "case_1057", "calls": [{"tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-8900", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1058", "calls": [{"tool": "get_master_hierarchy", "args": {"entity": "item", "depth": 2}}], "note": ""}
+{"id": "case_1059", "calls": [{"tool": "get_master_hierarchy", "args": {"entity": "item"}}], "note": ""}
+{"id": "case_1060", "calls": [{"tool": "get_master_hierarchy", "args": {"entity": "item", "root_code": "ITM-21403", "depth": 2}}], "note": ""}
+{"id": "case_1061", "calls": [{"tool": "get_purchase_detail", "args": {"entity": "supplier_invoice", "document_no": "SI-2023-69763", "include_lines": true}}], "note": ""}
+{"id": "case_1062", "calls": [{"tool": "get_purchase_detail", "args": {"entity": "receipt", "document_no": "RC-2025-56114"}}], "note": ""}
+{"id": "case_1063", "calls": [{"tool": "get_purchase_detail", "args": {"entity": "receipt", "document_no": "RC-2018-04095", "include_lines": false}}], "note": ""}
+{"id": "case_1064", "calls": [{"tool": "get_purchase_detail", "args": {"entity": "receipt", "document_no": "RC-2019-40964"}}], "note": ""}
+{"id": "case_1065", "calls": [{"tool": "get_sales_detail", "args": {"entity": "invoice", "document_no": "INV-2020-69620", "include_lines": false}}], "note": ""}
+{"id": "case_1066", "calls": [{"tool": "get_sales_detail", "args": {"entity": "sales_order", "document_no": "SO-2025-71353", "include_lines": false}}], "note": ""}
+{"id": "case_1067", "calls": [{"tool": "get_sales_detail", "args": {"entity": "shipment", "document_no": "SHP-2019-21150"}}], "note": ""}
+{"id": "case_1068", "calls": [{"tool": "list_master_records", "args": {"entity": "supplier", "active_only": true, "keyword": "物流"}}], "note": ""}
+{"id": "case_1069", "calls": [{"tool": "list_master_records", "args": {"entity": "department", "keyword": "樹脂"}}], "note": ""}
+{"id": "case_1070", "calls": [{"tool": "list_master_records", "args": {"entity": "department", "active_only": true, "keyword": "樹脂"}}], "note": ""}
+{"id": "case_1071", "calls": [{"tool": "list_open_hr_items", "args": {"entity": "payroll", "overdue_only": true}}], "note": ""}
+{"id": "case_1072", "calls": [{"tool": "list_open_hr_items", "args": {"entity": "attendance", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1073", "calls": [{"tool": "list_open_hr_items", "args": {"entity": "attendance", "overdue_only": true}}], "note": ""}
+{"id": "case_1074", "calls": [{"tool": "list_open_hr_items", "args": {"entity": "attendance", "period": "last_month"}}], "note": ""}
+{"id": "case_1075", "calls": [{"tool": "list_open_inventory_items", "args": {"entity": "movement", "period": "this_month"}}], "note": ""}
+{"id": "case_1076", "calls": [{"tool": "list_open_inventory_items", "args": {"entity": "movement"}}], "note": ""}
+{"id": "case_1077", "calls": [{"tool": "list_open_inventory_items", "args": {"entity": "movement", "overdue_only": true}}], "note": ""}
+{"id": "case_1078", "calls": [{"tool": "list_open_inventory_items", "args": {"entity": "movement", "overdue_only": true, "period": "last_month"}}], "note": ""}
+{"id": "case_1079", "calls": [{"tool": "list_open_purchase_items", "args": {"entity": "receipt", "overdue_only": false, "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1080", "calls": [{"tool": "list_open_purchase_items", "args": {"entity": "purchase_order", "overdue_only": false, "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1081", "calls": [{"tool": "list_open_purchase_items", "args": {"entity": "receipt"}}], "note": ""}
+{"id": "case_1082", "calls": [{"tool": "list_open_sales_items", "args": {"entity": "sales_order", "period": "this_month"}}], "note": ""}
+{"id": "case_1083", "calls": [{"tool": "list_open_sales_items", "args": {"entity": "shipment", "period": "last_month"}}], "note": ""}
+{"id": "case_1084", "calls": [{"tool": "list_open_sales_items", "args": {"entity": "invoice", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1085", "calls": [{"tool": "list_open_sales_items", "args": {"entity": "sales_order"}}], "note": ""}
+{"id": "case_1086", "calls": [{"tool": "list_pending_hr_approvals", "args": {"entity": "payroll", "approval_stage": "manager_signoff"}}], "note": ""}
+{"id": "case_1087", "calls": [{"tool": "list_pending_hr_approvals", "args": {"entity": "payroll", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1088", "calls": [{"tool": "list_pending_hr_approvals", "args": {"entity": "attendance", "approval_stage": "hr_signoff", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1089", "calls": [{"tool": "list_pending_hr_approvals", "args": {"entity": "attendance", "period": "last_month"}}], "note": ""}
+{"id": "case_1090", "calls": [{"tool": "list_pending_purchase_approvals", "args": {"entity": "receipt"}}], "note": ""}
+{"id": "case_1091", "calls": [{"tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice", "approval_stage": "budget_check"}}], "note": ""}
+{"id": "case_1092", "calls": [{"tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1093", "calls": [{"tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice"}}], "note": ""}
+{"id": "case_1094", "calls": [{"tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1095", "calls": [{"tool": "list_pending_sales_approvals", "args": {"entity": "shipment", "period": "this_month"}}], "note": ""}
+{"id": "case_1096", "calls": [{"tool": "list_pending_sales_approvals", "args": {"entity": "invoice"}}], "note": ""}
+{"id": "case_1097", "calls": [{"tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "this_month"}}], "note": ""}
+{"id": "case_1098", "calls": [{"tool": "list_report_documents", "args": {"report_type": "law", "fiscal_year": 2025}}], "note": ""}
+{"id": "case_1099", "calls": [{"tool": "list_report_documents", "args": {"report_type": "ordinance", "fiscal_year": 2024, "keyword": "情報公開"}}], "note": ""}
+{"id": "case_1100", "calls": [{"tool": "list_report_documents", "args": {"report_type": "ordinance", "keyword": "情報公開"}}], "note": ""}
+{"id": "case_1101", "calls": [{"tool": "resolve_code", "args": {"entity": "customer", "name": "西海フーズ株式会社"}}], "note": ""}
+{"id": "case_1102", "calls": [{"tool": "resolve_code", "args": {"entity": "customer", "name": "株式会社ひかり医療"}}], "note": ""}
+{"id": "case_1103", "calls": [{"tool": "resolve_code", "args": {"entity": "supplier", "name": "東都精工株式会社"}}], "note": ""}
+{"id": "case_1104", "calls": [{"tool": "resolve_code", "args": {"entity": "item", "name": "樹脂ペレットPP"}}], "note": ""}
+{"id": "case_1105", "calls": [{"tool": "search_accounting_record", "args": {"entity": "journal", "period": "last_month", "status": "draft"}}], "note": ""}
+{"id": "case_1106", "calls": [{"tool": "search_accounting_record", "args": {"entity": "account_balance", "period": "last_month", "keyword": "前受金"}}], "note": ""}
+{"id": "case_1107", "calls": [{"tool": "search_accounting_record", "args": {"entity": "journal", "period": "this_month", "status": "confirmed", "keyword": "前受金"}}], "note": ""}
+{"id": "case_1108", "calls": [{"tool": "search_accounting_record", "args": {"entity": "journal", "period": "last_quarter", "keyword": "為替差損"}}], "note": ""}
+{"id": "case_1109", "calls": [{"tool": "search_accounting_record", "args": {"entity": "journal", "period": "this_month", "keyword": "本社経費"}}], "note": ""}
+{"id": "case_1110", "calls": [{"tool": "search_hr_record", "args": {"entity": "payroll", "period": "this_fiscal_year", "status": "draft", "keyword": "中途採用"}}], "note": ""}
+{"id": "case_1111", "calls": [{"tool": "search_hr_record", "args": {"entity": "payroll", "keyword": "契約社員"}}], "note": ""}
+{"id": "case_1112", "calls": [{"tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_fiscal_year", "keyword": "契約社員"}}], "note": ""}
+{"id": "case_1113", "calls": [{"tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_month", "status": "closed", "keyword": "評価面談"}}], "note": ""}
+{"id": "case_1114", "calls": [{"tool": "search_hr_record", "args": {"entity": "attendance", "period": "last_quarter", "status": "draft"}}], "note": ""}
+{"id": "case_1115", "calls": [{"tool": "search_inventory_record", "args": {"entity": "movement", "period": "this_month"}}], "note": ""}
+{"id": "case_1116", "calls": [{"tool": "search_inventory_record", "args": {"entity": "stock", "period": "this_fiscal_year", "keyword": "移動中"}}], "note": ""}
+{"id": "case_1117", "calls": [{"tool": "search_inventory_record", "args": {"entity": "movement", "period": "last_month", "status": "cancelled", "keyword": "移動中"}}], "note": ""}
+{"id": "case_1118", "calls": [{"tool": "search_inventory_record", "args": {"entity": "movement", "keyword": "滞留在庫"}}], "note": ""}
+{"id": "case_1119", "calls": [{"tool": "search_master", "args": {"entity": "department", "code": "D-1635", "name": "購買課"}}], "note": ""}
+{"id": "case_1120", "calls": [{"tool": "search_master", "args": {"entity": "customer", "code": "C-1560"}}], "note": ""}
+{"id": "case_1121", "calls": [{"tool": "search_master", "args": {"entity": "customer", "name": "西海フーズ株式会社", "field": "shipping_address"}}], "note": ""}
+{"id": "case_1122", "calls": [{"tool": "search_purchase_record", "args": {"entity": "receipt", "keyword": "原材料A"}}], "note": ""}
+{"id": "case_1123", "calls": [{"tool": "search_purchase_record", "args": {"entity": "purchase_order", "status": "confirmed"}}], "note": ""}
+{"id": "case_1124", "calls": [{"tool": "search_purchase_record", "args": {"entity": "supplier_invoice"}}], "note": ""}
+{"id": "case_1125", "calls": [{"tool": "search_purchase_record", "args": {"entity": "purchase_order", "period": "last_quarter", "status": "cancelled", "keyword": "消耗品"}}], "note": ""}
+{"id": "case_1126", "calls": [{"tool": "search_purchase_record", "args": {"entity": "purchase_order", "period": "last_month", "status": "draft"}}], "note": ""}
+{"id": "case_1127", "calls": [{"tool": "search_report", "args": {"report_type": "yuho", "fiscal_year": 2022, "metric": "capital"}}], "note": ""}
+{"id": "case_1130", "calls": [{"tool": "search_report_section", "args": {"report_type": "yuho", "section": "corporate_governance"}}], "note": ""}
+{"id": "case_1131", "calls": [{"tool": "search_report_section", "args": {"report_type": "yuho", "section": "officers"}}], "note": ""}
+{"id": "case_1132", "calls": [{"tool": "search_report_section", "args": {"report_type": "yuho", "fiscal_year": 2021, "section": "corporate_governance"}}], "note": ""}
+{"id": "case_1133", "calls": [{"tool": "search_sales_record", "args": {"entity": "invoice", "keyword": "返品"}}], "note": ""}
+{"id": "case_1134", "calls": [{"tool": "search_sales_record", "args": {"entity": "invoice", "status": "closed"}}], "note": ""}
+{"id": "case_1135", "calls": [{"tool": "search_sales_record", "args": {"entity": "sales_order", "status": "cancelled"}}], "note": ""}
+{"id": "case_1136", "calls": [{"tool": "search_sales_record", "args": {"entity": "sales_order", "period": "last_month"}}], "note": ""}
+{"id": "case_1137", "calls": [{"tool": "search_sales_record", "args": {"entity": "invoice", "period": "this_fiscal_year", "status": "draft", "keyword": "ステンレス配管"}}], "note": ""}
+{"id": "case_1138", "calls": [{"tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "day", "period": "this_month"}}], "note": ""}
+{"id": "case_1139", "calls": [{"tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "quarter", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1140", "calls": [{"tool": "trend_hr", "args": {"entity": "attendance", "metric": "count", "interval": "week", "period": "this_month"}}], "note": ""}
+{"id": "case_1141", "calls": [{"tool": "trend_hr", "args": {"entity": "attendance", "metric": "quantity", "period": "last_month"}}], "note": ""}
+{"id": "case_1142", "calls": [{"tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "month", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1143", "calls": [{"tool": "trend_inventory", "args": {"entity": "stock", "metric": "quantity", "period": "this_month"}}], "note": ""}
+{"id": "case_1144", "calls": [{"tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}}], "note": ""}
+{"id": "case_1145", "calls": [{"tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "interval": "day", "period": "last_month"}}], "note": ""}
+{"id": "case_1147", "calls": [{"tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "interval": "day", "period": "last_month"}}], "note": ""}
+{"id": "case_1148", "calls": [{"tool": "trend_purchase", "args": {"entity": "supplier_invoice", "metric": "quantity", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_1149", "calls": [{"tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "period": "this_month"}}], "note": ""}
+{"id": "case_1150", "calls": [{"tool": "trend_purchase", "args": {"entity": "purchase_order", "metric": "quantity", "interval": "week", "period": "last_month"}}], "note": ""}
+{"id": "case_1151", "calls": [{"tool": "trend_purchase", "args": {"entity": "supplier_invoice", "metric": "count", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1152", "calls": [{"tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2022, "year_to": 2025}}], "note": ""}
+{"id": "case_1153", "calls": [{"tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2023, "year_to": 2024}}], "note": ""}
+{"id": "case_1154", "calls": [{"tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2021, "year_to": 2025}}], "note": ""}
+{"id": "case_1155", "calls": [{"tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "average_age", "year_from": 2018, "year_to": 2020}}], "note": ""}
+{"id": "case_1156", "calls": [{"tool": "trend_sales", "args": {"entity": "invoice", "metric": "quantity", "interval": "day", "period": "last_month"}}], "note": ""}
+{"id": "case_1157", "calls": [{"tool": "trend_sales", "args": {"entity": "sales_order", "metric": "quantity", "interval": "month", "period": "last_fiscal_year"}}], "note": ""}
+{"id": "case_1158", "calls": [{"tool": "trend_sales", "args": {"entity": "invoice", "metric": "count", "interval": "week", "period": "this_fiscal_year"}}], "note": ""}
+{"id": "case_0201", "calls": [{"tool": "aggregate_metric", "args": {"metric": "sales", "aggregation": "sum", "group_by": "department", "period": "last_month"}}], "note": ""}
+{"id": "case_0202", "calls": [{"tool": "trend_sales", "args": {"entity": "invoice", "metric": "amount", "interval": "month", "period": "this_fiscal_year"}}, {"tool": "trend_sales", "args": {"entity": "sales_order", "metric": "amount", "interval": "month", "period": "this_fiscal_year"}}], "note": "\"売上\" does not fix the sales entity; invoice (billed revenue) and sales_order are both defensible"}
+{"id": "case_0203", "calls": [{"tool": "compare_period_metric", "args": {"metric": "sales", "period_a": "last_month", "period_b": "this_month"}}], "note": ""}
+{"id": "case_0204", "calls": [{"tool": "list_open_purchase_items", "args": {"entity": "purchase_order", "overdue_only": true}}, {"tool": "list_open_purchase_items", "args": {"entity": "receipt", "overdue_only": true}}, {"tool": "list_open_purchase_items", "args": {"entity": "supplier_invoice", "overdue_only": true}}], "note": "\"購買で\" names only the module; required entity could be purchase_order, receipt or supplier_invoice"}
+{"id": "case_0101", "calls": [{"tool": "search_report", "args": {"report_type": "yuho", "fiscal_year": 2023, "metric": "employee_count"}}], "note": ""}
+{"id": "case_0102", "calls": [{"tool": "trend_report_metric", "args": {"report_type": "yuho", "metric": "employee_count", "year_from": 2020, "year_to": 2023}}], "note": ""}
+{"id": "case_0103", "calls": [{"tool": "search_report_section", "args": {"report_type": "yuho", "fiscal_year": 2023, "section": "business_risks"}}], "note": ""}
+{"id": "case_0104", "calls": [{"tool": "list_report_documents", "args": {"report_type": "ordinance", "fiscal_year": 2022}}], "note": ""}
+{"id": "case_0001", "calls": [{"tool": "search_master", "args": {"entity": "supplier", "code": "7001", "field": "registered_address"}}, {"tool": "search_master", "args": {"entity": "customer", "code": "7001", "field": "registered_address"}}], "note": "\"取引先\" covers both supplier and customer masters"}
+{"id": "case_0003", "calls": [{"tool": "list_master_records", "args": {"entity": "item", "active_only": true, "keyword": "ステンレス"}}], "note": ""}
+{"id": "case_0004", "calls": [{"tool": "get_master_hierarchy", "args": {"entity": "department", "root_code": "D100", "depth": 2}}], "note": ""}
+{"id": "case_0005", "calls": [{"tool": "get_sales_detail", "args": {"entity": "sales_order", "document_no": "SO-20240115", "include_lines": true}}], "note": ""}

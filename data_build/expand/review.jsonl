@@ -1,0 +1,186 @@
+{"id": "case_1001", "decision": "keep", "note": ""}
+{"id": "case_1002", "decision": "keep", "note": ""}
+{"id": "case_1003", "decision": "keep", "note": ""}
+{"id": "case_1004", "decision": "keep", "note": ""}
+{"id": "case_1005", "decision": "keep", "note": ""}
+{"id": "case_1006", "decision": "keep", "note": ""}
+{"id": "case_1007", "decision": "keep", "note": "最初の「捨てる」は作り直し前の判断案に沿ったもの。今の中身はそのまま"}
+{"id": "case_1008", "decision": "keep", "note": ""}
+{"id": "case_1009", "decision": "keep", "note": ""}
+{"id": "case_1010", "decision": "keep", "note": ""}
+{"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動の回数を数えて", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
+{"id": "case_1012", "decision": "fix", "query": "今月の在庫移動の数量の合計を出して。", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
+{"id": "case_1013", "decision": "fix", "query": "先月分の在庫移動の数量、合計はいくつ？", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
+{"id": "case_1014", "decision": "fix", "query": "前四半期の在庫移動の数量を品目別に合計してください。", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
+{"id": "case_1015", "decision": "keep", "note": ""}
+{"id": "case_1016", "decision": "fix", "query": "今月の売上の1件あたりの最小値はいくらですか？", "note": ""}
+{"id": "case_1017", "decision": "fix", "query": "前年度の仕入額について、仕入先ごとの最大値を出して", "note": ""}
+{"id": "case_1018", "decision": "fix", "query": "前年度の仕入額の最小値はいくら？", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}, "note": "期間の引数加えてほしい"}
+{"id": "case_1019", "decision": "keep", "note": ""}
+{"id": "case_1020", "decision": "keep", "note": "前の版（期間なし）に「今年度」を足す修正が付いていた。期間の規則で前年度が足されたので、今の版を採る"}
+{"id": "case_1021", "decision": "keep", "note": ""}
+{"id": "case_1022", "decision": "keep", "note": ""}
+{"id": "case_1023", "decision": "fix", "query": "前四半期の仕入先からの請求書額の合計を品目別に集計して", "note": ""}
+{"id": "case_1024", "decision": "fix", "query": "今年度の請求書の額の平均を部門別に見せて", "note": "額なのか数量なのかがわからない"}
+{"id": "case_1025", "decision": "fix", "query": "個別の請求書じゃなくて、今月の平均額を出して", "note": ""}
+{"id": "case_1026", "decision": "keep", "note": ""}
+{"id": "case_1027", "decision": "keep", "note": ""}
+{"id": "case_1028", "decision": "fix", "query": "先月と比べて今月の仕入額がどう変わったか教えて", "gold": {"expected_tool": "compare_period_metric", "exact": {"metric": "purchase_amount", "period_a": "last_month", "period_b": "this_month"}}, "note": "比較の基準（period_a）が語順で決まらなかったので、基準を先月と明記した"}
+{"id": "case_1029", "decision": "keep", "note": ""}
+{"id": "case_1030", "decision": "keep", "note": ""}
+{"id": "case_1031", "decision": "keep", "note": ""}
+{"id": "case_1032", "decision": "keep", "note": ""}
+{"id": "case_1033", "decision": "keep", "note": ""}
+{"id": "case_1034", "decision": "keep", "note": "そこまで会話が続いている前提ということね？であればよい（「直す」だがクエリは変更なし）"}
+{"id": "case_1035", "decision": "keep", "note": "上に同じ"}
+{"id": "case_1036", "decision": "keep", "note": "上に同じ"}
+{"id": "case_1037", "decision": "keep", "note": "上に同じ"}
+{"id": "case_1038", "decision": "keep", "note": ""}
+{"id": "case_1039", "decision": "keep", "note": ""}
+{"id": "case_1040", "decision": "keep", "note": ""}
+{"id": "case_1041", "decision": "keep", "note": ""}
+{"id": "case_1042", "decision": "keep", "note": "（「直す」だがクエリは変更なし）"}
+{"id": "case_1043", "decision": "keep", "note": ""}
+{"id": "case_1044", "decision": "keep", "note": ""}
+{"id": "case_1045", "decision": "keep", "note": ""}
+{"id": "case_1046", "decision": "keep", "note": ""}
+{"id": "case_1047", "decision": "keep", "note": ""}
+{"id": "case_1048", "decision": "keep", "note": ""}
+{"id": "case_1049", "decision": "keep", "note": ""}
+{"id": "case_1050", "decision": "keep", "note": ""}
+{"id": "case_1051", "decision": "keep", "note": ""}
+{"id": "case_1052", "decision": "keep", "note": ""}
+{"id": "case_1053", "decision": "keep", "note": ""}
+{"id": "case_1054", "decision": "fix", "query": "品番ITM-81481のマスタ登録内容の変更履歴を見せてください。", "note": "なんの変更履歴？となる（何の変更履歴かが分かるよう「マスタ登録内容の」を足した）"}
+{"id": "case_1055", "decision": "fix", "query": "仕入先コードS-6283のマスタ登録内容について、今の内容じゃなくて、これまでどう変更されてきたかを知りたいです。", "note": "上に同じ。何が変更された履歴なのか？（何の変更履歴かが分かるよう「マスタ登録内容の」を足した）"}
+{"id": "case_1056", "decision": "keep", "note": ""}
+{"id": "case_1057", "decision": "fix", "query": "社員番号E-8900の登録情報の変更履歴を、今年度の分だけ見せてください。", "note": "（何の変更履歴かが分かるよう「マスタ登録内容の」を足した）"}
+{"id": "case_1058", "decision": "keep", "note": ""}
+{"id": "case_1059", "decision": "keep", "note": ""}
+{"id": "case_1060", "decision": "keep", "note": ""}
+{"id": "case_1061", "decision": "keep", "note": "コード指定が気になる（「直す」だがクエリは変更なし。伝票番号での照会は実務どおりと判断）"}
+{"id": "case_1062", "decision": "keep", "note": ""}
+{"id": "case_1063", "decision": "keep", "note": ""}
+{"id": "case_1064", "decision": "keep", "note": ""}
+{"id": "case_1065", "decision": "keep", "note": ""}
+{"id": "case_1066", "decision": "keep", "note": ""}
+{"id": "case_1067", "decision": "keep", "note": ""}
+{"id": "case_1068", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：キーワードで絞るのはどうなのか。カテゴリを事前にデータ側で定義しておいて、その中から引数で選ぶ方式の方が良いのでは"}
+{"id": "case_1069", "decision": "keep", "note": ""}
+{"id": "case_1070", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
+{"id": "case_1071", "decision": "keep", "note": ""}
+{"id": "case_1072", "decision": "keep", "note": ""}
+{"id": "case_1073", "decision": "keep", "note": ""}
+{"id": "case_1074", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：引数おかしくない？滞留の判別がこれじゃできないと思う"}
+{"id": "case_1075", "decision": "keep", "note": ""}
+{"id": "case_1076", "decision": "keep", "note": ""}
+{"id": "case_1077", "decision": "keep", "note": ""}
+{"id": "case_1078", "decision": "keep", "note": ""}
+{"id": "case_1079", "decision": "keep", "note": ""}
+{"id": "case_1080", "decision": "keep", "note": ""}
+{"id": "case_1081", "decision": "keep", "note": ""}
+{"id": "case_1082", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：滞留の判別ができない"}
+{"id": "case_1083", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
+{"id": "case_1084", "decision": "keep", "note": ""}
+{"id": "case_1085", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
+{"id": "case_1086", "decision": "keep", "note": ""}
+{"id": "case_1087", "decision": "keep", "note": ""}
+{"id": "case_1088", "decision": "keep", "note": ""}
+{"id": "case_1089", "decision": "keep", "note": ""}
+{"id": "case_1092", "decision": "keep", "note": ""}
+{"id": "case_1093", "decision": "keep", "note": ""}
+{"id": "case_1094", "decision": "fix", "query": "前四半期の顧客向けの請求書で承認待ちのものを見せて", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
+{"id": "case_1096", "decision": "fix", "query": "承認待ちの顧客向け請求書を一覧にして", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
+{"id": "case_1097", "decision": "fix", "query": "今月の顧客向けの請求書で、承認待ちのまま止まっているものは？", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
+{"id": "case_1098", "decision": "keep", "note": ""}
+{"id": "case_1099", "decision": "keep", "note": ""}
+{"id": "case_1100", "decision": "keep", "note": "例規とは。略さない方が良いのでは（「例規」は条例・規則等の総称で略語ではない。そのままにした）"}
+{"id": "case_1101", "decision": "keep", "note": ""}
+{"id": "case_1102", "decision": "keep", "note": ""}
+{"id": "case_1103", "decision": "keep", "note": ""}
+{"id": "case_1104", "decision": "keep", "note": ""}
+{"id": "case_1105", "decision": "keep", "note": ""}
+{"id": "case_1106", "decision": "keep", "note": ""}
+{"id": "case_1107", "decision": "keep", "note": ""}
+{"id": "case_1108", "decision": "keep", "note": ""}
+{"id": "case_1109", "decision": "keep", "note": ""}
+{"id": "case_1110", "decision": "keep", "note": ""}
+{"id": "case_1111", "decision": "keep", "note": ""}
+{"id": "case_1114", "decision": "keep", "note": ""}
+{"id": "case_1115", "decision": "keep", "note": ""}
+{"id": "case_1119", "decision": "keep", "note": ""}
+{"id": "case_1120", "decision": "keep", "note": ""}
+{"id": "case_1121", "decision": "fix", "query": "西海フーズ株式会社の出荷先住所を教えて", "gold": {"expected_tool": "search_master", "exact": {"entity": "customer", "field": "shipping_address", "name": "西海フーズ株式会社"}}, "note": "顧客指定すれば良いのでは？"}
+{"id": "case_1122", "decision": "keep", "note": ""}
+{"id": "case_1123", "decision": "keep", "note": ""}
+{"id": "case_1124", "decision": "keep", "note": ""}
+{"id": "case_1125", "decision": "keep", "note": ""}
+{"id": "case_1126", "decision": "keep", "note": ""}
+{"id": "case_1131", "decision": "keep", "note": ""}
+{"id": "case_1132", "decision": "fix", "query": "2021年度の有価証券報告書のコーポレート・ガバナンスの記載本文を出して", "note": "一応直したが、有報という呼びは一般的なのか？（「有報」は有価証券報告書の一般的な略称。他の件では「有報」のまま）"}
+{"id": "case_1144", "decision": "fix", "query": "前四半期の在庫の金額の推移を月毎で出してください", "gold": {"expected_tool": "trend_inventory", "exact": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}}, "note": ""}
+{"id": "case_1149", "decision": "keep", "note": ""}
+{"id": "case_1150", "decision": "keep", "note": ""}
+{"id": "case_1153", "decision": "keep", "note": ""}
+{"id": "case_1156", "decision": "keep", "note": ""}
+{"id": "case_1157", "decision": "fix", "query": "前年度の受注の数量の推移を月毎で見せて", "gold": {"expected_tool": "trend_sales", "exact": {"entity": "sales_order", "metric": "quantity", "interval": "month", "period": "last_fiscal_year"}}, "note": ""}
+{"id": "case_1158", "decision": "keep", "note": ""}
+{"id": "case_1161", "decision": "keep", "note": ""}
+{"id": "case_1166", "decision": "keep", "note": ""}
+{"id": "case_1168", "decision": "keep", "note": ""}
+{"id": "case_1171", "decision": "keep", "note": ""}
+{"id": "case_1173", "decision": "keep", "note": ""}
+{"id": "case_1174", "decision": "keep", "note": ""}
+{"id": "case_1175", "decision": "keep", "note": ""}
+{"id": "case_1177", "decision": "keep", "note": ""}
+{"id": "case_1180", "decision": "keep", "note": ""}
+{"id": "case_1184", "decision": "keep", "note": ""}
+{"id": "case_1090", "decision": "keep", "note": ""}
+{"id": "case_1091", "decision": "keep", "note": ""}
+{"id": "case_1112", "decision": "keep", "note": ""}
+{"id": "case_1113", "decision": "keep", "note": ""}
+{"id": "case_1116", "decision": "keep", "note": ""}
+{"id": "case_1117", "decision": "keep", "note": ""}
+{"id": "case_1118", "decision": "keep", "note": ""}
+{"id": "case_1127", "decision": "keep", "note": ""}
+{"id": "case_1128", "decision": "keep", "note": ""}
+{"id": "case_1129", "decision": "keep", "note": ""}
+{"id": "case_1130", "decision": "keep", "note": ""}
+{"id": "case_1133", "decision": "keep", "note": ""}
+{"id": "case_1134", "decision": "keep", "note": ""}
+{"id": "case_1135", "decision": "keep", "note": ""}
+{"id": "case_1136", "decision": "keep", "note": ""}
+{"id": "case_1137", "decision": "keep", "note": ""}
+{"id": "case_1143", "decision": "keep", "note": ""}
+{"id": "case_1145", "decision": "keep", "note": ""}
+{"id": "case_1146", "decision": "keep", "note": ""}
+{"id": "case_1147", "decision": "keep", "note": ""}
+{"id": "case_1148", "decision": "keep", "note": ""}
+{"id": "case_1151", "decision": "keep", "note": ""}
+{"id": "case_1152", "decision": "keep", "note": ""}
+{"id": "case_1154", "decision": "keep", "note": ""}
+{"id": "case_1159", "decision": "keep", "note": ""}
+{"id": "case_1160", "decision": "keep", "note": ""}
+{"id": "case_1162", "decision": "keep", "note": ""}
+{"id": "case_1163", "decision": "keep", "note": ""}
+{"id": "case_1164", "decision": "keep", "note": ""}
+{"id": "case_1165", "decision": "keep", "note": ""}
+{"id": "case_1167", "decision": "keep", "note": ""}
+{"id": "case_1169", "decision": "keep", "note": ""}
+{"id": "case_1170", "decision": "keep", "note": ""}
+{"id": "case_1172", "decision": "keep", "note": ""}
+{"id": "case_1176", "decision": "keep", "note": ""}
+{"id": "case_1178", "decision": "keep", "note": ""}
+{"id": "case_1179", "decision": "keep", "note": ""}
+{"id": "case_1181", "decision": "keep", "note": ""}
+{"id": "case_1182", "decision": "keep", "note": ""}
+{"id": "case_1183", "decision": "keep", "note": ""}
+{"id": "case_1185", "decision": "keep", "note": ""}
+{"id": "case_1186", "decision": "keep", "note": ""}
+{"id": "case_1095", "decision": "keep", "note": ""}
+{"id": "case_1138", "decision": "keep", "note": ""}
+{"id": "case_1139", "decision": "keep", "note": ""}
+{"id": "case_1140", "decision": "keep", "note": ""}
+{"id": "case_1141", "decision": "keep", "note": ""}
+{"id": "case_1142", "decision": "keep", "note": ""}
+{"id": "case_1155", "decision": "keep", "note": ""}

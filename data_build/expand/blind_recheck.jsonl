@@ -1,0 +1,24 @@
+{"id": "case_1018", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}, "note": "aggregate_purchase(aggregation=min, period=last_fiscal_year) も候補だが entity（purchase_order/receipt/supplier_invoice）がクエリから決まらないため、metric=purchase_amount を持つ aggregate_metric を選んだ。"}
+{"id": "case_1116", "tool": "search_inventory_record", "args": {"entity": "stock", "period": "this_fiscal_year", "keyword": "移動中"}, "note": "status enum に「移動中」が無いため keyword で指定。entity は stock と movement で迷う（移動伝票なら movement）。移動中を未処理と見て list_open_inventory_items(entity=movement, period=this_fiscal_year) とする解釈もありうる。"}
+{"id": "case_1121", "tool": "search_master", "args": {"entity": "customer", "name": "西海フーズ株式会社", "field": "shipping_address"}, "note": "出荷先なので得意先(customer)と判断したが、entity が supplier の可能性もクエリだけでは排除できない。"}
+{"id": "case_1024", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "group_by": "department", "period": "this_fiscal_year"}, "note": "aggregate_metric(metric=sales)も候補だが、請求書という販売モジュールの対象種別が明示されているのでaggregate_salesを選んだ。"}
+{"id": "case_1025", "tool": "aggregate_sales", "args": {"entity": "invoice", "aggregation": "avg", "period": "this_month"}, "note": "「個別の請求書じゃなくて」はsearch_sales_record/get_sales_detailを退ける指示と解した。group_byは言及が無いので省略。"}
+{"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "month", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}, "note": ""}
+{"id": "case_1157", "tool": "trend_sales", "args": {"entity": "sales_order", "metric": "quantity", "interval": "month", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1056", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-4560"}, "note": ""}
+{"id": "case_1011", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1028", "tool": "compare_period_metric", "args": {"metric": "purchase_amount", "period_a": "last_month", "period_b": "this_month"}, "note": "「先月と比べて今月」なので比較元(period_a)=先月、比較先(period_b)=今月。逆順は比較の向きが反転するため不採用。"}
+{"id": "case_1016", "tool": "aggregate_metric", "args": {"metric": "sales", "aggregation": "min", "period": "this_month"}, "note": "「1件あたりの最小値」は個々の売上レコードのうち最小の値＝集約min（group_byは指定なし。noneでも同義）。aggregate_salesも販売額の集約はできるが必須のentity（受注/請求/出荷）をクエリが特定しないため、汎用のaggregate_metric(sales)を正とした。"}
+{"id": "case_1017", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "max", "group_by": "supplier", "period": "last_fiscal_year"}, "note": "「前年度」はlast_fiscal_yearと解釈。aggregate_purchaseも候補になり得るが必須のentity（発注/入荷/仕入請求）をクエリが特定しないため、仕入額を直接表すaggregate_metric(purchase_amount)を正とした。"}
+{"id": "case_1132", "tool": "search_report_section", "args": {"report_type": "yuho", "fiscal_year": 2021, "section": "corporate_governance"}, "note": ""}
+{"id": "case_1023", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}, "note": "「仕入先からの請求書」はsupplier_invoiceを名指ししている。aggregate_metric(metric=purchase_amount, group_by=item)も仕入額の集計として近いが、請求書という伝票種別を表せないため代替にはしない（境界ケース）。"}
+{"id": "case_1012", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "this_month"}, "note": "aggregate_metricのinventory_qtyは在庫数量(残高)を指し、在庫移動の数量ではないため代替にしない。"}
+{"id": "case_1013", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "last_month"}, "note": "aggregate_metricのinventory_qtyは在庫数量(残高)を指し、在庫移動の数量ではないため代替にしない。"}
+{"id": "case_1014", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}, "note": "aggregate_metricのinventory_qtyは在庫数量(残高)を指し、在庫移動の数量ではないため代替にしない。"}
+{"id": "case_1054", "tool": "get_master_change_history", "args": {"entity": "item", "code": "ITM-81481"}, "note": ""}
+{"id": "case_1055", "tool": "get_master_change_history", "args": {"entity": "supplier", "code": "S-6283"}, "note": "「今の内容じゃなくて」で search_master を明示的に排除している。"}
+{"id": "case_1057", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-8900", "period": "this_fiscal_year"}, "note": "「今年度」は this_fiscal_year に対応。"}
+{"id": "case_1094", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_quarter"}, "note": ""}
+{"id": "case_1096", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice"}, "note": ""}
+{"id": "case_1097", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "this_month"}, "note": ""}

@@ -1,0 +1,186 @@
+{"id": "case_1001", "query": "前年度の勘定残高の合計を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1002", "query": "前四半期の勘定残高について、月別の平均を出してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1003", "query": "今月の仕訳の合計額を教えてください", "style": "plain", "writer_note": ""}
+{"id": "case_1004", "query": "前四半期の勘定残高の合計を部門別に出して", "style": "plain", "writer_note": ""}
+{"id": "case_1005", "query": "金額じゃなくて、今月の仕訳が何件あるかだけ知りたい", "style": "hard", "writer_note": ""}
+{"id": "case_1006", "query": "前年度の給与の最小値を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1007", "query": "今年度の給与の合計を教えてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1008", "query": "今月の給与の平均を教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1009", "query": "今年度の給与の平均を出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1010", "query": "先月の給与について、平均や合計じゃなくて一番低い額だけ知りたいです。", "style": "hard", "writer_note": ""}
+{"id": "case_1011", "query": "前年度の在庫移動の合計を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1012", "query": "今月の在庫移動の合計を出して。", "style": "plain", "writer_note": ""}
+{"id": "case_1013", "query": "先月分の在庫移動、合計はいくつ？", "style": "plain", "writer_note": ""}
+{"id": "case_1014", "query": "前四半期の在庫移動を品目別に合計してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1015", "query": "今月の在庫移動は、金額や数量の合計じゃなくて件数で、品目別に数えてほしい。", "style": "hard", "writer_note": ""}
+{"id": "case_1016", "query": "今月の売上の最小値はいくらですか？", "style": "plain", "writer_note": ""}
+{"id": "case_1017", "query": "前年度の仕入額を仕入先別に見て、最大の金額を出してほしい。", "style": "plain", "writer_note": "仕入先別の最大値は、各仕入先ごとの最大か全体の最大か曖昧になりうる"}
+{"id": "case_1018", "query": "仕入額の最小値はいくら？", "style": "plain", "writer_note": ""}
+{"id": "case_1019", "query": "今年度の売上の平均を部門別に出してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1020", "query": "前年度の入荷の件数を部門別に数えて", "style": "hard", "writer_note": ""}
+{"id": "case_1021", "query": "今年度の仕入先からの請求書、一覧じゃなくて最大値を知りたい", "style": "plain", "writer_note": ""}
+{"id": "case_1022", "query": "前年度の入荷の合計を出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1023", "query": "前四半期の仕入先からの請求書の合計を品目別に集計して", "style": "plain", "writer_note": ""}
+{"id": "case_1024", "query": "今年度の請求書の平均を部門別に見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1025", "query": "今月の個別の請求書じゃなくて平均を出して", "style": "hard", "writer_note": ""}
+{"id": "case_1026", "query": "先月の請求書は全部で何件？", "style": "plain", "writer_note": ""}
+{"id": "case_1027", "query": "前年度の請求書の件数を顧客別に出して", "style": "plain", "writer_note": ""}
+{"id": "case_1028", "query": "仕入額を今月と先月で比較して", "style": "plain", "writer_note": ""}
+{"id": "case_1029", "query": "売上を前年度と今年度で比べて、差を教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1030", "query": "人数が前年度から今年度でどう変わったか、差分で教えて", "style": "hard", "writer_note": ""}
+{"id": "case_1031", "query": "有報の営業利益を2022年度と2024年度で比較して", "style": "plain", "writer_note": ""}
+{"id": "case_1032", "query": "有価証券報告書の平均年齢、2018年度と2022年度を比べて", "style": "plain", "writer_note": ""}
+{"id": "case_1033", "query": "有報の平均年齢を2022年度と2025年度の2時点で比較してください", "style": "plain", "writer_note": ""}
+{"id": "case_1034", "query": "Excel形式で出力して", "style": "plain", "writer_note": ""}
+{"id": "case_1035", "query": "今の結果だけじゃなくて、テーブル全体をExcelファイルで出して", "style": "hard", "writer_note": ""}
+{"id": "case_1036", "query": "JSONで書き出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1037", "query": "テーブル全体をCSVにして", "style": "plain", "writer_note": ""}
+{"id": "case_1038", "query": "仕訳JE-2021-43184の詳細を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1039", "query": "仕訳番号JE-2020-04197の内容を、明細行も含めて見せてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1040", "query": "仕訳の一覧ではなく、仕訳番号JE-2021-55975の1件について明細行まで全部確認したいです。", "style": "hard", "writer_note": ""}
+{"id": "case_1041", "query": "仕訳番号JE-2022-61020の詳細を明細行も含めて教えてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1042", "query": "2025年度の期首と期末を教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1043", "query": "2019年度の会計期間の定義を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1044", "query": "2024年度の四半期の区切りを知りたい", "style": "plain", "writer_note": ""}
+{"id": "case_1045", "query": "金額じゃなくて期間の定義そのものがほしい。2020年度分", "style": "hard", "writer_note": ""}
+{"id": "case_1046", "query": "勤怠AT-2025-67882の詳細を。明細は不要", "style": "plain", "writer_note": ""}
+{"id": "case_1047", "query": "給与明細の番号PY-2021-12202の内容を確認したいです。", "style": "plain", "writer_note": ""}
+{"id": "case_1048", "query": "給与伝票番号PY-2021-61018の詳細を出してもらえますか。", "style": "plain", "writer_note": ""}
+{"id": "case_1049", "query": "給与伝票PY-2019-37316の中身を見たい", "style": "plain", "writer_note": ""}
+{"id": "case_1050", "query": "在庫移動の伝票番号MV-2019-52080について、検索ではなくこの1件の中身を見たいです。", "style": "hard", "writer_note": "Claudeが正解に無い「明細は不要」を削除"}
+{"id": "case_1051", "query": "在庫移動の伝票番号MV-2024-80466の詳細を、明細行も含めて表示してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1052", "query": "在庫移動の伝票番号MV-2021-08370を開いて、内容を見せてください。", "style": "plain", "writer_note": "Claudeが正解に無い「明細は不要」を削除"}
+{"id": "case_1053", "query": "在庫移動の伝票番号MV-2020-45514の詳細が知りたいです。明細行も含めてお願いします。", "style": "plain", "writer_note": ""}
+{"id": "case_1054", "query": "品番ITM-81481の変更履歴を見せてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1055", "query": "仕入先コードS-6283について、今の登録内容じゃなくて、これまでどう変更されてきたかを知りたいです。", "style": "hard", "writer_note": ""}
+{"id": "case_1056", "query": "社員番号E-4560の登録情報の変更履歴を教えてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1057", "query": "社員番号E-8900の変更履歴を、今年度の分だけ見せてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1058", "query": "部門コードD-8190を起点にした部門の組織階層を表示してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1059", "query": "品目分類の階層構造を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1060", "query": "品番ITM-21403の単体情報ではなく、そこから2階層分の構成を見たいです。", "style": "hard", "writer_note": ""}
+{"id": "case_1061", "query": "仕入先からの請求書SI-2023-69763を明細も含めて見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1062", "query": "入荷伝票RC-2025-56114の詳細を教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1063", "query": "入荷RC-2018-04095の詳細。明細は不要です", "style": "plain", "writer_note": ""}
+{"id": "case_1064", "query": "RC-2019-40964の入荷の中身を確認したい", "style": "plain", "writer_note": ""}
+{"id": "case_1065", "query": "請求書INV-2020-69620について、一覧ではなくこの1件を。明細行は要らない", "style": "hard", "writer_note": ""}
+{"id": "case_1066", "query": "受注SO-2025-71353の詳細を、明細なしで見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1067", "query": "出荷SHP-2019-21150の詳細をください", "style": "plain", "writer_note": ""}
+{"id": "case_1068", "query": "有効な仕入先を「物流」で絞って一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1069", "query": "部門マスタを「樹脂」で絞って一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1070", "query": "無効なものは除いて、「樹脂」に関する部門を一覧にして", "style": "hard", "writer_note": ""}
+{"id": "case_1071", "query": "給与関連で処理が止まったままになっているもののうち、期限を過ぎたものだけ一覧にしてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1072", "query": "今年度の未処理の勤怠を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1073", "query": "未処理の勤怠で、期限切れのものだけ出して", "style": "plain", "writer_note": ""}
+{"id": "case_1074", "query": "先月の勤怠の未処理分を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1075", "query": "今月の在庫移動で、まだ処理されていないものを教えて", "style": "hard", "writer_note": ""}
+{"id": "case_1076", "query": "未処理の在庫移動を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1077", "query": "在庫の移動伝票で未処理のものを、期限を過ぎているものだけ出してもらえますか。", "style": "plain", "writer_note": ""}
+{"id": "case_1078", "query": "先月分の在庫移動で、まだ処理が終わっていなくて期限も過ぎているものを教えて。", "style": "plain", "writer_note": ""}
+{"id": "case_1079", "query": "今年度の未処理の入荷を、期限超過に限らず全部見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1080", "query": "前年度の発注で滞留しているもの。期限切れだけに絞らなくていい", "style": "hard", "writer_note": ""}
+{"id": "case_1081", "query": "未処理の入荷を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1082", "query": "今月の受注で未処理のものを出して", "style": "plain", "writer_note": ""}
+{"id": "case_1083", "query": "先月の出荷で未処理のものを教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1084", "query": "今年度の請求書で未消込のものを一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1085", "query": "全件の検索じゃなくて、滞留している受注だけ見せて", "style": "hard", "writer_note": ""}
+{"id": "case_1086", "query": "上長決裁待ちの給与を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1087", "query": "前四半期の給与で承認待ちのものを出して", "style": "plain", "writer_note": ""}
+{"id": "case_1088", "query": "前四半期の勤怠で、人事決裁待ちのものを見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1089", "query": "先月の勤怠の承認待ち一覧をください", "style": "plain", "writer_note": ""}
+{"id": "case_1090", "query": "未処理の一覧じゃなくて、今月分の発注で承認待ちで止まっているものを見せて", "style": "hard", "writer_note": ""}
+{"id": "case_1091", "query": "前四半期の発注のうち、上長決裁待ちになっているものを一覧で出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1092", "query": "前年度の仕入先からの請求書で承認待ちのもの", "style": "plain", "writer_note": ""}
+{"id": "case_1093", "query": "承認待ちの仕入先請求書を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1094", "query": "前四半期の請求書で承認待ちのものを見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1095", "query": "先月の、お客さんに出した請求書のうち、未処理じゃなくて承認待ちで止まっているほうを一覧で見せて", "style": "hard", "writer_note": ""}
+{"id": "case_1096", "query": "承認待ちの請求書を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1097", "query": "今月の請求書で、承認待ちのまま止まっているものは？", "style": "plain", "writer_note": ""}
+{"id": "case_1098", "query": "2025年度の法律の文書にはどんなものがあるか、一覧を出してください。", "style": "plain", "writer_note": ""}
+{"id": "case_1099", "query": "2024年度の例規で「情報公開」に関する文書を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1100", "query": "文書の中身じゃなくて、例規で「情報公開」に関する文書がどれかを知りたい", "style": "hard", "writer_note": ""}
+{"id": "case_1101", "query": "顧客の「西海フーズ株式会社」のコードを教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1102", "query": "株式会社ひかり医療の顧客コードを調べてください", "style": "plain", "writer_note": ""}
+{"id": "case_1103", "query": "仕入先の東都精工株式会社のコードは？", "style": "plain", "writer_note": ""}
+{"id": "case_1104", "query": "品目「樹脂ペレットPP」のコードを知りたい", "style": "plain", "writer_note": ""}
+{"id": "case_1105", "query": "集計じゃなくて個別に。先月の仕訳の下書きを一覧で", "style": "hard", "writer_note": ""}
+{"id": "case_1106", "query": "先月の勘定残高で「前受金」のものを探して", "style": "plain", "writer_note": ""}
+{"id": "case_1107", "query": "今月の確定済みの仕訳で「前受金」に当たるものを出して", "style": "plain", "writer_note": ""}
+{"id": "case_1108", "query": "前四半期の仕訳で「為替差損」に関する記録を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1109", "query": "今月の仕訳から「本社経費」のものを探して", "style": "plain", "writer_note": ""}
+{"id": "case_1110", "query": "今年度の給与レコードで、下書きのもの。キーワードは「中途採用」", "style": "hard", "writer_note": ""}
+{"id": "case_1111", "query": "給与のレコードから「契約社員」を探して", "style": "plain", "writer_note": ""}
+{"id": "case_1112", "query": "今年度の勤怠から「休日出勤」で検索してください", "style": "plain", "writer_note": ""}
+{"id": "case_1113", "query": "今月の勤怠で、締め済みのもののうち「休日出勤」に関する記録を探して", "style": "plain", "writer_note": "Claudeが言い方を直した（「完了」→「締め済み」、「在庫記録」→「在庫残高のレコード」。検査で別の読みが出たため）"}
+{"id": "case_1114", "query": "前四半期の勤怠レコードで下書きのものを一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1115", "query": "今月の在庫移動を、集計せずに1件ずつ一覧で見せてください。", "style": "hard", "writer_note": ""}
+{"id": "case_1116", "query": "今年度の在庫残高のレコードから「棚卸差異」で検索したいです", "style": "plain", "writer_note": "Claudeが言い方を直した（「完了」→「締め済み」、「在庫記録」→「在庫残高のレコード」。検査で別の読みが出たため）"}
+{"id": "case_1117", "query": "先月の在庫移動で、取消済みのもののうち「第2倉庫」に関する記録を出してほしい", "style": "plain", "writer_note": ""}
+{"id": "case_1118", "query": "在庫移動の記録を「ボルトM8」で検索してください", "style": "plain", "writer_note": ""}
+{"id": "case_1119", "query": "品目「ステンレスボルトM8」のマスタ登録内容を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1120", "query": "得意先の一覧じゃなくて、「株式会社みなと建設」1社の今のマスタ登録情報を確認したいんだけど", "style": "hard", "writer_note": ""}
+{"id": "case_1121", "query": "顧客の出荷先住所を教えて", "style": "plain", "writer_note": "コードも名称も指定がなく、どの顧客か特定できない"}
+{"id": "case_1122", "query": "入荷の記録で「原材料A」に関するものを探して", "style": "plain", "writer_note": ""}
+{"id": "case_1123", "query": "確定済みの発注を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1124", "query": "仕入先からの請求書のレコードを一覧で見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1125", "query": "前四半期の発注で、取消になったもの。「消耗品」に絞って", "style": "hard", "writer_note": ""}
+{"id": "case_1126", "query": "先月の発注で下書きのものを一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1127", "query": "2022年度の有報から資本金を調べて", "style": "plain", "writer_note": ""}
+{"id": "case_1128", "query": "法律の文書の中から「労働時間」について書かれている箇所を探してほしい。", "style": "plain", "writer_note": ""}
+{"id": "case_1129", "query": "法律で「インボイス」に関する記載を検索してもらえますか。", "style": "plain", "writer_note": ""}
+{"id": "case_1130", "query": "指標の数値じゃなくて、有報のコーポレート・ガバナンスの記述そのものを出して", "style": "hard", "writer_note": ""}
+{"id": "case_1131", "query": "有価証券報告書の役員の本文を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1132", "query": "2021年度の有報のコーポレート・ガバナンスの記載本文を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1133", "query": "請求書の記録で「返品」に関するものを探して", "style": "plain", "writer_note": ""}
+{"id": "case_1134", "query": "クローズ済みの請求書を一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1135", "query": "取消になった受注を、集計じゃなくて個別に一覧で", "style": "hard", "writer_note": ""}
+{"id": "case_1136", "query": "先月の受注を検索して一覧にして", "style": "plain", "writer_note": ""}
+{"id": "case_1137", "query": "今年度の請求書で下書きのもの。「ステンレス配管」に絞って", "style": "plain", "writer_note": ""}
+{"id": "case_1138", "query": "今年度の給与額の推移を見せてください", "style": "plain", "writer_note": ""}
+{"id": "case_1139", "query": "前四半期の給与の金額の推移を教えて", "style": "plain", "writer_note": ""}
+{"id": "case_1140", "query": "前四半期の給与額を、合計じゃなくて月ごとの推移で見たいです", "style": "hard", "writer_note": ""}
+{"id": "case_1141", "query": "前年度の給与額がどう推移していたか知りたい", "style": "plain", "writer_note": ""}
+{"id": "case_1142", "query": "今年度の給与額の推移を、月次で出してください", "style": "plain", "writer_note": "Claudeが言い方を直した（「月次で追えるように」→「推移を、月次で」。検査で月別の集計とも読めたため）"}
+{"id": "case_1143", "query": "今月の在庫移動について、金額の推移を見せてください。", "style": "plain", "writer_note": "metricが金額の在庫移動(movement)は意味が少し不自然だが、スキーマ上は有効。"}
+{"id": "case_1144", "query": "前四半期の在庫の金額の推移を出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1145", "query": "先月の在庫移動の金額、集計ではなく日ごとの推移で", "style": "hard", "writer_note": ""}
+{"id": "case_1146", "query": "先月の在庫移動の件数が、どう推移したか教えてください。", "style": "plain", "writer_note": ""}
+{"id": "case_1147", "query": "先月の入荷の金額の推移を日別に見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1148", "query": "今年度の仕入先請求書の数量の推移を出して", "style": "plain", "writer_note": ""}
+{"id": "case_1149", "query": "今月の入荷金額の推移を出してください", "style": "plain", "writer_note": ""}
+{"id": "case_1150", "query": "合計じゃなくて、先月の発注数量の週ごとの時系列推移がほしい", "style": "hard", "writer_note": ""}
+{"id": "case_1151", "query": "前年度の仕入先からの請求書の件数の推移", "style": "plain", "writer_note": ""}
+{"id": "case_1152", "query": "有報の平均年齢を2022年度から2025年度までの推移で見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1153", "query": "有報の平均年齢、2023年度から2024年度まで各年度の値を並べて", "style": "plain", "writer_note": ""}
+{"id": "case_1154", "query": "有価証券報告書の平均年齢の推移を、2021年度から2025年度まで", "style": "plain", "writer_note": ""}
+{"id": "case_1155", "query": "有報の平均年齢、2018年度と2020年度を比べるだけじゃなくて、2018年度から2020年度までの推移を見たい", "style": "hard", "writer_note": ""}
+{"id": "case_1156", "query": "先月の請求書の数量の推移を日別に出して", "style": "plain", "writer_note": ""}
+{"id": "case_1157", "query": "前年度の受注の数量の推移を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1158", "query": "今年度の請求書の件数の推移を週次で見せてください", "style": "plain", "writer_note": ""}
+{"id": "case_1159", "query": "この発注を確定して", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1160", "query": "請求書を承認しておいて", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1161", "query": "従業員E-741の電話番号を新しい番号に変更して", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1162", "query": "受注SO-2025-39391を取り消してください", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1163", "query": "この請求書を顧客にメールで送信して", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1164", "query": "仕入先S-4623をマスタから削除して", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1165", "query": "提出済みの勤怠申請を差し戻して", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1166", "query": "新しい部門を登録しておいて", "style": "negative", "category": "unsupported_action", "writer_note": ""}
+{"id": "case_1167", "query": "おはようございます", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1168", "query": "お疲れさま、今日も忙しいね", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1169", "query": "あなたの名前を教えて", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1170", "query": "最近寒くなってきましたね", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1171", "query": "お昼なに食べようかな", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1172", "query": "よろしくお願いします", "style": "negative", "category": "small_talk", "writer_note": ""}
+{"id": "case_1173", "query": "減価償却って何？", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1174", "query": "インボイス制度の概要を教えて", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1175", "query": "仕訳の借方と貸方の違いは？", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1176", "query": "在庫回転率の計算式を教えてください", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1177", "query": "月次決算では普通どんなことをするの？", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1178", "query": "ABC分析ってどういう手法？", "style": "negative", "category": "general_knowledge", "writer_note": ""}
+{"id": "case_1179", "query": "来月の売上を予測して", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1180", "query": "競合A社の売上高はいくら？", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1181", "query": "今年度の為替レートの見通しを出して", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1182", "query": "明日の出荷、雨で遅れそう？天気予報を見せて", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1183", "query": "業界平均の営業利益率と自社を比べて", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1184", "query": "取引先の外部信用格付けを一覧にして", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1185", "query": "今後の原材料価格の相場を教えて", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}
+{"id": "case_1186", "query": "高橋 誠さんは今後昇進すると思う？", "style": "negative", "category": "out_of_catalog_data", "writer_note": ""}

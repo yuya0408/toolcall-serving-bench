@@ -34,11 +34,30 @@
     "provenance": {
       "description": "How this case was produced. Lets readers recompute metrics excluding any generation method.",
       "type": "string",
-      "enum": ["seed_manual", "grounded", "adversarial_manual"]
+      "enum": ["seed_manual", "grounded", "adversarial_manual", "generated"]
     },
     "source": {
       "description": "For grounded cases: the public dataset the argument ground-truth is grounded in.",
       "type": "string"
+    },
+    "generation": {
+      "description": "For generated cases (docs/adr/0004-expand-case-set.md): the gold call was sampled by a seeded script, the query was written by an LLM from that call, and an LLM that never saw the gold call tried to recover it. Lets readers restrict metrics to human-reviewed cases.",
+      "type": "object",
+      "required": ["gold_seed", "query_model", "check_model", "review", "human_edit"],
+      "additionalProperties": false,
+      "properties": {
+        "gold_seed": { "type": "integer", "description": "Seed of scripts/generate_gold_calls.py that produced the gold call." },
+        "query_model": { "type": "string", "description": "Model that wrote the query from the gold call." },
+        "check_model": { "type": "string", "description": "Model that tried to recover the gold call from the query alone." },
+        "review": {
+          "enum": ["flagged_reviewed", "sampled_reviewed", "rest_reviewed", "unreviewed"],
+          "description": "flagged_reviewed: the blind check disagreed with the gold call and a human resolved it. sampled_reviewed: the check agreed and the case was in the random human-review sample. rest_reviewed: the check agreed, the case was not sampled, and a human reviewed it when the rest were reviewed too. unreviewed: the check agreed and no human looked at it."
+        },
+        "human_edit": {
+          "enum": ["none", "query", "query_and_gold"],
+          "description": "What a human changed after review. query: the query was rewritten. query_and_gold: the query was rewritten and the gold call replaced with the one the new query determines. Every edited case passed the blind check again."
+        }
+      }
     }
   },
   "allOf": [
@@ -49,6 +68,11 @@
     {
       "if": { "properties": { "provenance": { "const": "grounded" } } },
       "then": { "required": ["source"] }
+    },
+    {
+      "if": { "properties": { "provenance": { "const": "generated" } } },
+      "then": { "required": ["generation"] },
+      "else": { "not": { "required": ["generation"] } }
     }
   ]
 }

@@ -13,7 +13,7 @@ def test_load_and_score():
     cases = load_cases("data")
     assert len(cases) >= 4
     prov = by_provenance(cases)
-    assert set(prov) == {"seed_manual", "grounded", "adversarial_manual"}
+    assert set(prov) == {"seed_manual", "grounded", "adversarial_manual", "generated"}
 
     dec = IdentityDecoder()
     # Simulate a correct call on the grounded case.
