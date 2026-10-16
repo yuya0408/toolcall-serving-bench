@@ -15,7 +15,8 @@ human decisions, one line per reviewed id:
 and blind_recheck.jsonl, the blind check (same shape as blind_calls.jsonl)
 rerun on the corrected queries only.
 
-Every flagged or sampled case must have a decision. A fix rewrites the query
+Every case must have a decision (all are reviewed, not only the flagged and
+sampled ones). A fix rewrites the query
 and may replace the gold call with the one the corrected query determines.
 Every fixed case must pass the blind check again against its corrected gold
 call, so the query alone still pins the answer. Each case records how far it was checked
@@ -59,10 +60,10 @@ def main() -> int:
     review = _jsonl(BUILD / "review.jsonl")
     recheck = _jsonl(BUILD / "blind_recheck.jsonl")
 
-    needs_review = [i for i, r in queue.items() if r["flags"] or r["sampled"]]
-    missing = [i for i in needs_review if i not in review]
+    # The sample bounded the defect rate at ~15%, too high to leave the rest unread (ADR-0004, step 4).
+    missing = [i for i in queue if i not in review]
     if missing:
-        raise SystemExit(f"{len(missing)} flagged/sampled cases have no decision in review.jsonl, e.g. {missing[:5]}")
+        raise SystemExit(f"{len(missing)} cases have no decision in review.jsonl, e.g. {missing[:5]}")
 
     rng = random.Random(NEGATIVE_DISTRACTOR_SEED)
     names = sorted(tools)
