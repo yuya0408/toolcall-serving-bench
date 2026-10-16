@@ -46,7 +46,14 @@ Rules:
   - from a seventh seed (APPROVAL_SEED), pending-approval lists are redrawn
     unless the record type has an approval workflow and the stage belongs
     to it (receipts and shipments are not approved; a budget check happens
-    on purchase orders, not on supplier invoices).
+    on purchase orders, not on supplier invoices; sales orders are not
+    approved either, only invoices on the sales side).
+  - from a ninth seed (HR_TREND_SEED), HR trends are redrawn unless they
+    follow payroll amounts, by month or quarter, over more than a month: a
+    count of payroll or attendance records, or an attendance "quantity", is
+    not something anyone trends; for headcount the catalog does not say
+    whether a head count is the count or the quantity metric; and pay
+    changes month by month, so a daily or weekly series says nothing.
   - from an eighth seed (KEYWORD_SEED), a search keyword that does not fit
     the record type (KEYWORDS is per module: "performance review" in
     attendance records) is replaced from KEYWORDS_BY_ENTITY; nothing else in
@@ -94,10 +101,10 @@ REALISM_SEED = 20261020
 NO_DOCUMENTS = {"account_balance", "cost_center", "headcount", "stock", "warehouse"}
 APPROVAL_SEED = 20261021
 KEYWORD_SEED = 20261022
+HR_TREND_SEED = 20261023
 APPROVAL_STAGES = {   # record types with an approval workflow, and the stages each goes through
     "purchase_order": {"budget_check", "manager_signoff"},
     "supplier_invoice": {"manager_signoff", "finance_signoff"},
-    "sales_order": {"credit_check", "discount_approval", "manager_signoff"},
     "invoice": {"manager_signoff"},
     "attendance": {"manager_signoff", "hr_signoff"},
     "payroll": {"manager_signoff", "hr_signoff"},
@@ -209,6 +216,8 @@ AGGREGATIONS_BY_ENTITY = {   # aggregate_<module>: what can sensibly be summed /
 }
 GROUP_BY_BY_ENTITY = {"warehouse": {"month"}, "headcount": {"department", "month"}}   # narrower than the module rule
 SINGLE_MONTH = {"last_month", "this_month"}   # grouping or trending these by month says nothing
+HR_TREND_SERIES = {"payroll": {"amount"}}   # the only HR series a reviewer would trend whose metric is unambiguous
+HR_TREND_INTERVALS = {"month", "quarter"}   # pay changes month by month
 HR_TREND_METRICS = {"headcount": {"count"}, "payroll": {"amount", "count"}, "attendance": {"quantity", "count"}}
 COMPARABLE_PERIODS = [{"last_month", "this_month"}, {"last_fiscal_year", "this_fiscal_year"}]
 
@@ -461,6 +470,34 @@ def replace_off_topic_keywords(rng: random.Random, tools: dict[str, dict[str, An
         validate_case_against_tools(row, tools)
 
 
+def untrended_hr(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    if tool["name"] != "trend_hr":
+        return False
+    if args["metric"] not in HR_TREND_SERIES.get(args["entity"], set()):
+        return True
+    return args.get("interval", "month") not in HR_TREND_INTERVALS or args.get("period") in SINGLE_MONTH
+
+
+def redraw_untrended_hr(rng: random.Random, tools: dict[str, dict[str, Any]],
+                        rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not untrended_hr(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(2000):   # one draw in ~40 is a payroll amount trend
+            candidate = sample_args(rng, tool)
+            if needs_period(tool, candidate):
+                candidate["period"] = _value(rng, tool, "period", tool["parameters"]["properties"]["period"], candidate)
+            if not (untrended_hr(tool, candidate) or meaningless(tool, candidate))                     and plausible(tool, candidate) and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -567,6 +604,7 @@ def main(argv: list[str] | None = None) -> int:
     redraw_unrealistic(random.Random(REALISM_SEED), tools, rows, seen)
     redraw_no_approval_workflow(random.Random(APPROVAL_SEED), tools, rows, seen)
     replace_off_topic_keywords(random.Random(KEYWORD_SEED), tools, rows, seen)
+    redraw_untrended_hr(random.Random(HR_TREND_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:

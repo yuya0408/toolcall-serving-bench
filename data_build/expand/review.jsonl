@@ -89,9 +89,9 @@
 {"id": "case_1089", "decision": "keep", "note": ""}
 {"id": "case_1092", "decision": "keep", "note": ""}
 {"id": "case_1093", "decision": "keep", "note": ""}
-{"id": "case_1094", "decision": "keep", "note": ""}
-{"id": "case_1096", "decision": "keep", "note": ""}
-{"id": "case_1097", "decision": "keep", "note": ""}
+{"id": "case_1094", "decision": "fix", "query": "前四半期の顧客向けの請求書で承認待ちのものを見せて", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
+{"id": "case_1096", "decision": "fix", "query": "承認待ちの顧客向け請求書を一覧にして", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
+{"id": "case_1097", "decision": "fix", "query": "今月の顧客向けの請求書で、承認待ちのまま止まっているものは？", "note": "素の「請求書」は仕入先からの請求書とも読めたので、顧客向けと明記した"}
 {"id": "case_1098", "decision": "keep", "note": ""}
 {"id": "case_1099", "decision": "keep", "note": ""}
 {"id": "case_1100", "decision": "keep", "note": "例規とは。略さない方が良いのでは（「例規」は条例・規則等の総称で略語ではない。そのままにした）"}
@@ -118,7 +118,6 @@
 {"id": "case_1126", "decision": "keep", "note": ""}
 {"id": "case_1131", "decision": "keep", "note": ""}
 {"id": "case_1132", "decision": "fix", "query": "2021年度の有価証券報告書のコーポレート・ガバナンスの記載本文を出して", "note": "一応直したが、有報という呼びは一般的なのか？（「有報」は有価証券報告書の一般的な略称。他の件では「有報」のまま）"}
-{"id": "case_1142", "decision": "fix", "query": "前年度の人員の件数の推移を月次で出して", "gold": {"expected_tool": "trend_hr", "exact": {"entity": "headcount", "metric": "count", "interval": "month", "period": "last_fiscal_year"}}, "note": ""}
 {"id": "case_1144", "decision": "fix", "query": "前四半期の在庫の金額の推移を月毎で出してください", "gold": {"expected_tool": "trend_inventory", "exact": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}}, "note": ""}
 {"id": "case_1149", "decision": "keep", "note": ""}
 {"id": "case_1150", "decision": "keep", "note": ""}
@@ -136,3 +135,45 @@
 {"id": "case_1177", "decision": "keep", "note": ""}
 {"id": "case_1180", "decision": "keep", "note": ""}
 {"id": "case_1184", "decision": "keep", "note": ""}
+{"id": "case_1090", "decision": "keep", "note": ""}
+{"id": "case_1091", "decision": "keep", "note": ""}
+{"id": "case_1112", "decision": "keep", "note": ""}
+{"id": "case_1113", "decision": "keep", "note": ""}
+{"id": "case_1116", "decision": "keep", "note": ""}
+{"id": "case_1117", "decision": "keep", "note": ""}
+{"id": "case_1118", "decision": "keep", "note": ""}
+{"id": "case_1127", "decision": "keep", "note": ""}
+{"id": "case_1128", "decision": "keep", "note": ""}
+{"id": "case_1129", "decision": "keep", "note": ""}
+{"id": "case_1130", "decision": "keep", "note": ""}
+{"id": "case_1133", "decision": "keep", "note": ""}
+{"id": "case_1134", "decision": "keep", "note": ""}
+{"id": "case_1135", "decision": "keep", "note": ""}
+{"id": "case_1136", "decision": "keep", "note": ""}
+{"id": "case_1137", "decision": "keep", "note": ""}
+{"id": "case_1143", "decision": "keep", "note": ""}
+{"id": "case_1145", "decision": "keep", "note": ""}
+{"id": "case_1146", "decision": "keep", "note": ""}
+{"id": "case_1147", "decision": "keep", "note": ""}
+{"id": "case_1148", "decision": "keep", "note": ""}
+{"id": "case_1151", "decision": "keep", "note": ""}
+{"id": "case_1152", "decision": "keep", "note": ""}
+{"id": "case_1154", "decision": "keep", "note": ""}
+{"id": "case_1159", "decision": "keep", "note": ""}
+{"id": "case_1160", "decision": "keep", "note": ""}
+{"id": "case_1162", "decision": "keep", "note": ""}
+{"id": "case_1163", "decision": "keep", "note": ""}
+{"id": "case_1164", "decision": "keep", "note": ""}
+{"id": "case_1165", "decision": "keep", "note": ""}
+{"id": "case_1167", "decision": "keep", "note": ""}
+{"id": "case_1169", "decision": "keep", "note": ""}
+{"id": "case_1170", "decision": "keep", "note": ""}
+{"id": "case_1172", "decision": "keep", "note": ""}
+{"id": "case_1176", "decision": "keep", "note": ""}
+{"id": "case_1178", "decision": "keep", "note": ""}
+{"id": "case_1179", "decision": "keep", "note": ""}
+{"id": "case_1181", "decision": "keep", "note": ""}
+{"id": "case_1182", "decision": "keep", "note": ""}
+{"id": "case_1183", "decision": "keep", "note": ""}
+{"id": "case_1185", "decision": "keep", "note": ""}
+{"id": "case_1186", "decision": "keep", "note": ""}

@@ -19,3 +19,6 @@
 {"id": "case_1054", "tool": "get_master_change_history", "args": {"entity": "item", "code": "ITM-81481"}, "note": ""}
 {"id": "case_1055", "tool": "get_master_change_history", "args": {"entity": "supplier", "code": "S-6283"}, "note": "「今の内容じゃなくて」で search_master を明示的に排除している。"}
 {"id": "case_1057", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-8900", "period": "this_fiscal_year"}, "note": "「今年度」は this_fiscal_year に対応。"}
+{"id": "case_1094", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_quarter"}, "note": ""}
+{"id": "case_1096", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice"}, "note": ""}
+{"id": "case_1097", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "this_month"}, "note": ""}

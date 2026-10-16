@@ -92,7 +92,7 @@
 {"id": "case_1092", "query": "前年度の仕入先からの請求書で承認待ちのもの", "flags": [], "sampled": true}
 {"id": "case_1093", "query": "承認待ちの仕入先請求書を一覧にして", "flags": [], "sampled": false}
 {"id": "case_1094", "query": "前四半期の請求書で承認待ちのものを見せて", "flags": [], "sampled": false}
-{"id": "case_1095", "query": "前年度の受注で、上長決裁が下りずに止まっているものを知りたい。未処理かどうかではなく承認待ちのほうで", "flags": [], "sampled": false}
+{"id": "case_1095", "query": "先月の、お客さんに出した請求書のうち、未処理じゃなくて承認待ちで止まっているほうを一覧で見せて", "flags": [], "sampled": false}
 {"id": "case_1096", "query": "承認待ちの請求書を一覧にして", "flags": [], "sampled": true}
 {"id": "case_1097", "query": "今月の請求書で、承認待ちのまま止まっているものは？", "flags": [], "sampled": false}
 {"id": "case_1098", "query": "2025年度の法律の文書にはどんなものがあるか、一覧を出してください。", "flags": [], "sampled": true}
@@ -135,11 +135,11 @@
 {"id": "case_1135", "query": "取消になった受注を、集計じゃなくて個別に一覧で", "flags": [], "sampled": false}
 {"id": "case_1136", "query": "先月の受注を検索して一覧にして", "flags": [], "sampled": false}
 {"id": "case_1137", "query": "今年度の請求書で下書きのもの。「ステンレス配管」に絞って", "flags": [], "sampled": false}
-{"id": "case_1138", "query": "今月の給与の件数推移を日別で見せて", "flags": [], "sampled": false}
-{"id": "case_1139", "query": "前年度の給与の件数の推移を四半期ごとに出して", "flags": [], "sampled": false}
-{"id": "case_1140", "query": "合計じゃなくて、今月の勤怠の件数の推移を週ごとに", "flags": [], "sampled": false}
-{"id": "case_1141", "query": "先月の勤怠の数量の推移を見せて", "flags": [], "sampled": false}
-{"id": "case_1142", "query": "前年度の人員の件数の推移を週次で出して", "flags": ["writer note: gold is unnatural: a weekly count trend of headcount over a whole fiscal year is not something a real user would ask for."], "sampled": false}
+{"id": "case_1138", "query": "今年度の給与額の推移を見せてください", "flags": [], "sampled": false}
+{"id": "case_1139", "query": "前四半期の給与の金額の推移を教えて", "flags": [], "sampled": false}
+{"id": "case_1140", "query": "前四半期の給与額を、合計じゃなくて月ごとの推移で見たいです", "flags": [], "sampled": false}
+{"id": "case_1141", "query": "前年度の給与額がどう推移していたか知りたい", "flags": [], "sampled": false}
+{"id": "case_1142", "query": "今年度の給与額の推移を、月次で出してください", "flags": ["writer note: Claudeが言い方を直した（「月次で追えるように」→「推移を、月次で」。検査で月別の集計とも読めたため）"], "sampled": false}
 {"id": "case_1143", "query": "今月の在庫移動について、金額の推移を見せてください。", "flags": ["writer note: metricが金額の在庫移動(movement)は意味が少し不自然だが、スキーマ上は有効。", "blind note: 粒度(interval)は指定がないので付けない。"], "sampled": false}
 {"id": "case_1144", "query": "前四半期の在庫の金額の推移を出してください", "flags": ["blind note: 粒度の指定なしのため interval は省略。"], "sampled": false}
 {"id": "case_1145", "query": "先月の在庫移動の金額、集計ではなく日ごとの推移で", "flags": [], "sampled": false}
@@ -152,7 +152,7 @@
 {"id": "case_1152", "query": "有報の平均年齢を2022年度から2025年度までの推移で見せて", "flags": [], "sampled": false}
 {"id": "case_1153", "query": "有報の平均年齢、2023年度から2024年度まで各年度の値を並べて", "flags": ["blind note: 隣接2年度なのでcompare_report_metricとも区別しにくい。「各年度の値を並べて」で系列と判断"], "sampled": false}
 {"id": "case_1154", "query": "有価証券報告書の平均年齢の推移を、2021年度から2025年度まで", "flags": [], "sampled": false}
-{"id": "case_1155", "query": "2点の差分じゃなくて系列で。有報の平均年齢、2018年度から2020年度", "flags": [], "sampled": false}
+{"id": "case_1155", "query": "有報の平均年齢、2018年度と2020年度を比べるだけじゃなくて、2018年度から2020年度までの推移を見たい", "flags": [], "sampled": false}
 {"id": "case_1156", "query": "先月の請求書の数量の推移を日別に出して", "flags": ["blind note: 「請求書」は販売の請求書(invoice)と解釈。"], "sampled": false}
 {"id": "case_1157", "query": "前年度の受注の数量の推移を見せて", "flags": ["blind note: 粒度の指定なしのため interval は省略。"], "sampled": false}
 {"id": "case_1158", "query": "今年度の請求書の件数の推移を週次で見せてください", "flags": ["blind note: 「請求書」は販売の請求書(invoice)と解釈。"], "sampled": false}

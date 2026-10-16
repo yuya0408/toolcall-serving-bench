@@ -92,7 +92,7 @@
 {"id": "case_1092", "tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1093", "tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice"}, "note": ""}
 {"id": "case_1094", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_quarter"}, "note": ""}
-{"id": "case_1095", "tool": "list_pending_sales_approvals", "args": {"entity": "sales_order", "approval_stage": "manager_signoff", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1095", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_month"}, "note": ""}
 {"id": "case_1096", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice"}, "note": ""}
 {"id": "case_1097", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "this_month"}, "note": ""}
 {"id": "case_1098", "tool": "list_report_documents", "args": {"report_type": "law", "fiscal_year": 2025}, "note": ""}
@@ -135,11 +135,11 @@
 {"id": "case_1135", "tool": "search_sales_record", "args": {"entity": "sales_order", "status": "cancelled"}, "note": ""}
 {"id": "case_1136", "tool": "search_sales_record", "args": {"entity": "sales_order", "period": "last_month"}, "note": ""}
 {"id": "case_1137", "tool": "search_sales_record", "args": {"entity": "invoice", "period": "this_fiscal_year", "status": "draft", "keyword": "ステンレス配管"}, "note": ""}
-{"id": "case_1138", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "day", "period": "this_month"}, "note": ""}
-{"id": "case_1139", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "count", "interval": "quarter", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1140", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "count", "interval": "week", "period": "this_month"}, "note": ""}
-{"id": "case_1141", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "quantity", "period": "last_month"}, "note": ""}
-{"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "week", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1138", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "amount", "period": "this_fiscal_year"}, "note": ""}
+{"id": "case_1139", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "amount", "period": "last_quarter"}, "note": ""}
+{"id": "case_1140", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "amount", "interval": "month", "period": "last_quarter"}, "note": ""}
+{"id": "case_1141", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "amount", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1142", "tool": "trend_hr", "args": {"entity": "payroll", "metric": "amount", "interval": "month", "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1143", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "period": "this_month"}, "note": "粒度(interval)は指定がないので付けない。"}
 {"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "period": "last_quarter"}, "note": "粒度の指定なしのため interval は省略。"}
 {"id": "case_1145", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "interval": "day", "period": "last_month"}, "note": ""}

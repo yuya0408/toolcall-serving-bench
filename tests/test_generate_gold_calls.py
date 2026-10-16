@@ -119,3 +119,8 @@ def test_approvals_follow_a_workflow_and_keywords_fit_the_record_type(rows):
            if gen.no_approval_workflow(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])
            or gen.off_topic_keyword(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
     assert bad == []
+
+
+def test_hr_trends_follow_payroll_amounts_by_month_or_quarter(rows):
+    bad = [r["id"] for r in rows if gen.untrended_hr(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert bad == []
