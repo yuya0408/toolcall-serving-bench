@@ -4,9 +4,14 @@
 {"id": "case_1004", "decision": "keep", "note": ""}
 {"id": "case_1005", "decision": "keep", "note": ""}
 {"id": "case_1006", "decision": "keep", "note": ""}
+{"id": "case_1007", "decision": "keep", "note": "最初の「捨てる」は作り直し前の判断案に沿ったもの。今の中身はそのまま"}
 {"id": "case_1008", "decision": "keep", "note": ""}
 {"id": "case_1009", "decision": "keep", "note": ""}
+{"id": "case_1010", "decision": "keep", "note": ""}
 {"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動の回数を数えて", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
+{"id": "case_1012", "decision": "fix", "query": "今月の在庫移動の数量の合計を出して。", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
+{"id": "case_1013", "decision": "fix", "query": "先月分の在庫移動の数量、合計はいくつ？", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
+{"id": "case_1014", "decision": "fix", "query": "前四半期の在庫移動の数量を品目別に合計してください。", "note": "「在庫移動数」が件数とも読めたので「在庫移動の数量」にした"}
 {"id": "case_1015", "decision": "keep", "note": ""}
 {"id": "case_1016", "decision": "fix", "query": "今月の売上の1件あたりの最小値はいくらですか？", "note": ""}
 {"id": "case_1017", "decision": "fix", "query": "前年度の仕入額について、仕入先ごとの最大値を出して", "note": ""}
