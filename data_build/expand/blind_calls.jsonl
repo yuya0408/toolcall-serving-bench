@@ -4,19 +4,19 @@
 {"id": "case_1004", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "group_by": "department", "period": "last_quarter"}, "note": ""}
 {"id": "case_1005", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "count", "period": "this_month"}, "note": ""}
 {"id": "case_1006", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "min", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1007", "tool": "aggregate_hr", "args": {"entity": "headcount", "aggregation": "count"}, "note": ""}
+{"id": "case_1007", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "sum", "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1008", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "avg", "period": "this_month"}, "note": ""}
 {"id": "case_1009", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "avg", "period": "this_fiscal_year"}, "note": ""}
-{"id": "case_1010", "tool": "aggregate_hr", "args": {"entity": "headcount", "aggregation": "avg"}, "note": ""}
+{"id": "case_1010", "tool": "aggregate_hr", "args": {"entity": "payroll", "aggregation": "min", "period": "last_month"}, "note": ""}
 {"id": "case_1011", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1012", "tool": "aggregate_inventory", "args": {"entity": "stock", "aggregation": "avg", "group_by": "item", "period": "last_fiscal_year"}, "note": "aggregate_metric(metric=inventory_qty)も候補"}
-{"id": "case_1013", "tool": "aggregate_inventory", "args": {"entity": "stock", "aggregation": "avg", "period": "last_quarter"}, "note": "aggregate_metric(metric=inventory_qty)も候補"}
-{"id": "case_1014", "tool": "aggregate_inventory", "args": {"entity": "stock", "aggregation": "avg", "period": "this_month"}, "note": "aggregate_metric(metric=inventory_qty)も候補"}
+{"id": "case_1012", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "this_month"}, "note": ""}
+{"id": "case_1013", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "last_month"}, "note": ""}
+{"id": "case_1014", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}, "note": ""}
 {"id": "case_1015", "tool": "aggregate_inventory", "args": {"entity": "warehouse", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1016", "tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "period": "last_quarter"}, "note": ""}
-{"id": "case_1017", "tool": "aggregate_metric", "args": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}, "note": ""}
+{"id": "case_1016", "tool": "aggregate_metric", "args": {"metric": "sales", "aggregation": "min", "period": "this_month"}, "note": "aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"}
+{"id": "case_1017", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "max", "group_by": "supplier", "period": "last_fiscal_year"}, "note": "「仕入先別に見て、最大の金額」は、仕入先ごとの最大値（max×supplier）とも、仕入先別合計を出してその中の最大を見る（sum×supplier）とも読める。aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"}
 {"id": "case_1018", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "min"}, "note": "aggregate_purchase(entityはsupplier_invoice/purchase_order等で不定)も候補"}
-{"id": "case_1019", "tool": "aggregate_metric", "args": {"metric": "headcount", "aggregation": "min", "group_by": "department", "period": "last_fiscal_year"}, "note": "aggregate_hr(entity=headcount)も候補"}
+{"id": "case_1019", "tool": "aggregate_metric", "args": {"metric": "sales", "aggregation": "avg", "group_by": "department", "period": "this_fiscal_year"}, "note": "aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"}
 {"id": "case_1020", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "count", "group_by": "department", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1021", "tool": "aggregate_purchase", "args": {"entity": "supplier_invoice", "aggregation": "max", "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1022", "tool": "aggregate_purchase", "args": {"entity": "receipt", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}

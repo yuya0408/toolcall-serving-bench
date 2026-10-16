@@ -4,19 +4,19 @@
 {"id": "case_1004", "query": "前四半期の勘定残高の合計を部門別に出して", "flags": [], "sampled": true}
 {"id": "case_1005", "query": "金額じゃなくて、今月の仕訳が何件あるかだけ知りたい", "flags": [], "sampled": false}
 {"id": "case_1006", "query": "前年度の給与の最小値を出して", "flags": [], "sampled": true}
-{"id": "case_1007", "query": "人事の人員レコードが何件あるか数えて", "flags": ["writer note: 人員(headcount)のcountは不自然"], "sampled": false}
+{"id": "case_1007", "query": "今年度の給与の合計を教えてください。", "flags": [], "sampled": false}
 {"id": "case_1008", "query": "今月の給与の平均を教えて", "flags": [], "sampled": false}
 {"id": "case_1009", "query": "今年度の給与の平均を出してください", "flags": [], "sampled": true}
-{"id": "case_1010", "query": "合計や件数ではなく、人事の人員の平均を知りたい", "flags": ["writer note: 人員(headcount)のavgは不自然"], "sampled": false}
+{"id": "case_1010", "query": "先月の給与について、平均や合計じゃなくて一番低い額だけ知りたいです。", "flags": [], "sampled": false}
 {"id": "case_1011", "query": "前年度の在庫移動の合計を出して", "flags": [], "sampled": true}
-{"id": "case_1012", "query": "前年度の在庫の平均を品目別に見せて", "flags": ["blind note: aggregate_metric(metric=inventory_qty)も候補"], "sampled": false}
-{"id": "case_1013", "query": "前四半期の在庫の平均を教えて", "flags": ["blind note: aggregate_metric(metric=inventory_qty)も候補"], "sampled": false}
-{"id": "case_1014", "query": "今月の在庫の平均を教えて", "flags": ["blind note: aggregate_metric(metric=inventory_qty)も候補"], "sampled": false}
+{"id": "case_1012", "query": "今月の在庫移動の合計を出して。", "flags": [], "sampled": false}
+{"id": "case_1013", "query": "先月分の在庫移動、合計はいくつ？", "flags": [], "sampled": false}
+{"id": "case_1014", "query": "前四半期の在庫移動を品目別に合計してください。", "flags": [], "sampled": false}
 {"id": "case_1015", "query": "個別の倉庫じゃなくて、前年度の倉庫の合計で", "flags": ["writer note: 倉庫のsumは何の合計か曖昧"], "sampled": false}
-{"id": "case_1016", "query": "前四半期の作業時間の最小値を出して", "flags": [], "sampled": true}
-{"id": "case_1017", "query": "前四半期の作業時間の最小値を部門別に", "flags": [], "sampled": false}
+{"id": "case_1016", "query": "今月の売上の最小値はいくらですか？", "flags": ["blind note: aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"], "sampled": false}
+{"id": "case_1017", "query": "前年度の仕入額を仕入先別に見て、最大の金額を出してほしい。", "flags": ["writer note: 仕入先別の最大値は、各仕入先ごとの最大か全体の最大か曖昧になりうる", "blind note: 「仕入先別に見て、最大の金額」は、仕入先ごとの最大値（max×supplier）とも、仕入先別合計を出してその中の最大を見る（sum×supplier）とも読める。aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"], "sampled": false}
 {"id": "case_1018", "query": "仕入額の最小値はいくら？", "flags": ["args: period gold 'last_fiscal_year' blind None", "blind note: aggregate_purchase(entityはsupplier_invoice/purchase_order等で不定)も候補"], "sampled": false}
-{"id": "case_1019", "query": "前年度の従業員数の最小値を部門別に出して", "flags": ["blind note: aggregate_hr(entity=headcount)も候補"], "sampled": false}
+{"id": "case_1019", "query": "今年度の売上の平均を部門別に出してください。", "flags": ["blind note: aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"], "sampled": false}
 {"id": "case_1020", "query": "前年度の入荷の件数を部門別に数えて", "flags": [], "sampled": true}
 {"id": "case_1021", "query": "今年度の仕入先からの請求書、一覧じゃなくて最大値を知りたい", "flags": [], "sampled": true}
 {"id": "case_1022", "query": "前年度の入荷の合計を出してください", "flags": [], "sampled": false}
@@ -47,7 +47,7 @@
 {"id": "case_1047", "query": "人員HC-2023-17219の詳細を見せて。明細行はいらない", "flags": [], "sampled": false}
 {"id": "case_1048", "query": "人員HC-2021-18768を明細も含めて見せてください", "flags": [], "sampled": false}
 {"id": "case_1049", "query": "給与伝票PY-2019-37316の中身を見たい", "flags": [], "sampled": false}
-{"id": "case_1050", "query": "一覧じゃなくて、在庫ST-2020-28543の1件だけ詳しく", "flags": [], "sampled": false}
+{"id": "case_1050", "query": "一覧じゃなくて、在庫ST-2020-28543の1件だけ詳しく", "flags": [], "sampled": true}
 {"id": "case_1051", "query": "在庫ST-2021-15344の詳細を、明細なしで", "flags": [], "sampled": false}
 {"id": "case_1052", "query": "在庫のST-2024-95811の詳細を出して", "flags": [], "sampled": false}
 {"id": "case_1053", "query": "倉庫WH-2022-90189の詳細を明細行まで見せて", "flags": [], "sampled": false}

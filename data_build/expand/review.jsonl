@@ -3,24 +3,17 @@
 {"id": "case_1003", "decision": "keep", "note": ""}
 {"id": "case_1004", "decision": "keep", "note": ""}
 {"id": "case_1006", "decision": "keep", "note": ""}
-{"id": "case_1007", "decision": "fix", "query": "人事社員が何人か教えて", "note": ""}
 {"id": "case_1009", "decision": "keep", "note": ""}
-{"id": "case_1010", "decision": "drop", "note": ""}
-{"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動回数の合計を出して", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
-{"id": "case_1012", "decision": "keep", "note": ""}
-{"id": "case_1013", "decision": "drop", "note": "品目指定しないと意味ないと思う"}
-{"id": "case_1014", "decision": "drop", "note": "上に同じ"}
+{"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動の回数を数えて", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
 {"id": "case_1015", "decision": "drop", "note": ""}
-{"id": "case_1016", "decision": "fix", "query": "前四半期の作業時間の部門別の最小値を出して", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "work_hours", "aggregation": "min", "group_by": "department", "period": "last_quarter"}}, "note": ""}
 {"id": "case_1018", "decision": "fix", "query": "前年度の仕入額の最小値はいくら？", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}, "note": "期間の引数加えてほしい"}
-{"id": "case_1019", "decision": "drop", "note": "クエリに現実味がない"}
 {"id": "case_1020", "decision": "keep", "note": "前の版（期間なし）に「今年度」を足す修正が付いていた。期間の規則で前年度が足されたので、今の版を採る"}
 {"id": "case_1021", "decision": "keep", "note": ""}
 {"id": "case_1024", "decision": "fix", "query": "今年度の請求書の額の平均を部門別に見せて", "note": "額なのか数量なのかがわからない"}
 {"id": "case_1025", "decision": "fix", "query": "個別の請求書じゃなくて、今月の平均額を出して", "note": ""}
 {"id": "case_1026", "decision": "keep", "note": ""}
 {"id": "case_1027", "decision": "keep", "note": ""}
-{"id": "case_1028", "decision": "keep", "note": ""}
+{"id": "case_1028", "decision": "fix", "query": "先月と比べて今月の仕入額がどう変わったか教えて", "gold": {"expected_tool": "compare_period_metric", "exact": {"metric": "purchase_amount", "period_a": "last_month", "period_b": "this_month"}}, "note": "比較の基準（period_a）が語順で決まらなかったので、基準を先月と明記した"}
 {"id": "case_1029", "decision": "keep", "note": ""}
 {"id": "case_1031", "decision": "keep", "note": ""}
 {"id": "case_1038", "decision": "keep", "note": ""}

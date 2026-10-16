@@ -97,3 +97,8 @@ def test_flow_aggregates_and_trends_have_a_period(rows):
 def test_no_open_items_over_snapshot_entities(rows):
     bad = [r["id"] for r in rows if gen.snapshot_open_items(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
     assert bad == []
+
+
+def test_no_aggregate_with_two_correct_tools(rows):
+    bad = [r["id"] for r in rows if gen.overlapping_aggregate(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert bad == []

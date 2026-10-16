@@ -25,6 +25,12 @@ Rules:
     offers every module the same tool families and every entity in each, so
     such calls are drawn; they are redrawn afterwards from a third seed
     (OPEN_ITEM_SEED), again leaving every other case's draw unchanged.
+  - headcount, inventory quantity and work hours (attendance) can be
+    aggregated both by the module aggregate (aggregate_hr /
+    aggregate_inventory) and by aggregate_metric,
+    so a query about them has two correct calls. Such calls are redrawn
+    from a fourth seed (OVERLAP_SEED); redraws also avoid aggregating
+    warehouses, whose only allowed aggregation (sum) means nothing.
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -58,6 +64,10 @@ MIN_PER_TOOL = 4
 FIRST_NEW_ID = 1001
 PERIOD_SEED = 20261016
 OPEN_ITEM_SEED = 20261017
+OVERLAP_SEED = 20261018
+OVERLAPPING_AGGREGATES = {("aggregate_hr", "headcount"), ("aggregate_inventory", "stock"), ("aggregate_hr", "attendance"),
+                          ("aggregate_metric", "headcount"), ("aggregate_metric", "inventory_qty"),
+                          ("aggregate_metric", "work_hours")}
 SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period; never "unprocessed"
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
@@ -267,6 +277,31 @@ def redraw_snapshot_open_items(rng: random.Random, tools: dict[str, dict[str, An
         validate_case_against_tools(row, tools)
 
 
+def overlapping_aggregate(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    """A quantity that both a module aggregate and aggregate_metric can answer."""
+    return (tool["name"], args.get("entity", args.get("metric"))) in OVERLAPPING_AGGREGATES
+
+
+def redraw_overlapping_aggregates(rng: random.Random, tools: dict[str, dict[str, Any]],
+                                  rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not overlapping_aggregate(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(200):
+            candidate = sample_args(rng, tool)
+            if needs_period(tool, candidate):   # the period rule ran before this pass
+                candidate["period"] = _value(rng, tool, "period", tool["parameters"]["properties"]["period"], candidate)
+            if not overlapping_aggregate(tool, candidate) and candidate.get("entity") != "warehouse"                     and plausible(tool, candidate) and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -368,6 +403,7 @@ def main(argv: list[str] | None = None) -> int:
 
     add_required_periods(random.Random(PERIOD_SEED), tools, rows, seen)
     redraw_snapshot_open_items(random.Random(OPEN_ITEM_SEED), tools, rows, seen)
+    redraw_overlapping_aggregates(random.Random(OVERLAP_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:
