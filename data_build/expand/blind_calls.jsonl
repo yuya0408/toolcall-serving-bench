@@ -1,5 +1,5 @@
 {"id": "case_1001", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1002", "tool": "aggregate_accounting", "args": {"entity": "cost_center", "aggregation": "sum", "period": "last_quarter"}, "note": ""}
+{"id": "case_1002", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "avg", "group_by": "month", "period": "last_quarter"}, "note": ""}
 {"id": "case_1003", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "sum", "period": "this_month"}, "note": ""}
 {"id": "case_1004", "tool": "aggregate_accounting", "args": {"entity": "account_balance", "aggregation": "sum", "group_by": "department", "period": "last_quarter"}, "note": ""}
 {"id": "case_1005", "tool": "aggregate_accounting", "args": {"entity": "journal", "aggregation": "count", "period": "this_month"}, "note": ""}
@@ -12,7 +12,7 @@
 {"id": "case_1012", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "this_month"}, "note": ""}
 {"id": "case_1013", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "period": "last_month"}, "note": ""}
 {"id": "case_1014", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "sum", "group_by": "item", "period": "last_quarter"}, "note": ""}
-{"id": "case_1015", "tool": "aggregate_inventory", "args": {"entity": "warehouse", "aggregation": "sum", "period": "last_fiscal_year"}, "note": ""}
+{"id": "case_1015", "tool": "aggregate_inventory", "args": {"entity": "movement", "aggregation": "count", "group_by": "item", "period": "this_month"}, "note": ""}
 {"id": "case_1016", "tool": "aggregate_metric", "args": {"metric": "sales", "aggregation": "min", "period": "this_month"}, "note": "aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"}
 {"id": "case_1017", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "max", "group_by": "supplier", "period": "last_fiscal_year"}, "note": "「仕入先別に見て、最大の金額」は、仕入先ごとの最大値（max×supplier）とも、仕入先別合計を出してその中の最大を見る（sum×supplier）とも読める。aggregate_sales/aggregate_purchase は entity（伝票種別）が必須だがクエリは伝票種別を述べていないため、汎用の aggregate_metric を正とし、モジュール別ツールは代替に入れない。"}
 {"id": "case_1018", "tool": "aggregate_metric", "args": {"metric": "purchase_amount", "aggregation": "min"}, "note": "aggregate_purchase(entityはsupplier_invoice/purchase_order等で不定)も候補"}
@@ -125,8 +125,8 @@
 {"id": "case_1125", "tool": "search_purchase_record", "args": {"entity": "purchase_order", "period": "last_quarter", "status": "cancelled", "keyword": "消耗品"}, "note": ""}
 {"id": "case_1126", "tool": "search_purchase_record", "args": {"entity": "purchase_order", "period": "last_month", "status": "draft"}, "note": ""}
 {"id": "case_1127", "tool": "search_report", "args": {"report_type": "yuho", "fiscal_year": 2022, "metric": "capital"}, "note": ""}
-{"id": "case_1128", "tool": "search_report", "args": {"report_type": "law", "fiscal_year": 2019}, "note": "何を調べるか不明。list_report_documents/search_report_sectionも候補"}
-{"id": "case_1129", "tool": "search_report", "args": {"report_type": "yuho", "fiscal_year": 2025}, "note": "何を調べるか(指標/セクション)不明。search_report_sectionも候補"}
+{"id": "case_1128", "tool": "search_report", "args": {"report_type": "law", "query_text": "労働時間"}, "note": "「書かれている箇所」は文書内の記載を求めているのでsearch_report。list_report_documents(keyword=労働時間)は該当文書の一覧で箇所までは返さないため外した。search_report_sectionはqueryを取れずsectionもyuho専用で不適。metric=noneは任意なので省略。"}
+{"id": "case_1129", "tool": "search_report", "args": {"report_type": "law", "query_text": "インボイス"}, "note": "「記載を検索」は文書内容の検索なのでsearch_report。list_report_documents(keyword=インボイス)は「どの文書があるか」寄りで弱いが、読み方次第では近い候補。metric=noneは任意なので省略。"}
 {"id": "case_1130", "tool": "search_report_section", "args": {"report_type": "yuho", "section": "corporate_governance"}, "note": ""}
 {"id": "case_1131", "tool": "search_report_section", "args": {"report_type": "yuho", "section": "officers"}, "note": ""}
 {"id": "case_1132", "tool": "search_report_section", "args": {"report_type": "yuho", "fiscal_year": 2021, "section": "corporate_governance"}, "note": ""}
@@ -140,10 +140,10 @@
 {"id": "case_1140", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "count", "interval": "week", "period": "this_month"}, "note": ""}
 {"id": "case_1141", "tool": "trend_hr", "args": {"entity": "attendance", "metric": "quantity", "period": "last_month"}, "note": ""}
 {"id": "case_1142", "tool": "trend_hr", "args": {"entity": "headcount", "metric": "count", "interval": "week", "period": "last_fiscal_year"}, "note": ""}
-{"id": "case_1143", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "quantity", "period": "this_month"}, "note": ""}
+{"id": "case_1143", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "period": "this_month"}, "note": "粒度(interval)は指定がないので付けない。"}
 {"id": "case_1144", "tool": "trend_inventory", "args": {"entity": "stock", "metric": "amount", "period": "last_quarter"}, "note": "粒度の指定なしのため interval は省略。"}
 {"id": "case_1145", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "amount", "interval": "day", "period": "last_month"}, "note": ""}
-{"id": "case_1146", "tool": "trend_inventory", "args": {"entity": "warehouse", "metric": "count", "period": "last_month"}, "note": ""}
+{"id": "case_1146", "tool": "trend_inventory", "args": {"entity": "movement", "metric": "count", "period": "last_month"}, "note": "粒度(interval)は指定がないので付けない。"}
 {"id": "case_1147", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "interval": "day", "period": "last_month"}, "note": ""}
 {"id": "case_1148", "tool": "trend_purchase", "args": {"entity": "supplier_invoice", "metric": "quantity", "period": "this_fiscal_year"}, "note": ""}
 {"id": "case_1149", "tool": "trend_purchase", "args": {"entity": "receipt", "metric": "amount", "period": "this_month"}, "note": "粒度の指定なしのため interval は省略。"}

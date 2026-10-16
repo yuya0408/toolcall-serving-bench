@@ -1,11 +1,9 @@
 {"id": "case_1001", "decision": "keep", "note": ""}
-{"id": "case_1002", "decision": "drop", "note": ""}
 {"id": "case_1003", "decision": "keep", "note": ""}
 {"id": "case_1004", "decision": "keep", "note": ""}
 {"id": "case_1006", "decision": "keep", "note": ""}
 {"id": "case_1009", "decision": "keep", "note": ""}
 {"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動の回数を数えて", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
-{"id": "case_1015", "decision": "drop", "note": ""}
 {"id": "case_1016", "decision": "fix", "query": "今月の売上の1件あたりの最小値はいくらですか？", "note": ""}
 {"id": "case_1017", "decision": "fix", "query": "前年度の仕入額について、仕入先ごとの最大値を出して", "note": ""}
 {"id": "case_1018", "decision": "fix", "query": "前年度の仕入額の最小値はいくら？", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}, "note": "期間の引数加えてほしい"}
@@ -38,23 +36,18 @@
 {"id": "case_1085", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：上に同じ"}
 {"id": "case_1092", "decision": "keep", "note": ""}
 {"id": "case_1096", "decision": "keep", "note": ""}
-{"id": "case_1098", "decision": "keep", "note": ""}
 {"id": "case_1103", "decision": "keep", "note": ""}
 {"id": "case_1106", "decision": "keep", "note": ""}
 {"id": "case_1114", "decision": "keep", "note": ""}
-{"id": "case_1115", "decision": "drop", "note": ""}
 {"id": "case_1116", "decision": "fix", "query": "今年度の在庫で現在「移動中」のものを出して", "note": "クエリが抽象的すぎた"}
 {"id": "case_1119", "decision": "keep", "note": ""}
 {"id": "case_1121", "decision": "fix", "query": "西海フーズ株式会社の出荷先住所を教えて", "gold": {"expected_tool": "search_master", "exact": {"entity": "customer", "field": "shipping_address", "name": "西海フーズ株式会社"}}, "note": "顧客指定すれば良いのでは？"}
 {"id": "case_1125", "decision": "keep", "note": ""}
 {"id": "case_1126", "decision": "keep", "note": ""}
-{"id": "case_1128", "decision": "drop", "note": ""}
-{"id": "case_1129", "decision": "drop", "note": ""}
 {"id": "case_1131", "decision": "keep", "note": ""}
 {"id": "case_1132", "decision": "fix", "query": "2021年度の有価証券報告書のコーポレート・ガバナンスの記載本文を出して", "note": "一応直したが、有報という呼びは一般的なのか？（「有報」は有価証券報告書の一般的な略称。他の件では「有報」のまま）"}
 {"id": "case_1142", "decision": "fix", "query": "前年度の人員の件数の推移を月次で出して", "gold": {"expected_tool": "trend_hr", "exact": {"entity": "headcount", "metric": "count", "interval": "month", "period": "last_fiscal_year"}}, "note": ""}
 {"id": "case_1144", "decision": "fix", "query": "前四半期の在庫の金額の推移を月毎で出してください", "gold": {"expected_tool": "trend_inventory", "exact": {"entity": "stock", "metric": "amount", "interval": "month", "period": "last_quarter"}}, "note": ""}
-{"id": "case_1146", "decision": "drop", "note": ""}
 {"id": "case_1149", "decision": "keep", "note": ""}
 {"id": "case_1150", "decision": "keep", "note": ""}
 {"id": "case_1153", "decision": "keep", "note": ""}

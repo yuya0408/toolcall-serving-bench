@@ -50,8 +50,8 @@
         "query_model": { "type": "string", "description": "Model that wrote the query from the gold call." },
         "check_model": { "type": "string", "description": "Model that tried to recover the gold call from the query alone." },
         "review": {
-          "enum": ["flagged_reviewed", "sampled_reviewed", "unreviewed"],
-          "description": "flagged_reviewed: the blind check disagreed with the gold call and a human resolved it. sampled_reviewed: the check agreed and the case was in the random human-review sample. unreviewed: the check agreed and no human looked at it."
+          "enum": ["flagged_reviewed", "sampled_reviewed", "rest_reviewed", "unreviewed"],
+          "description": "flagged_reviewed: the blind check disagreed with the gold call and a human resolved it. sampled_reviewed: the check agreed and the case was in the random human-review sample. rest_reviewed: the check agreed, the case was not sampled, and a human reviewed it when the rest were reviewed too. unreviewed: the check agreed and no human looked at it."
         },
         "human_edit": {
           "enum": ["none", "query", "query_and_gold"],

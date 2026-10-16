@@ -102,3 +102,8 @@ def test_no_open_items_over_snapshot_entities(rows):
 def test_no_aggregate_with_two_correct_tools(rows):
     bad = [r["id"] for r in rows if gen.overlapping_aggregate(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
     assert bad == []
+
+
+def test_no_combination_a_reviewer_found_meaningless(rows):
+    bad = [r["id"] for r in rows if gen.meaningless(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert bad == []

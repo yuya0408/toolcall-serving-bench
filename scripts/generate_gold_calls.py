@@ -31,6 +31,11 @@ Rules:
     so a query about them has two correct calls. Such calls are redrawn
     from a fourth seed (OVERLAP_SEED); redraws also avoid aggregating
     warehouses, whose only allowed aggregation (sum) means nothing.
+  - calls a reviewer dropped as meaningless are redrawn from a fifth seed
+    (REVIEW_RULE_SEED) once the reason is written down as a rule: summing
+    cost centers or warehouses, a trend of warehouses, a quantity trend of
+    all stock (items in different units), and a report search with nothing
+    to look up (no metric and no query text).
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -68,6 +73,7 @@ OVERLAP_SEED = 20261018
 OVERLAPPING_AGGREGATES = {("aggregate_hr", "headcount"), ("aggregate_inventory", "stock"), ("aggregate_hr", "attendance"),
                           ("aggregate_metric", "headcount"), ("aggregate_metric", "inventory_qty"),
                           ("aggregate_metric", "work_hours")}
+REVIEW_RULE_SEED = 20261019
 SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period; never "unprocessed"
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
@@ -302,6 +308,37 @@ def redraw_overlapping_aggregates(rng: random.Random, tools: dict[str, dict[str,
         validate_case_against_tools(row, tools)
 
 
+def meaningless(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    """Combinations a human reviewer found no one would ask for."""
+    name, entity = tool["name"], args.get("entity")
+    if family_of(name) == "aggregate" and entity in {"cost_center", "warehouse"}:
+        return True
+    if name == "trend_inventory" and (entity == "warehouse" or (entity == "stock" and args.get("metric") == "quantity")):
+        return True
+    return name == "search_report" and not {"metric", "query_text"} & args.keys()
+
+
+def redraw_meaningless(rng: random.Random, tools: dict[str, dict[str, Any]],
+                       rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not meaningless(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(200):
+            candidate = sample_args(rng, tool)
+            if needs_period(tool, candidate):   # every earlier rule still has to hold
+                candidate["period"] = _value(rng, tool, "period", tool["parameters"]["properties"]["period"], candidate)
+            if not (meaningless(tool, candidate) or overlapping_aggregate(tool, candidate)
+                    or snapshot_open_items(tool, candidate))                     and plausible(tool, candidate) and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -404,6 +441,7 @@ def main(argv: list[str] | None = None) -> int:
     add_required_periods(random.Random(PERIOD_SEED), tools, rows, seen)
     redraw_snapshot_open_items(random.Random(OPEN_ITEM_SEED), tools, rows, seen)
     redraw_overlapping_aggregates(random.Random(OVERLAP_SEED), tools, rows, seen)
+    redraw_meaningless(random.Random(REVIEW_RULE_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:

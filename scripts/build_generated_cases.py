@@ -94,6 +94,8 @@ def main() -> int:
             status = "flagged_reviewed"
         elif queue[case_id]["sampled"]:
             status = "sampled_reviewed"
+        elif case_id in review:
+            status = "rest_reviewed"
         else:
             status = "unreviewed"
         case = {

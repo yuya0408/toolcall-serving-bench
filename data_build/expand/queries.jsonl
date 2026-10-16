@@ -1,5 +1,5 @@
 {"id": "case_1001", "query": "前年度の勘定残高の合計を出して", "style": "plain", "writer_note": ""}
-{"id": "case_1002", "query": "前四半期の原価センタの合計を見せて", "style": "plain", "writer_note": "原価センタのsumは何の合計か曖昧"}
+{"id": "case_1002", "query": "前四半期の勘定残高について、月別の平均を出してください。", "style": "plain", "writer_note": ""}
 {"id": "case_1003", "query": "今月の仕訳の合計額を教えてください", "style": "plain", "writer_note": ""}
 {"id": "case_1004", "query": "前四半期の勘定残高の合計を部門別に出して", "style": "plain", "writer_note": ""}
 {"id": "case_1005", "query": "金額じゃなくて、今月の仕訳が何件あるかだけ知りたい", "style": "hard", "writer_note": ""}
@@ -12,7 +12,7 @@
 {"id": "case_1012", "query": "今月の在庫移動の合計を出して。", "style": "plain", "writer_note": ""}
 {"id": "case_1013", "query": "先月分の在庫移動、合計はいくつ？", "style": "plain", "writer_note": ""}
 {"id": "case_1014", "query": "前四半期の在庫移動を品目別に合計してください。", "style": "plain", "writer_note": ""}
-{"id": "case_1015", "query": "個別の倉庫じゃなくて、前年度の倉庫の合計で", "style": "hard", "writer_note": "倉庫のsumは何の合計か曖昧"}
+{"id": "case_1015", "query": "今月の在庫移動は、金額や数量の合計じゃなくて件数で、品目別に数えてほしい。", "style": "hard", "writer_note": ""}
 {"id": "case_1016", "query": "今月の売上の最小値はいくらですか？", "style": "plain", "writer_note": ""}
 {"id": "case_1017", "query": "前年度の仕入額を仕入先別に見て、最大の金額を出してほしい。", "style": "plain", "writer_note": "仕入先別の最大値は、各仕入先ごとの最大か全体の最大か曖昧になりうる"}
 {"id": "case_1018", "query": "仕入額の最小値はいくら？", "style": "plain", "writer_note": ""}
@@ -95,7 +95,7 @@
 {"id": "case_1095", "query": "今月の出荷のうち、承認ワークフローで止まっているものを。未処理の一覧とは別で", "style": "hard", "writer_note": ""}
 {"id": "case_1096", "query": "承認待ちの請求書を一覧にして", "style": "plain", "writer_note": ""}
 {"id": "case_1097", "query": "今月の請求書で、承認待ちのまま止まっているものは？", "style": "plain", "writer_note": ""}
-{"id": "case_1098", "query": "2025年度の法令の文書にどんなものがあるか一覧して", "style": "plain", "writer_note": ""}
+{"id": "case_1098", "query": "2025年度の法律の文書にはどんなものがあるか、一覧を出してください。", "style": "plain", "writer_note": ""}
 {"id": "case_1099", "query": "2024年度の例規で「情報公開」に関する文書を一覧にして", "style": "plain", "writer_note": ""}
 {"id": "case_1100", "query": "文書の中身じゃなくて、例規で「情報公開」に関する文書がどれかを知りたい", "style": "hard", "writer_note": ""}
 {"id": "case_1101", "query": "顧客の「西海フーズ株式会社」のコードを教えて", "style": "plain", "writer_note": ""}
@@ -112,7 +112,7 @@
 {"id": "case_1112", "query": "今年度の勤怠で「契約社員」に関するものを一覧にして", "style": "plain", "writer_note": ""}
 {"id": "case_1113", "query": "今月のクローズ済みの勤怠で「評価面談」のものを出して", "style": "plain", "writer_note": ""}
 {"id": "case_1114", "query": "前四半期の勤怠レコードで下書きのものを一覧にして", "style": "plain", "writer_note": ""}
-{"id": "case_1115", "query": "集計じゃなくて個別の記録で、今月の在庫移動を見せて", "style": "hard", "writer_note": ""}
+{"id": "case_1115", "query": "今月の在庫移動を、集計せずに1件ずつ一覧で見せてください。", "style": "hard", "writer_note": ""}
 {"id": "case_1116", "query": "今年度の在庫で「移動中」の記録を出して", "style": "plain", "writer_note": ""}
 {"id": "case_1117", "query": "先月の在庫移動のうち、取消になった「移動中」のもの", "style": "plain", "writer_note": ""}
 {"id": "case_1118", "query": "在庫移動の記録から「滞留在庫」を探して", "style": "plain", "writer_note": ""}
@@ -125,8 +125,8 @@
 {"id": "case_1125", "query": "前四半期の発注で、取消になったもの。「消耗品」に絞って", "style": "hard", "writer_note": ""}
 {"id": "case_1126", "query": "先月の発注で下書きのものを一覧にして", "style": "plain", "writer_note": ""}
 {"id": "case_1127", "query": "2022年度の有報から資本金を調べて", "style": "plain", "writer_note": ""}
-{"id": "case_1128", "query": "2019年度の法令の記載を調べて", "style": "plain", "writer_note": "年度と文書種別だけで何を調べるか曖昧"}
-{"id": "case_1129", "query": "2025年度の有価証券報告書の記載内容を調べて", "style": "plain", "writer_note": "年度と文書種別だけで何を調べるか曖昧"}
+{"id": "case_1128", "query": "法律の文書の中から「労働時間」について書かれている箇所を探してほしい。", "style": "plain", "writer_note": ""}
+{"id": "case_1129", "query": "法律で「インボイス」に関する記載を検索してもらえますか。", "style": "plain", "writer_note": ""}
 {"id": "case_1130", "query": "指標の数値じゃなくて、有報のコーポレート・ガバナンスの記述そのものを出して", "style": "hard", "writer_note": ""}
 {"id": "case_1131", "query": "有価証券報告書の役員の本文を見せて", "style": "plain", "writer_note": ""}
 {"id": "case_1132", "query": "2021年度の有報のコーポレート・ガバナンスの記載本文を出して", "style": "plain", "writer_note": ""}
@@ -140,10 +140,10 @@
 {"id": "case_1140", "query": "合計じゃなくて、今月の勤怠の件数の推移を週ごとに", "style": "hard", "writer_note": ""}
 {"id": "case_1141", "query": "先月の勤怠の数量の推移を見せて", "style": "plain", "writer_note": ""}
 {"id": "case_1142", "query": "前年度の人員の件数の推移を週次で出して", "style": "plain", "writer_note": "gold is unnatural: a weekly count trend of headcount over a whole fiscal year is not something a real user would ask for."}
-{"id": "case_1143", "query": "今月の在庫の数量の推移を見せて", "style": "plain", "writer_note": ""}
+{"id": "case_1143", "query": "今月の在庫移動について、金額の推移を見せてください。", "style": "plain", "writer_note": "metricが金額の在庫移動(movement)は意味が少し不自然だが、スキーマ上は有効。"}
 {"id": "case_1144", "query": "前四半期の在庫の金額の推移を出してください", "style": "plain", "writer_note": ""}
 {"id": "case_1145", "query": "先月の在庫移動の金額、集計ではなく日ごとの推移で", "style": "hard", "writer_note": ""}
-{"id": "case_1146", "query": "先月の倉庫の件数の推移", "style": "plain", "writer_note": "倉庫の件数推移は意味が曖昧"}
+{"id": "case_1146", "query": "先月の在庫移動の件数が、どう推移したか教えてください。", "style": "plain", "writer_note": ""}
 {"id": "case_1147", "query": "先月の入荷の金額の推移を日別に見せて", "style": "plain", "writer_note": ""}
 {"id": "case_1148", "query": "今年度の仕入先請求書の数量の推移を出して", "style": "plain", "writer_note": ""}
 {"id": "case_1149", "query": "今月の入荷金額の推移を出してください", "style": "plain", "writer_note": ""}
