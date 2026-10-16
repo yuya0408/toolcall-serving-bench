@@ -1,23 +1,40 @@
 {"id": "case_1001", "decision": "keep", "note": ""}
+{"id": "case_1002", "decision": "keep", "note": ""}
 {"id": "case_1003", "decision": "keep", "note": ""}
 {"id": "case_1004", "decision": "keep", "note": ""}
+{"id": "case_1005", "decision": "keep", "note": ""}
 {"id": "case_1006", "decision": "keep", "note": ""}
+{"id": "case_1008", "decision": "keep", "note": ""}
 {"id": "case_1009", "decision": "keep", "note": ""}
 {"id": "case_1011", "decision": "fix", "query": "前年度の在庫移動の回数を数えて", "gold": {"expected_tool": "aggregate_inventory", "exact": {"entity": "movement", "aggregation": "count", "period": "last_fiscal_year"}}, "note": "回数なのか在庫移動した品の数量なのかが曖昧"}
+{"id": "case_1015", "decision": "keep", "note": ""}
 {"id": "case_1016", "decision": "fix", "query": "今月の売上の1件あたりの最小値はいくらですか？", "note": ""}
 {"id": "case_1017", "decision": "fix", "query": "前年度の仕入額について、仕入先ごとの最大値を出して", "note": ""}
 {"id": "case_1018", "decision": "fix", "query": "前年度の仕入額の最小値はいくら？", "gold": {"expected_tool": "aggregate_metric", "exact": {"metric": "purchase_amount", "aggregation": "min", "period": "last_fiscal_year"}}, "note": "期間の引数加えてほしい"}
 {"id": "case_1019", "decision": "keep", "note": ""}
 {"id": "case_1020", "decision": "keep", "note": "前の版（期間なし）に「今年度」を足す修正が付いていた。期間の規則で前年度が足されたので、今の版を採る"}
 {"id": "case_1021", "decision": "keep", "note": ""}
+{"id": "case_1022", "decision": "keep", "note": ""}
+{"id": "case_1023", "decision": "fix", "query": "前四半期の仕入先からの請求書額の合計を品目別に集計して", "note": ""}
 {"id": "case_1024", "decision": "fix", "query": "今年度の請求書の額の平均を部門別に見せて", "note": "額なのか数量なのかがわからない"}
 {"id": "case_1025", "decision": "fix", "query": "個別の請求書じゃなくて、今月の平均額を出して", "note": ""}
 {"id": "case_1026", "decision": "keep", "note": ""}
 {"id": "case_1027", "decision": "keep", "note": ""}
 {"id": "case_1028", "decision": "fix", "query": "先月と比べて今月の仕入額がどう変わったか教えて", "gold": {"expected_tool": "compare_period_metric", "exact": {"metric": "purchase_amount", "period_a": "last_month", "period_b": "this_month"}}, "note": "比較の基準（period_a）が語順で決まらなかったので、基準を先月と明記した"}
 {"id": "case_1029", "decision": "keep", "note": ""}
+{"id": "case_1030", "decision": "keep", "note": ""}
 {"id": "case_1031", "decision": "keep", "note": ""}
+{"id": "case_1032", "decision": "keep", "note": ""}
+{"id": "case_1033", "decision": "keep", "note": ""}
+{"id": "case_1034", "decision": "keep", "note": "そこまで会話が続いている前提ということね？であればよい（「直す」だがクエリは変更なし）"}
+{"id": "case_1035", "decision": "keep", "note": "上に同じ"}
+{"id": "case_1036", "decision": "keep", "note": "上に同じ"}
+{"id": "case_1037", "decision": "keep", "note": "上に同じ"}
 {"id": "case_1038", "decision": "keep", "note": ""}
+{"id": "case_1039", "decision": "keep", "note": ""}
+{"id": "case_1040", "decision": "keep", "note": ""}
+{"id": "case_1041", "decision": "keep", "note": ""}
+{"id": "case_1042", "decision": "keep", "note": "（「直す」だがクエリは変更なし）"}
 {"id": "case_1050", "decision": "keep", "note": ""}
 {"id": "case_1054", "decision": "keep", "note": ""}
 {"id": "case_1056", "decision": "fix", "query": "従業員E-4560の登録情報の変更履歴を教えて", "note": ""}
