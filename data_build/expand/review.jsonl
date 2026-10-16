@@ -94,6 +94,7 @@
 {"id": "case_1097", "decision": "keep", "note": ""}
 {"id": "case_1098", "decision": "keep", "note": ""}
 {"id": "case_1099", "decision": "keep", "note": ""}
+{"id": "case_1100", "decision": "keep", "note": "例規とは。略さない方が良いのでは（「例規」は条例・規則等の総称で略語ではない。そのままにした）"}
 {"id": "case_1101", "decision": "keep", "note": ""}
 {"id": "case_1102", "decision": "keep", "note": ""}
 {"id": "case_1103", "decision": "keep", "note": ""}
@@ -105,12 +106,8 @@
 {"id": "case_1109", "decision": "keep", "note": ""}
 {"id": "case_1110", "decision": "keep", "note": ""}
 {"id": "case_1111", "decision": "keep", "note": ""}
-{"id": "case_1112", "decision": "keep", "note": ""}
 {"id": "case_1114", "decision": "keep", "note": ""}
 {"id": "case_1115", "decision": "keep", "note": ""}
-{"id": "case_1116", "decision": "fix", "query": "今年度の在庫で現在「移動中」のものを出して", "note": "クエリが抽象的すぎた"}
-{"id": "case_1117", "decision": "keep", "note": ""}
-{"id": "case_1118", "decision": "keep", "note": ""}
 {"id": "case_1119", "decision": "keep", "note": ""}
 {"id": "case_1120", "decision": "keep", "note": ""}
 {"id": "case_1121", "decision": "fix", "query": "西海フーズ株式会社の出荷先住所を教えて", "gold": {"expected_tool": "search_master", "exact": {"entity": "customer", "field": "shipping_address", "name": "西海フーズ株式会社"}}, "note": "顧客指定すれば良いのでは？"}

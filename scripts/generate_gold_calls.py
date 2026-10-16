@@ -43,6 +43,15 @@ Rules:
     lookup by code, since people ask by name (search_master takes a name;
     given both, a call with only one of them is as correct; tools that
     require a code keep it).
+  - from a seventh seed (APPROVAL_SEED), pending-approval lists are redrawn
+    unless the record type has an approval workflow and the stage belongs
+    to it (receipts and shipments are not approved; a budget check happens
+    on purchase orders, not on supplier invoices).
+  - from an eighth seed (KEYWORD_SEED), a search keyword that does not fit
+    the record type (KEYWORDS is per module: "performance review" in
+    attendance records) is replaced from KEYWORDS_BY_ENTITY; nothing else in
+    the call changes. Status words are left out, as they contradict the
+    status argument.
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -83,6 +92,33 @@ OVERLAPPING_AGGREGATES = {("aggregate_hr", "headcount"), ("aggregate_inventory",
 REVIEW_RULE_SEED = 20261019
 REALISM_SEED = 20261020
 NO_DOCUMENTS = {"account_balance", "cost_center", "headcount", "stock", "warehouse"}
+APPROVAL_SEED = 20261021
+KEYWORD_SEED = 20261022
+APPROVAL_STAGES = {   # record types with an approval workflow, and the stages each goes through
+    "purchase_order": {"budget_check", "manager_signoff"},
+    "supplier_invoice": {"manager_signoff", "finance_signoff"},
+    "sales_order": {"credit_check", "discount_approval", "manager_signoff"},
+    "invoice": {"manager_signoff"},
+    "attendance": {"manager_signoff", "hr_signoff"},
+    "payroll": {"manager_signoff", "hr_signoff"},
+}
+KEYWORDS_BY_ENTITY = {   # search terms that fit each record type
+    "sales_order": ["ステンレス配管", "保守契約", "東日本支店", "スポット案件", "定期便"],
+    "invoice": ["ステンレス配管", "保守契約", "東日本支店", "返品", "スポット案件"],
+    "shipment": ["ステンレス配管", "東日本支店", "返品", "定期便"],
+    "purchase_order": ["梱包資材", "電子部品", "外注加工", "消耗品", "原材料A", "輸入品"],
+    "receipt": ["梱包資材", "電子部品", "消耗品", "原材料A", "輸入品"],
+    "supplier_invoice": ["梱包資材", "電子部品", "外注加工", "消耗品", "原材料A", "輸入品"],
+    "stock": ["第2倉庫", "棚卸差異", "滞留在庫", "ボルトM8"],
+    "warehouse": ["第2倉庫", "棚卸差異"],
+    "movement": ["第2倉庫", "ボルトM8", "返品入庫", "工場間移動"],
+    "journal": ["減価償却", "仮払金", "交際費", "前受金", "本社経費", "為替差損"],
+    "account_balance": ["仮払金", "前受金"],
+    "cost_center": ["本社経費", "減価償却"],
+    "attendance": ["時間外労働", "有給休暇", "休日出勤", "営業部"],
+    "payroll": ["賞与", "契約社員", "中途採用", "通勤手当", "営業部"],
+    "headcount": ["中途採用", "契約社員", "営業部"],
+}
 SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period; never "unprocessed"
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
@@ -381,6 +417,50 @@ def redraw_unrealistic(rng: random.Random, tools: dict[str, dict[str, Any]],
         validate_case_against_tools(row, tools)
 
 
+def no_approval_workflow(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    if not tool["name"].startswith("list_pending_"):
+        return False
+    stages = APPROVAL_STAGES.get(args.get("entity"))
+    return stages is None or ("approval_stage" in args and args["approval_stage"] not in stages)
+
+
+def off_topic_keyword(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    return family_of(tool["name"]) == "search_record" and "keyword" in args         and args["keyword"] not in KEYWORDS_BY_ENTITY[args["entity"]]
+
+
+def redraw_no_approval_workflow(rng: random.Random, tools: dict[str, dict[str, Any]],
+                                rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not no_approval_workflow(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(200):
+            candidate = sample_args(rng, tool)
+            if not no_approval_workflow(tool, candidate) and plausible(tool, candidate)                     and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
+def replace_off_topic_keywords(rng: random.Random, tools: dict[str, dict[str, Any]],
+                               rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool, args = tools[row["expected_tool"]], row["expected_args"]["exact"]
+        if not off_topic_keyword(tool, args):
+            continue
+        seen.discard(_key(tool["name"], args))
+        choices = [k for k in KEYWORDS_BY_ENTITY[args["entity"]]
+                   if _key(tool["name"], {**args, "keyword": k}) not in seen]
+        candidate = {**args, "keyword": rng.choice(choices)}
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -485,6 +565,8 @@ def main(argv: list[str] | None = None) -> int:
     redraw_overlapping_aggregates(random.Random(OVERLAP_SEED), tools, rows, seen)
     redraw_meaningless(random.Random(REVIEW_RULE_SEED), tools, rows, seen)
     redraw_unrealistic(random.Random(REALISM_SEED), tools, rows, seen)
+    redraw_no_approval_workflow(random.Random(APPROVAL_SEED), tools, rows, seen)
+    replace_off_topic_keywords(random.Random(KEYWORD_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:

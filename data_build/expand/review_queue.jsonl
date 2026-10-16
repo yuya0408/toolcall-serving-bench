@@ -87,12 +87,12 @@
 {"id": "case_1087", "query": "前四半期の給与で承認待ちのものを出して", "flags": [], "sampled": false}
 {"id": "case_1088", "query": "前四半期の勤怠で、人事決裁待ちのものを見せて", "flags": [], "sampled": false}
 {"id": "case_1089", "query": "先月の勤怠の承認待ち一覧をください", "flags": [], "sampled": false}
-{"id": "case_1090", "query": "未処理ではなく承認待ちのほうの入荷を一覧で", "flags": [], "sampled": false}
-{"id": "case_1091", "query": "予算確認で止まっている仕入先からの請求書を出して", "flags": [], "sampled": false}
+{"id": "case_1090", "query": "未処理の一覧じゃなくて、今月分の発注で承認待ちで止まっているものを見せて", "flags": ["blind note: 承認ステージは指定なし。approval_stage='any'を付けても意味は同じだが、クエリが述べていないので省略。「未処理の一覧じゃなくて」でlist_open_purchase_itemsを明示的に除外している。"], "sampled": false}
+{"id": "case_1091", "query": "前四半期の発注のうち、上長決裁待ちになっているものを一覧で出してください", "flags": [], "sampled": false}
 {"id": "case_1092", "query": "前年度の仕入先からの請求書で承認待ちのもの", "flags": [], "sampled": true}
 {"id": "case_1093", "query": "承認待ちの仕入先請求書を一覧にして", "flags": [], "sampled": false}
 {"id": "case_1094", "query": "前四半期の請求書で承認待ちのものを見せて", "flags": [], "sampled": false}
-{"id": "case_1095", "query": "今月の出荷のうち、承認ワークフローで止まっているものを。未処理の一覧とは別で", "flags": [], "sampled": false}
+{"id": "case_1095", "query": "前年度の受注で、上長決裁が下りずに止まっているものを知りたい。未処理かどうかではなく承認待ちのほうで", "flags": [], "sampled": false}
 {"id": "case_1096", "query": "承認待ちの請求書を一覧にして", "flags": [], "sampled": true}
 {"id": "case_1097", "query": "今月の請求書で、承認待ちのまま止まっているものは？", "flags": [], "sampled": false}
 {"id": "case_1098", "query": "2025年度の法律の文書にはどんなものがあるか、一覧を出してください。", "flags": [], "sampled": true}
@@ -109,13 +109,13 @@
 {"id": "case_1109", "query": "今月の仕訳から「本社経費」のものを探して", "flags": [], "sampled": false}
 {"id": "case_1110", "query": "今年度の給与レコードで、下書きのもの。キーワードは「中途採用」", "flags": [], "sampled": false}
 {"id": "case_1111", "query": "給与のレコードから「契約社員」を探して", "flags": [], "sampled": false}
-{"id": "case_1112", "query": "今年度の勤怠で「契約社員」に関するものを一覧にして", "flags": [], "sampled": false}
-{"id": "case_1113", "query": "今月のクローズ済みの勤怠で「評価面談」のものを出して", "flags": [], "sampled": false}
+{"id": "case_1112", "query": "今年度の勤怠から「休日出勤」で検索してください", "flags": [], "sampled": false}
+{"id": "case_1113", "query": "今月の勤怠で、締め済みのもののうち「休日出勤」に関する記録を探して", "flags": ["writer note: Claudeが言い方を直した（「完了」→「締め済み」、「在庫記録」→「在庫残高のレコード」。検査で別の読みが出たため）"], "sampled": false}
 {"id": "case_1114", "query": "前四半期の勤怠レコードで下書きのものを一覧にして", "flags": [], "sampled": true}
 {"id": "case_1115", "query": "今月の在庫移動を、集計せずに1件ずつ一覧で見せてください。", "flags": [], "sampled": true}
-{"id": "case_1116", "query": "今年度の在庫で「移動中」の記録を出して", "flags": ["blind note: 「在庫」でstockとしたが、移動中の記録ならmovementの可能性も"], "sampled": false}
-{"id": "case_1117", "query": "先月の在庫移動のうち、取消になった「移動中」のもの", "flags": [], "sampled": false}
-{"id": "case_1118", "query": "在庫移動の記録から「滞留在庫」を探して", "flags": [], "sampled": false}
+{"id": "case_1116", "query": "今年度の在庫残高のレコードから「棚卸差異」で検索したいです", "flags": ["writer note: Claudeが言い方を直した（「完了」→「締め済み」、「在庫記録」→「在庫残高のレコード」。検査で別の読みが出たため）"], "sampled": false}
+{"id": "case_1117", "query": "先月の在庫移動で、取消済みのもののうち「第2倉庫」に関する記録を出してほしい", "flags": ["blind note: 「第2倉庫」は倉庫名だが、対象は在庫移動と明示されているのでentity=movementでkeywordに入れる。"], "sampled": false}
+{"id": "case_1118", "query": "在庫移動の記録を「ボルトM8」で検索してください", "flags": [], "sampled": false}
 {"id": "case_1119", "query": "品目「ステンレスボルトM8」のマスタ登録内容を見せて", "flags": [], "sampled": false}
 {"id": "case_1120", "query": "得意先の一覧じゃなくて、「株式会社みなと建設」1社の今のマスタ登録情報を確認したいんだけど", "flags": [], "sampled": false}
 {"id": "case_1121", "query": "顧客の出荷先住所を教えて", "flags": ["args: name gold '西海フーズ株式会社' blind None", "writer note: コードも名称も指定がなく、どの顧客か特定できない", "blind note: どの顧客か(コード/名称)が書かれていない。list_master_recordsやnullも考えられる"], "sampled": false}

@@ -112,3 +112,10 @@ def test_no_combination_a_reviewer_found_meaningless(rows):
 def test_no_call_a_reviewer_found_unlike_real_questions(rows):
     bad = [r["id"] for r in rows if gen.unrealistic(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
     assert bad == []
+
+
+def test_approvals_follow_a_workflow_and_keywords_fit_the_record_type(rows):
+    bad = [r["id"] for r in rows
+           if gen.no_approval_workflow(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])
+           or gen.off_topic_keyword(_TOOLS[r["expected_tool"]], r["expected_args"]["exact"])]
+    assert bad == []

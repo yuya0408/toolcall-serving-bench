@@ -87,12 +87,12 @@
 {"id": "case_1087", "tool": "list_pending_hr_approvals", "args": {"entity": "payroll", "period": "last_quarter"}, "note": ""}
 {"id": "case_1088", "tool": "list_pending_hr_approvals", "args": {"entity": "attendance", "approval_stage": "hr_signoff", "period": "last_quarter"}, "note": ""}
 {"id": "case_1089", "tool": "list_pending_hr_approvals", "args": {"entity": "attendance", "period": "last_month"}, "note": ""}
-{"id": "case_1090", "tool": "list_pending_purchase_approvals", "args": {"entity": "receipt"}, "note": ""}
-{"id": "case_1091", "tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice", "approval_stage": "budget_check"}, "note": ""}
+{"id": "case_1090", "tool": "list_pending_purchase_approvals", "args": {"entity": "purchase_order", "period": "this_month"}, "note": "承認ステージは指定なし。approval_stage='any'を付けても意味は同じだが、クエリが述べていないので省略。「未処理の一覧じゃなくて」でlist_open_purchase_itemsを明示的に除外している。"}
+{"id": "case_1091", "tool": "list_pending_purchase_approvals", "args": {"entity": "purchase_order", "approval_stage": "manager_signoff", "period": "last_quarter"}, "note": ""}
 {"id": "case_1092", "tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1093", "tool": "list_pending_purchase_approvals", "args": {"entity": "supplier_invoice"}, "note": ""}
 {"id": "case_1094", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "last_quarter"}, "note": ""}
-{"id": "case_1095", "tool": "list_pending_sales_approvals", "args": {"entity": "shipment", "period": "this_month"}, "note": ""}
+{"id": "case_1095", "tool": "list_pending_sales_approvals", "args": {"entity": "sales_order", "approval_stage": "manager_signoff", "period": "last_fiscal_year"}, "note": ""}
 {"id": "case_1096", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice"}, "note": ""}
 {"id": "case_1097", "tool": "list_pending_sales_approvals", "args": {"entity": "invoice", "period": "this_month"}, "note": ""}
 {"id": "case_1098", "tool": "list_report_documents", "args": {"report_type": "law", "fiscal_year": 2025}, "note": ""}
@@ -109,13 +109,13 @@
 {"id": "case_1109", "tool": "search_accounting_record", "args": {"entity": "journal", "period": "this_month", "keyword": "本社経費"}, "note": ""}
 {"id": "case_1110", "tool": "search_hr_record", "args": {"entity": "payroll", "period": "this_fiscal_year", "status": "draft", "keyword": "中途採用"}, "note": ""}
 {"id": "case_1111", "tool": "search_hr_record", "args": {"entity": "payroll", "keyword": "契約社員"}, "note": ""}
-{"id": "case_1112", "tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_fiscal_year", "keyword": "契約社員"}, "note": ""}
-{"id": "case_1113", "tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_month", "status": "closed", "keyword": "評価面談"}, "note": ""}
+{"id": "case_1112", "tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_fiscal_year", "keyword": "休日出勤"}, "note": ""}
+{"id": "case_1113", "tool": "search_hr_record", "args": {"entity": "attendance", "period": "this_month", "status": "closed", "keyword": "休日出勤"}, "note": ""}
 {"id": "case_1114", "tool": "search_hr_record", "args": {"entity": "attendance", "period": "last_quarter", "status": "draft"}, "note": ""}
 {"id": "case_1115", "tool": "search_inventory_record", "args": {"entity": "movement", "period": "this_month"}, "note": ""}
-{"id": "case_1116", "tool": "search_inventory_record", "args": {"entity": "stock", "period": "this_fiscal_year", "keyword": "移動中"}, "note": "「在庫」でstockとしたが、移動中の記録ならmovementの可能性も"}
-{"id": "case_1117", "tool": "search_inventory_record", "args": {"entity": "movement", "period": "last_month", "status": "cancelled", "keyword": "移動中"}, "note": ""}
-{"id": "case_1118", "tool": "search_inventory_record", "args": {"entity": "movement", "keyword": "滞留在庫"}, "note": ""}
+{"id": "case_1116", "tool": "search_inventory_record", "args": {"entity": "stock", "period": "this_fiscal_year", "keyword": "棚卸差異"}, "note": ""}
+{"id": "case_1117", "tool": "search_inventory_record", "args": {"entity": "movement", "period": "last_month", "status": "cancelled", "keyword": "第2倉庫"}, "note": "「第2倉庫」は倉庫名だが、対象は在庫移動と明示されているのでentity=movementでkeywordに入れる。"}
+{"id": "case_1118", "tool": "search_inventory_record", "args": {"entity": "movement", "keyword": "ボルトM8"}, "note": ""}
 {"id": "case_1119", "tool": "search_master", "args": {"entity": "item", "name": "ステンレスボルトM8"}, "note": ""}
 {"id": "case_1120", "tool": "search_master", "args": {"entity": "customer", "name": "株式会社みなと建設"}, "note": ""}
 {"id": "case_1121", "tool": "search_master", "args": {"entity": "customer", "field": "shipping_address"}, "note": "どの顧客か(コード/名称)が書かれていない。list_master_recordsやnullも考えられる"}
