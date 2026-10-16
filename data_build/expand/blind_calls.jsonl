@@ -36,28 +36,28 @@
 {"id": "case_1036", "tool": "export_dataset", "args": {"format": "json"}, "note": ""}
 {"id": "case_1037", "tool": "export_dataset", "args": {"format": "csv", "scope": "full_table"}, "note": ""}
 {"id": "case_1038", "tool": "get_accounting_detail", "args": {"entity": "journal", "document_no": "JE-2021-43184"}, "note": ""}
-{"id": "case_1039", "tool": "get_accounting_detail", "args": {"entity": "account_balance", "document_no": "AB-2023-64959"}, "note": ""}
-{"id": "case_1040", "tool": "get_accounting_detail", "args": {"entity": "cost_center", "document_no": "CC-2025-19474"}, "note": ""}
-{"id": "case_1041", "tool": "get_accounting_detail", "args": {"entity": "cost_center", "document_no": "CC-2024-25924"}, "note": ""}
+{"id": "case_1039", "tool": "get_accounting_detail", "args": {"entity": "journal", "document_no": "JE-2020-04197", "include_lines": true}, "note": ""}
+{"id": "case_1040", "tool": "get_accounting_detail", "args": {"entity": "journal", "document_no": "JE-2021-55975", "include_lines": true}, "note": ""}
+{"id": "case_1041", "tool": "get_accounting_detail", "args": {"entity": "journal", "document_no": "JE-2022-61020", "include_lines": true}, "note": ""}
 {"id": "case_1042", "tool": "get_fiscal_calendar", "args": {"fiscal_year": 2025}, "note": ""}
 {"id": "case_1043", "tool": "get_fiscal_calendar", "args": {"fiscal_year": 2019}, "note": ""}
 {"id": "case_1044", "tool": "get_fiscal_calendar", "args": {"fiscal_year": 2024}, "note": ""}
 {"id": "case_1045", "tool": "get_fiscal_calendar", "args": {"fiscal_year": 2020}, "note": ""}
 {"id": "case_1046", "tool": "get_hr_detail", "args": {"entity": "attendance", "document_no": "AT-2025-67882", "include_lines": false}, "note": ""}
-{"id": "case_1047", "tool": "get_hr_detail", "args": {"entity": "headcount", "document_no": "HC-2023-17219", "include_lines": false}, "note": ""}
-{"id": "case_1048", "tool": "get_hr_detail", "args": {"entity": "headcount", "document_no": "HC-2021-18768", "include_lines": true}, "note": ""}
+{"id": "case_1047", "tool": "get_hr_detail", "args": {"entity": "payroll", "document_no": "PY-2021-12202"}, "note": "「給与明細」は給与伝票（payslip）を指す語で明細行の要求とは読みにくいが、明細行込みと解する読み手もいる（別解は正解に無い引数を足すだけで、採点は正解に無い引数を見ない）"}
+{"id": "case_1048", "tool": "get_hr_detail", "args": {"entity": "payroll", "document_no": "PY-2021-61018"}, "note": ""}
 {"id": "case_1049", "tool": "get_hr_detail", "args": {"entity": "payroll", "document_no": "PY-2019-37316"}, "note": ""}
-{"id": "case_1050", "tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2020-28543"}, "note": ""}
-{"id": "case_1051", "tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2021-15344", "include_lines": false}, "note": ""}
-{"id": "case_1052", "tool": "get_inventory_detail", "args": {"entity": "stock", "document_no": "ST-2024-95811"}, "note": ""}
-{"id": "case_1053", "tool": "get_inventory_detail", "args": {"entity": "warehouse", "document_no": "WH-2022-90189", "include_lines": true}, "note": ""}
+{"id": "case_1050", "tool": "get_inventory_detail", "args": {"entity": "movement", "document_no": "MV-2019-52080"}, "note": ""}
+{"id": "case_1051", "tool": "get_inventory_detail", "args": {"entity": "movement", "document_no": "MV-2024-80466", "include_lines": true}, "note": ""}
+{"id": "case_1052", "tool": "get_inventory_detail", "args": {"entity": "movement", "document_no": "MV-2021-08370"}, "note": ""}
+{"id": "case_1053", "tool": "get_inventory_detail", "args": {"entity": "movement", "document_no": "MV-2020-45514", "include_lines": true}, "note": ""}
 {"id": "case_1054", "tool": "get_master_change_history", "args": {"entity": "item", "code": "ITM-81481"}, "note": ""}
 {"id": "case_1055", "tool": "get_master_change_history", "args": {"entity": "supplier", "code": "S-6283"}, "note": ""}
 {"id": "case_1056", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-4560"}, "note": ""}
 {"id": "case_1057", "tool": "get_master_change_history", "args": {"entity": "employee", "code": "E-8900", "period": "this_fiscal_year"}, "note": ""}
-{"id": "case_1058", "tool": "get_master_hierarchy", "args": {"entity": "item", "depth": 2}, "note": ""}
+{"id": "case_1058", "tool": "get_master_hierarchy", "args": {"entity": "department", "root_code": "D-8190"}, "note": ""}
 {"id": "case_1059", "tool": "get_master_hierarchy", "args": {"entity": "item"}, "note": ""}
-{"id": "case_1060", "tool": "get_master_hierarchy", "args": {"entity": "item", "root_code": "ITM-21403", "depth": 2}, "note": ""}
+{"id": "case_1060", "tool": "get_master_hierarchy", "args": {"entity": "item", "root_code": "ITM-21403", "depth": 2}, "note": "「構成」はBOM（部品構成）とも読めるが、カタログにBOMツールは無く品目階層が唯一の候補"}
 {"id": "case_1061", "tool": "get_purchase_detail", "args": {"entity": "supplier_invoice", "document_no": "SI-2023-69763", "include_lines": true}, "note": ""}
 {"id": "case_1062", "tool": "get_purchase_detail", "args": {"entity": "receipt", "document_no": "RC-2025-56114"}, "note": ""}
 {"id": "case_1063", "tool": "get_purchase_detail", "args": {"entity": "receipt", "document_no": "RC-2018-04095", "include_lines": false}, "note": ""}
@@ -116,8 +116,8 @@
 {"id": "case_1116", "tool": "search_inventory_record", "args": {"entity": "stock", "period": "this_fiscal_year", "keyword": "移動中"}, "note": "「在庫」でstockとしたが、移動中の記録ならmovementの可能性も"}
 {"id": "case_1117", "tool": "search_inventory_record", "args": {"entity": "movement", "period": "last_month", "status": "cancelled", "keyword": "移動中"}, "note": ""}
 {"id": "case_1118", "tool": "search_inventory_record", "args": {"entity": "movement", "keyword": "滞留在庫"}, "note": ""}
-{"id": "case_1119", "tool": "search_master", "args": {"entity": "department", "code": "D-1635", "name": "購買課"}, "note": "コードと名称の両方が書かれている。codeのみ指定も可"}
-{"id": "case_1120", "tool": "search_master", "args": {"entity": "customer", "code": "C-1560"}, "note": ""}
+{"id": "case_1119", "tool": "search_master", "args": {"entity": "item", "name": "ステンレスボルトM8"}, "note": ""}
+{"id": "case_1120", "tool": "search_master", "args": {"entity": "customer", "name": "株式会社みなと建設"}, "note": ""}
 {"id": "case_1121", "tool": "search_master", "args": {"entity": "customer", "field": "shipping_address"}, "note": "どの顧客か(コード/名称)が書かれていない。list_master_recordsやnullも考えられる"}
 {"id": "case_1122", "tool": "search_purchase_record", "args": {"entity": "receipt", "keyword": "原材料A"}, "note": ""}
 {"id": "case_1123", "tool": "search_purchase_record", "args": {"entity": "purchase_order", "status": "confirmed"}, "note": ""}

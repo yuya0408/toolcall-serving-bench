@@ -36,15 +36,14 @@
 {"id": "case_1036", "decision": "keep", "note": "上に同じ"}
 {"id": "case_1037", "decision": "keep", "note": "上に同じ"}
 {"id": "case_1038", "decision": "keep", "note": ""}
-{"id": "case_1039", "decision": "keep", "note": ""}
-{"id": "case_1040", "decision": "keep", "note": ""}
-{"id": "case_1041", "decision": "keep", "note": ""}
 {"id": "case_1042", "decision": "keep", "note": "（「直す」だがクエリは変更なし）"}
-{"id": "case_1050", "decision": "keep", "note": ""}
-{"id": "case_1054", "decision": "keep", "note": ""}
-{"id": "case_1056", "decision": "fix", "query": "従業員E-4560の登録情報の変更履歴を教えて", "note": ""}
+{"id": "case_1043", "decision": "keep", "note": ""}
+{"id": "case_1044", "decision": "keep", "note": ""}
+{"id": "case_1045", "decision": "keep", "note": ""}
+{"id": "case_1046", "decision": "keep", "note": ""}
+{"id": "case_1049", "decision": "keep", "note": ""}
 {"id": "case_1059", "decision": "keep", "note": ""}
-{"id": "case_1060", "decision": "keep", "note": ""}
+{"id": "case_1061", "decision": "keep", "note": "コード指定が気になる（「直す」だがクエリは変更なし。伝票番号での照会は実務どおりと判断）"}
 {"id": "case_1063", "decision": "keep", "note": ""}
 {"id": "case_1064", "decision": "keep", "note": ""}
 {"id": "case_1068", "decision": "keep", "note": "ツール一覧の設計への指摘（未処理を引数でなくツールで表す／キーワードの自由記述）。一覧は変えないと決めたのでケースはそのまま（ADR-0004の制約）。元のメモ：キーワードで絞るのはどうなのか。カテゴリを事前にデータ側で定義しておいて、その中から引数で選ぶ方式の方が良いのでは"}
@@ -62,7 +61,6 @@
 {"id": "case_1106", "decision": "keep", "note": ""}
 {"id": "case_1114", "decision": "keep", "note": ""}
 {"id": "case_1116", "decision": "fix", "query": "今年度の在庫で現在「移動中」のものを出して", "note": "クエリが抽象的すぎた"}
-{"id": "case_1119", "decision": "keep", "note": ""}
 {"id": "case_1121", "decision": "fix", "query": "西海フーズ株式会社の出荷先住所を教えて", "gold": {"expected_tool": "search_master", "exact": {"entity": "customer", "field": "shipping_address", "name": "西海フーズ株式会社"}}, "note": "顧客指定すれば良いのでは？"}
 {"id": "case_1125", "decision": "keep", "note": ""}
 {"id": "case_1126", "decision": "keep", "note": ""}

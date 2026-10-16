@@ -36,28 +36,28 @@
 {"id": "case_1036", "query": "JSONで書き出してください", "flags": [], "sampled": false}
 {"id": "case_1037", "query": "テーブル全体をCSVにして", "flags": [], "sampled": false}
 {"id": "case_1038", "query": "仕訳JE-2021-43184の詳細を見せて", "flags": [], "sampled": true}
-{"id": "case_1039", "query": "勘定残高AB-2023-64959の詳細を出してください", "flags": [], "sampled": false}
-{"id": "case_1040", "query": "一覧ではなく、原価センタCC-2025-19474のこの1件を詳しく", "flags": [], "sampled": false}
-{"id": "case_1041", "query": "CC-2024-25924の原価センタの中身を確認したい", "flags": [], "sampled": false}
+{"id": "case_1039", "query": "仕訳番号JE-2020-04197の内容を、明細行も含めて見せてください。", "flags": [], "sampled": false}
+{"id": "case_1040", "query": "仕訳の一覧ではなく、仕訳番号JE-2021-55975の1件について明細行まで全部確認したいです。", "flags": [], "sampled": false}
+{"id": "case_1041", "query": "仕訳番号JE-2022-61020の詳細を明細行も含めて教えてください。", "flags": [], "sampled": false}
 {"id": "case_1042", "query": "2025年度の期首と期末を教えて", "flags": [], "sampled": false}
 {"id": "case_1043", "query": "2019年度の会計期間の定義を見せて", "flags": [], "sampled": false}
 {"id": "case_1044", "query": "2024年度の四半期の区切りを知りたい", "flags": [], "sampled": false}
 {"id": "case_1045", "query": "金額じゃなくて期間の定義そのものがほしい。2020年度分", "flags": [], "sampled": false}
-{"id": "case_1046", "query": "勤怠AT-2025-67882の詳細を。明細は不要", "flags": [], "sampled": false}
-{"id": "case_1047", "query": "人員HC-2023-17219の詳細を見せて。明細行はいらない", "flags": [], "sampled": false}
-{"id": "case_1048", "query": "人員HC-2021-18768を明細も含めて見せてください", "flags": [], "sampled": true}
+{"id": "case_1046", "query": "勤怠AT-2025-67882の詳細を。明細は不要", "flags": [], "sampled": true}
+{"id": "case_1047", "query": "給与明細の番号PY-2021-12202の内容を確認したいです。", "flags": ["blind note: 「給与明細」は給与伝票（payslip）を指す語で明細行の要求とは読みにくいが、明細行込みと解する読み手もいる（別解は正解に無い引数を足すだけで、採点は正解に無い引数を見ない）"], "sampled": false}
+{"id": "case_1048", "query": "給与伝票番号PY-2021-61018の詳細を出してもらえますか。", "flags": [], "sampled": true}
 {"id": "case_1049", "query": "給与伝票PY-2019-37316の中身を見たい", "flags": [], "sampled": false}
-{"id": "case_1050", "query": "一覧じゃなくて、在庫ST-2020-28543の1件だけ詳しく", "flags": [], "sampled": true}
-{"id": "case_1051", "query": "在庫ST-2021-15344の詳細を、明細なしで", "flags": [], "sampled": false}
-{"id": "case_1052", "query": "在庫のST-2024-95811の詳細を出して", "flags": [], "sampled": false}
-{"id": "case_1053", "query": "倉庫WH-2022-90189の詳細を明細行まで見せて", "flags": [], "sampled": false}
-{"id": "case_1054", "query": "品目ITM-81481の変更履歴を見せて", "flags": [], "sampled": true}
-{"id": "case_1055", "query": "仕入先S-6283の変更履歴を出してください", "flags": [], "sampled": false}
-{"id": "case_1056", "query": "従業員E-4560の変更履歴を教えて", "flags": [], "sampled": true}
-{"id": "case_1057", "query": "従業員E-8900の今年度の変更履歴を見せて", "flags": [], "sampled": false}
-{"id": "case_1058", "query": "個々の品目の属性じゃなくて、品目分類の階層を2階層分見せて", "flags": [], "sampled": false}
+{"id": "case_1050", "query": "在庫移動の伝票番号MV-2019-52080について、検索ではなくこの1件の中身を見たいです。", "flags": ["writer note: Claudeが正解に無い「明細は不要」を削除"], "sampled": false}
+{"id": "case_1051", "query": "在庫移動の伝票番号MV-2024-80466の詳細を、明細行も含めて表示してください。", "flags": [], "sampled": true}
+{"id": "case_1052", "query": "在庫移動の伝票番号MV-2021-08370を開いて、内容を見せてください。", "flags": ["writer note: Claudeが正解に無い「明細は不要」を削除"], "sampled": false}
+{"id": "case_1053", "query": "在庫移動の伝票番号MV-2020-45514の詳細が知りたいです。明細行も含めてお願いします。", "flags": [], "sampled": false}
+{"id": "case_1054", "query": "品番ITM-81481の変更履歴を見せてください。", "flags": [], "sampled": true}
+{"id": "case_1055", "query": "仕入先コードS-6283について、今の登録内容じゃなくて、これまでどう変更されてきたかを知りたいです。", "flags": [], "sampled": false}
+{"id": "case_1056", "query": "社員番号E-4560の登録情報の変更履歴を教えてください。", "flags": [], "sampled": true}
+{"id": "case_1057", "query": "社員番号E-8900の変更履歴を、今年度の分だけ見せてください。", "flags": [], "sampled": false}
+{"id": "case_1058", "query": "部門コードD-8190を起点にした部門の組織階層を表示してください。", "flags": [], "sampled": false}
 {"id": "case_1059", "query": "品目分類の階層構造を見せて", "flags": [], "sampled": true}
-{"id": "case_1060", "query": "品目の一覧じゃなくてツリーで。ITM-21403を起点に2階層分", "flags": [], "sampled": true}
+{"id": "case_1060", "query": "品番ITM-21403の単体情報ではなく、そこから2階層分の構成を見たいです。", "flags": ["blind note: 「構成」はBOM（部品構成）とも読めるが、カタログにBOMツールは無く品目階層が唯一の候補"], "sampled": false}
 {"id": "case_1061", "query": "仕入先からの請求書SI-2023-69763を明細も含めて見せて", "flags": [], "sampled": false}
 {"id": "case_1062", "query": "入荷伝票RC-2025-56114の詳細を教えて", "flags": [], "sampled": false}
 {"id": "case_1063", "query": "入荷RC-2018-04095の詳細。明細は不要です", "flags": [], "sampled": true}
@@ -116,9 +116,9 @@
 {"id": "case_1116", "query": "今年度の在庫で「移動中」の記録を出して", "flags": ["blind note: 「在庫」でstockとしたが、移動中の記録ならmovementの可能性も"], "sampled": false}
 {"id": "case_1117", "query": "先月の在庫移動のうち、取消になった「移動中」のもの", "flags": [], "sampled": false}
 {"id": "case_1118", "query": "在庫移動の記録から「滞留在庫」を探して", "flags": [], "sampled": false}
-{"id": "case_1119", "query": "部門コードD-1635、購買課の登録情報を出して", "flags": ["blind note: コードと名称の両方が書かれている。codeのみ指定も可"], "sampled": false}
-{"id": "case_1120", "query": "一覧ではなく1社分。顧客コードC-1560のマスタ情報を", "flags": [], "sampled": false}
-{"id": "case_1121", "query": "顧客の出荷先住所を教えて", "flags": ["writer note: コードも名称も指定がなく、どの顧客か特定できない", "blind note: どの顧客か(コード/名称)が書かれていない。list_master_recordsやnullも考えられる"], "sampled": false}
+{"id": "case_1119", "query": "品目「ステンレスボルトM8」のマスタ登録内容を見せて", "flags": [], "sampled": false}
+{"id": "case_1120", "query": "得意先の一覧じゃなくて、「株式会社みなと建設」1社の今のマスタ登録情報を確認したいんだけど", "flags": [], "sampled": false}
+{"id": "case_1121", "query": "顧客の出荷先住所を教えて", "flags": ["args: name gold '西海フーズ株式会社' blind None", "writer note: コードも名称も指定がなく、どの顧客か特定できない", "blind note: どの顧客か(コード/名称)が書かれていない。list_master_recordsやnullも考えられる"], "sampled": false}
 {"id": "case_1122", "query": "入荷の記録で「原材料A」に関するものを探して", "flags": [], "sampled": false}
 {"id": "case_1123", "query": "確定済みの発注を一覧にして", "flags": [], "sampled": false}
 {"id": "case_1124", "query": "仕入先からの請求書のレコードを一覧で見せて", "flags": [], "sampled": false}

@@ -36,6 +36,13 @@ Rules:
     cost centers or warehouses, a trend of warehouses, a quantity trend of
     all stock (items in different units), and a report search with nothing
     to look up (no metric and no query text).
+  - and, from a sixth seed (REALISM_SEED), calls a reviewer found unlike
+    real questions: a detail lookup by document number on something that
+    has no documents (balances, cost centers, headcount, stock,
+    warehouses), a hierarchy depth with no starting point, and a master
+    lookup by code, since people ask by name (search_master takes a name;
+    given both, a call with only one of them is as correct; tools that
+    require a code keep it).
   - enum values are drawn uniformly, except sentinels that mean "no
     constraint" ("none", "any"): stating them in a query is unnatural, so the
     argument is left out instead.
@@ -74,6 +81,8 @@ OVERLAPPING_AGGREGATES = {("aggregate_hr", "headcount"), ("aggregate_inventory",
                           ("aggregate_metric", "headcount"), ("aggregate_metric", "inventory_qty"),
                           ("aggregate_metric", "work_hours")}
 REVIEW_RULE_SEED = 20261019
+REALISM_SEED = 20261020
+NO_DOCUMENTS = {"account_balance", "cost_center", "headcount", "stock", "warehouse"}
 SNAPSHOT_ENTITIES = {"headcount", "stock", "warehouse"}   # "how many now" needs no period; never "unprocessed"
 SENTINELS = {"none", "any"}
 OPTIONAL_P = 0.5
@@ -339,6 +348,39 @@ def redraw_meaningless(rng: random.Random, tools: dict[str, dict[str, Any]],
         validate_case_against_tools(row, tools)
 
 
+def unrealistic(tool: dict[str, Any], args: dict[str, Any]) -> bool:
+    """Calls no one would phrase as a question this way."""
+    name = tool["name"]
+    if family_of(name) == "get_detail" and args.get("entity") in NO_DOCUMENTS:
+        return True
+    if name == "get_master_hierarchy" and "depth" in args and "root_code" not in args:
+        return True
+    # A master lookup names the record it is about, by name: with a code too, the code-only
+    # call would be just as correct; with neither, there is nothing to look up.
+    return name == "search_master" and ("code" in args or "name" not in args)
+
+
+def redraw_unrealistic(rng: random.Random, tools: dict[str, dict[str, Any]],
+                       rows: list[dict[str, Any]], seen: set[str]) -> None:
+    for row in rows:
+        tool = tools[row["expected_tool"]]
+        if not unrealistic(tool, row["expected_args"]["exact"]):
+            continue
+        seen.discard(_key(tool["name"], row["expected_args"]["exact"]))
+        for _attempt in range(200):
+            candidate = sample_args(rng, tool)
+            if needs_period(tool, candidate):
+                candidate["period"] = _value(rng, tool, "period", tool["parameters"]["properties"]["period"], candidate)
+            if not (unrealistic(tool, candidate) or meaningless(tool, candidate)
+                    or overlapping_aggregate(tool, candidate) or snapshot_open_items(tool, candidate))                     and plausible(tool, candidate) and _key(tool["name"], candidate) not in seen:
+                break
+        else:
+            raise RuntimeError(f"could not redraw {row['id']}")
+        seen.add(_key(tool["name"], candidate))
+        row["expected_args"]["exact"] = candidate
+        validate_case_against_tools(row, tools)
+
+
 def needs_period(tool: dict[str, Any], args: dict[str, Any]) -> bool:
     """An aggregate or a trend over a flow means nothing without a period."""
     if "period" not in tool["parameters"]["properties"] or "period" in args:
@@ -442,6 +484,7 @@ def main(argv: list[str] | None = None) -> int:
     redraw_snapshot_open_items(random.Random(OPEN_ITEM_SEED), tools, rows, seen)
     redraw_overlapping_aggregates(random.Random(OVERLAP_SEED), tools, rows, seen)
     redraw_meaningless(random.Random(REVIEW_RULE_SEED), tools, rows, seen)
+    redraw_unrealistic(random.Random(REALISM_SEED), tools, rows, seen)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="\n") as f:
