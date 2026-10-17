@@ -92,6 +92,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--vllm-startup-log", type=pathlib.Path,
                    help="required for vllm at concurrency > 1 (the queueing guard)")
     p.add_argument("--run-id-prefix", default="", help="smoke- / pilot- / empty for main runs")
+    p.add_argument("--max-cases", type=int,
+                   help="smoke- / pilot- only: run the first N cases (by id); a main run uses them all")
     p.add_argument("--data-dir", type=pathlib.Path, default=_ROOT / "data")
     p.add_argument("--out-dir", type=pathlib.Path, default=_ROOT / "runs")
     p.add_argument("--instance-type", default="g6.xlarge")
@@ -104,10 +106,12 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         p.error("plain accuracy is concurrency=1 by definition; use --pass-type accuracy_under_load")
     if args.engine == "vllm" and args.concurrency > 1 and args.vllm_startup_log is None:
         p.error("--vllm-startup-log is required for vllm at concurrency > 1")
+    trial_run = args.run_id_prefix.startswith(("smoke-", "pilot-"))
+    if args.max_cases is not None and not trial_run:
+        p.error("--max-cases is for smoke-/pilot- runs only: the case set is fixed for main runs (docs/adr/0004)")
     if args.pass_type == "latency":
         if args.n_requests is None:
             p.error("--n-requests is required for --pass-type latency")
-        trial_run = args.run_id_prefix.startswith(("smoke-", "pilot-"))
         if args.n_requests < MIN_REQUESTS and not trial_run:
             p.error(f"--n-requests must be >= {MIN_REQUESTS} for a main run (docs/adr/0003)")
         if args.engine == "transformers_hf" and args.concurrency != 1:
@@ -270,6 +274,8 @@ def main(argv: list[str] | None = None) -> int:
     tools = load_tools(catalog_path)
     catalog_version = json.loads(catalog_path.read_text(encoding="utf-8"))["version"]
     cases = load_cases(args.data_dir)
+    if args.max_cases is not None:
+        cases = sorted(cases, key=lambda c: c["id"])[:args.max_cases]
 
     cell: dict[str, Any] = {
         "engine": args.engine,

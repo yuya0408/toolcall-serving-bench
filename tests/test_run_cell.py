@@ -83,6 +83,20 @@ def test_seed_base_changes_the_logged_orders(tmp_path, fake_gpu_backend):
     assert all(sorted(orders_a[k]) == sorted(orders_b[k]) for k in orders_a)
 
 
+def test_max_cases_takes_the_first_cases_by_id(tmp_path, fake_gpu_backend):
+    _, rows = _run(tmp_path, "--run-id-prefix", "smoke-", "--max-cases", "4")
+    first = sorted(c["id"] for c in _CASES)[:4]
+    assert sorted({r["case_id"] for r in rows}) == first
+    assert len(rows) == 4 * 3
+
+
+def test_max_cases_is_refused_on_a_main_run():
+    argv = ["--pass-type", "accuracy", "--engine", "vllm", "--base-url", "http://x", "--model", "m",
+            "--quantization", "q", "--engine-version", "v", "--tool-stage", "10", "--max-cases", "4"]
+    with pytest.raises(SystemExit):
+        run_cell._parse_args(argv)
+
+
 @pytest.mark.parametrize("bad", [
     ["--pass-type", "accuracy", "--concurrency", "4"],                      # accuracy is serial
     ["--pass-type", "accuracy_under_load", "--concurrency", "16"],           # vllm >1 needs the log
