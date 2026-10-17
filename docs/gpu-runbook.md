@@ -101,17 +101,47 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json     # 2回目のappl
 ssh -i ~/.ssh/id_ed25519 ubuntu@$IP "cd ~/toolcall-serving-bench && nohup ~/venv/bin/python scripts/gpu/run_cells.py scripts/gpu/cells/pilot.json --only lat-vllm-bf16-c32 lat-llama-gguf-c32 > ~/out/cells-rest.log 2>&1 < /dev/null &"
 ```
 
-## 4. 止まったとき
+## 4. 疎通の後：パイロットに進むか、止めるか
 
-| 症状 | 見る場所 |
+疎通（`smoke.json`）が終わったら、次をすべて満たすときだけ2回目のapplyでパイロットに進む。1つでも外れたら、パイロットには進まず、
+destroyしてから原因を手元で調べる（GPUの時間を、原因の分からないまま使わないため）。
+
+1. `versions.json`があり、`checks/vllm_tool_call_parser.txt`に`hermes`がある。
+2. `acc-*`の4セルが`ok`。どれかの`selection_mean`が0に近い、または1つだけ他より大きく低い場合は、生出力（`*.raw.jsonl`の`raw_output`）を見て、
+   パーサーやチャットテンプレートの不一致でないかを確かめる。モデルの実力ではなく配線の誤りなら、その構成の結果は使えない。
+3. `run_cell.log`に、thinkingのガード（`assert_no_thinking`）で止まった記録が無い。
+4. `load-vllm-awq-c16`のmanifestに`vllm_diagnostics`があり、ガードで止まっていない。
+5. `lat-*-c1`の生出力で、起動直後のセルのキャッシュ済みトークン数が0。
+
+`load-llama-gguf-c16`が`server_not_ready`や`unsupported`になるのは、止める理由にしない。llama.cppがその並行数で動かないこと自体が
+ADR-0003の結果（「対応していない」）である。その場合は、パイロットのllama.cppの並行数16・32のセルを外す（外したことはPRに書く）。
+
+`checks/llama_seed.json`の`same_seed_identical`が`false`でも止めない。llama.cppの結果は1回ごとに再現するとはみなさない、と記録する。
+
+## 5. 止まったとき
+
+| 症状 | 見る場所・対処 |
 | --- | --- |
-| `setup.log`が途中で止まった | `~/out/setup.log`の最後。`setup.sh`は途中まで済んだ処理を飛ばすので、直してからもう一度`local.sh setup`でよい |
+| `collect`が「setup.sh failed」で止まった | `~/out/SETUP_FAILED`（失敗した行とコマンド）と`setup.log`の最後。`setup.sh`は済んだ処理を飛ばすので、直してからもう一度`local.sh setup` |
 | `server_not_ready` | `~/out/<セル名>/server.log`（メモリ不足・フラグの誤りなど）と`server_command.txt` |
 | `error` | `~/out/<セル名>/run_cell.log`。manifestのガードで止まった場合も、生出力は先に書かれている |
+| `timeout` | セルの時間の上限（既定90分、セル一覧の`timeout_min`）を超えた。サーバーが固まったか、見積もりより遅い。`server.log`と`run_cell.log`の最後の時刻を見る。上限は実測した時間ではないので、遅いだけなら`timeout_min`を上げて`--only`で回し直す |
 | `unsupported` | `~/out/<セル名>/*.aborted.json`の`reason`。ADR-0003では結果として記録する（やり直さない） |
-| `collect`が止まった | もう一度`local.sh collect $IP`。rsyncなので、続きからコピーする |
+| `collect`が「the cell list stopped early」で止まった | `~/out/FAILED`。セルの後にGPUのメモリが空かなかった（残りのセルがすべて起動できなくなるので、そこで止めた）か、`run_cells.py`自体が落ちた。`nvidia-smi`で残ったプロセスを確かめて消し、`--only`で残りを回す |
+| `collect`が「unreachable for 10 minutes」で止まった | インスタンスが消えた（`local.sh status`が通らず、`terraform -chdir=infra/gpu show`にも無い）か、回線のIPが変わった。下を見る |
+| `collect`がほかの理由で止まった | もう一度`local.sh collect $IP`。rsyncなので、続きからコピーする |
 
-## 5. destroy（手で行う）
+**回線のIPが途中で変わったとき**：インスタンス上の処理はそのまま続いている。新しいIPを渡してapplyし直すと、セキュリティグループの許可だけが
+置き換わる（インスタンスは作り直されない。planで`aws_instance`が`replace`になっていないことを確かめてからyesと打つ）。その後、`collect`をもう一度打つ。
+
+```
+terraform -chdir=infra/gpu apply -var "ssh_allowed_cidr=$(curl -4 -s https://checkip.amazonaws.com)/32"
+```
+
+**6時間に間に合わないとき**：`local.sh status`の「--- shutdown」の下が自動シャットダウンの予定（`USEC=`の形なら、UNIX時刻のマイクロ秒）。間に合わないセルは、回り終わったものを`collect`で
+回収した後に、次のapplyで`--only`を付けて回す。シャットダウンの時刻は延ばさない（課金の歯止めのため）。
+
+## 6. destroy（手で行う）
 
 `collect`が「collected into …」を出したのを確かめてから、自動シャットダウンを待たずにdestroyする
 （合意済みの運用：apply → 実行 → 確認 → すぐdestroy）。

@@ -14,12 +14,15 @@ OUT=~/out
 MODELS=~/models
 REPO=~/toolcall-serving-bench
 mkdir -p "$OUT/checks" "$MODELS"
+rm -f "$OUT/SETUP_DONE" "$OUT/SETUP_FAILED"
+# A marker local.sh collect stops on; the failing command is the last lines of ~/out/setup.log.
+trap 'echo "setup.sh line $LINENO: $BASH_COMMAND" > "$OUT/SETUP_FAILED"' ERR
 
 export PATH="/usr/local/cuda/bin:$PATH"   # the DLAMI installs nvcc there, not always on PATH
 echo "== AMI prerequisites"
 nvidia-smi | tee "$OUT/checks/nvidia-smi.txt"
 nvcc --version | tee "$OUT/checks/nvcc.txt"   # no nvcc -> no CUDA build of llama.cpp; stop here
-shutdown --show 2>&1 | tee "$OUT/checks/shutdown.txt" || true
+{ shutdown --show 2>/dev/null || cat /run/systemd/shutdown/scheduled; } 2>&1 | tee "$OUT/checks/shutdown.txt" || true   # --show needs systemd >= 250
 
 echo "== system packages"
 sudo apt-get update -q

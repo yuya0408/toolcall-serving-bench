@@ -17,12 +17,15 @@ vLLM's prefix cache before a latency cell.
 Writes to --out (default ~/out), which scripts/gpu/local.sh collect copies
 back while the run goes on:
   <cell name>/            the cell's manifest, raw log and server log
-  status.jsonl            one line per finished cell: exit code and timing
-  RUNNING / DONE          markers; DONE names the cell list that finished
+  status.jsonl            one line per finished cell: outcome, exit code, timing
+  RUNNING / DONE / FAILED markers; DONE names the cell list that finished,
+                          FAILED says why the list stopped early
 
-A failed cell (server never ready, run_cell.py error) is recorded and the
-list moves on: a configuration that cannot run is a result (ADR-0003's
-"unsupported"), and the remaining cells do not depend on it.
+A failed cell (server never ready, run_cell.py error, past its time limit)
+is recorded and the list moves on: a configuration that cannot run is a
+result (ADR-0003's "unsupported"), and the remaining cells do not depend on
+it. The list stops early -- FAILED -- only when going on would waste the
+rest: the GPU is not freed after a cell, or this script itself fails.
 """
 from __future__ import annotations
 import argparse
@@ -33,6 +36,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime, timezone
 from typing import Any
 
@@ -51,6 +55,10 @@ MODELS = {   # quantization -> the model id the manifest records and vLLM serves
 # Arguments a cell may pass through to run_cell.py, as written in the cell list.
 RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurrency", "n",
                  "n_requests", "temperature", "max_cases", "seed_base", "request_timeout")
+# A cell's wall-clock limit unless it sets timeout_min: catches a hung server or
+# cell before it holds the list until the auto-shutdown. Not a measured
+# duration -- set timeout_min on cells expected to run longer.
+DEFAULT_TIMEOUT_MIN = 90
 REQUIRED = ("name", "pass_type", "engine", "quantization", "tool_stage", "prefix")
 
 
@@ -66,7 +74,7 @@ def validate(cells: list[dict[str, Any]]) -> None:
         missing = [k for k in REQUIRED if k not in c]
         if missing:
             raise SystemExit(f"{c.get('name')}: missing {missing}")
-        unknown = set(c) - set(REQUIRED) - set(RUN_CELL_ARGS) - {"server"}
+        unknown = set(c) - set(REQUIRED) - set(RUN_CELL_ARGS) - {"server", "timeout_min"}
         if unknown:
             raise SystemExit(f"{c['name']}: unknown fields {sorted(unknown)}")
         if c["prefix"] not in ("smoke-", "pilot-", ""):
@@ -135,26 +143,47 @@ def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
     return False
 
 
+def _spawn(cmd: list[str], log, env: dict[str, str] | None = None) -> subprocess.Popen:
+    """Start cmd in its own process group, so stopping it also stops what it
+    started (vLLM's engine-core workers)."""
+    return subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env,
+                            start_new_session=hasattr(os, "killpg"))
+
+
+def _signal_group(proc: subprocess.Popen, sig: int) -> None:
+    try:
+        if hasattr(os, "killpg"):
+            os.killpg(proc.pid, sig)
+        elif proc.poll() is None:
+            proc.kill()
+    except ProcessLookupError:
+        pass
+
+
 def _stop(proc: subprocess.Popen) -> None:
+    """SIGINT and a minute to shut down cleanly, then SIGKILL the whole group:
+    a worker left behind would hold VRAM and fail every later cell."""
     if proc.poll() is None:
-        proc.send_signal(signal.SIGINT)
+        _signal_group(proc, signal.SIGINT)
         try:
             proc.wait(timeout=60)
         except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-    _wait_gpu_free()
+            pass
+    _signal_group(proc, getattr(signal, "SIGKILL", signal.SIGTERM))
+    proc.wait()
 
 
-def _wait_gpu_free(limit_mib: int = 1024, timeout_s: int = 120) -> None:
-    """The next server must not start while the last one still holds VRAM."""
+def _wait_gpu_free(limit_mib: int = 1024, timeout_s: int = 120) -> bool:
+    """Whether the GPU is (nearly) empty again: the next server must not start
+    while the last one still holds VRAM."""
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         used = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
                               capture_output=True, text=True).stdout.strip().splitlines()
         if used and int(used[0]) < limit_mib:
-            return
+            return True
         time.sleep(3)
+    return False
 
 
 def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -> dict[str, Any]:
@@ -163,27 +192,44 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -
     status: dict[str, Any] = {"name": cell["name"], "started_at": _now()}
     server_cmd = server_command(cell)
     server_log = cell_dir / "server.log" if server_cmd else None
-    proc = None
+    timeout_s = 60 * cell.get("timeout_min", DEFAULT_TIMEOUT_MIN)
+    server = runner = None
     try:
         if server_cmd:
             env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1"} if cell["engine"] == "vllm" else None
             (cell_dir / "server_command.txt").write_text(" ".join(server_cmd) + "\n")
             with server_log.open("w") as log:
-                proc = subprocess.Popen(server_cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
-            if not _wait_ready(cell["engine"], proc):
-                status.update(outcome="server_not_ready", returncode=proc.poll())
+                server = _spawn(server_cmd, log, env)
+            if not _wait_ready(cell["engine"], server):
+                status.update(outcome="server_not_ready", returncode=server.poll())
                 return status
         cmd = run_cell_command(cell, engine_version(cell["engine"], versions), cell_dir, server_log)
         (cell_dir / "run_cell_command.txt").write_text(" ".join(cmd) + "\n")
         with (cell_dir / "run_cell.log").open("w") as log:
-            rc = subprocess.run(cmd, stdout=log, stderr=subprocess.STDOUT).returncode
+            runner = _spawn(cmd, log)
+        try:
+            rc = runner.wait(timeout=timeout_s)
+        except subprocess.TimeoutExpired:
+            # A hung server or cell would otherwise hold the list until the auto-shutdown.
+            status.update(outcome="timeout", returncode=None, timeout_min=timeout_s / 60)
+            return status
         # run_cell.py exits 2 for an aborted latency cell, which it records as "unsupported".
         status.update(outcome={0: "ok", 2: "unsupported"}.get(rc, "error"), returncode=rc)
         return status
     finally:
-        if proc is not None:
-            _stop(proc)
+        for proc in (runner, server):
+            if proc is not None:
+                _stop(proc)
+        status["gpu_freed"] = _wait_gpu_free()
         status["finished_at"] = _now()
+
+
+def _mark(out: pathlib.Path, name: str, text: str | None) -> None:
+    path = out / name
+    if text is None:
+        path.unlink(missing_ok=True)
+    else:
+        path.write_text(text)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -197,19 +243,34 @@ def main(argv: list[str] | None = None) -> int:
     validate(cells)
     if args.only:
         cells = [c for c in cells if c["name"] in set(args.only)]
-    versions = json.loads((args.out / "versions.json").read_text())   # written by setup.sh
 
-    (args.out / "DONE").unlink(missing_ok=True)
-    (args.out / "RUNNING").write_text(f"{args.cells.name} {_now()}\n")
-    for cell in cells:
-        print(f"[{_now()}] {cell['name']}", flush=True)
-        status = run_one(cell, versions, args.out)
-        print(f"[{_now()}] {cell['name']}: {status['outcome']}", flush=True)
-        with (args.out / "status.jsonl").open("a") as f:
-            f.write(json.dumps(status) + "\n")
-    (args.out / "RUNNING").unlink(missing_ok=True)
-    (args.out / "DONE").write_text(f"{args.cells.name} {_now()}\n")
-    return 0
+    for name in ("DONE", "FAILED"):
+        _mark(args.out, name, None)
+    _mark(args.out, "RUNNING", f"{args.cells.name} {_now()}\n")
+    failure = None
+    try:
+        versions = json.loads((args.out / "versions.json").read_text())   # written by setup.sh
+        for cell in cells:
+            print(f"[{_now()}] {cell['name']}", flush=True)
+            status = run_one(cell, versions, args.out)
+            print(f"[{_now()}] {cell['name']}: {status['outcome']}", flush=True)
+            with (args.out / "status.jsonl").open("a") as f:
+                f.write(json.dumps(status) + "\n")
+            if not status["gpu_freed"]:
+                failure = (f"GPU memory still in use after {cell['name']}; the remaining cells "
+                           "would all fail to start, so the list stops here")
+                break
+    except BaseException:
+        failure = traceback.format_exc()
+        raise
+    finally:
+        _mark(args.out, "RUNNING", None)
+        if failure:
+            _mark(args.out, "FAILED", f"{args.cells.name} {_now()}\n{failure}\n")
+            print(f"FAILED: {failure}", flush=True)
+        else:
+            _mark(args.out, "DONE", f"{args.cells.name} {_now()}\n")
+    return 1 if failure else 0
 
 
 if __name__ == "__main__":

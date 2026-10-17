@@ -73,3 +73,55 @@ def test_validate_refuses(bad):
             "quantization": "bf16-none", "tool_stage": 10, **bad}
     with pytest.raises(SystemExit):
         run_cells.validate([cell])
+
+
+def _hf_cell(name, **extra):
+    return {"name": name, "prefix": "smoke-", "pass_type": "accuracy", "engine": "transformers_hf",
+            "quantization": "bf16-none", "tool_stage": 10, "n": 1, **extra}
+
+
+def _fake_run(monkeypatch, code, gpu_freed=True):
+    """transformers_hf needs no server; run_cell.py is replaced by a tiny Python program."""
+    import sys
+    monkeypatch.setattr(run_cells, "run_cell_command", lambda *a: [sys.executable, "-c", code])
+    monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: gpu_freed)
+
+
+def test_a_cell_past_its_time_limit_is_stopped_and_recorded(tmp_path, monkeypatch):
+    _fake_run(monkeypatch, "import time; time.sleep(60)")
+    status = run_cells.run_one(_hf_cell("slow", timeout_min=0.02), _VERSIONS, tmp_path)
+    assert status["outcome"] == "timeout" and status["gpu_freed"] is True
+
+
+def _main(tmp_path, cells):
+    (tmp_path / "versions.json").write_text(json.dumps(_VERSIONS))
+    path = tmp_path / "cells.json"
+    path.write_text(json.dumps(cells))
+    return run_cells.main([str(path), "--out", str(tmp_path)])
+
+
+def test_the_list_stops_with_failed_when_the_gpu_is_not_freed(tmp_path, monkeypatch):
+    _fake_run(monkeypatch, "pass", gpu_freed=False)
+    assert _main(tmp_path, [_hf_cell("a"), _hf_cell("b")]) == 1
+    lines = (tmp_path / "status.jsonl").read_text().splitlines()
+    assert [json.loads(l)["name"] for l in lines] == ["a"]          # b never started
+    assert "GPU memory still in use after a" in (tmp_path / "FAILED").read_text()
+    assert not (tmp_path / "RUNNING").exists() and not (tmp_path / "DONE").exists()
+
+
+def test_a_crash_of_the_runner_itself_leaves_failed_not_running(tmp_path, monkeypatch):
+    def boom(*a):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(run_cells, "run_one", boom)
+    with pytest.raises(RuntimeError):
+        _main(tmp_path, [_hf_cell("a")])
+    assert "boom" in (tmp_path / "FAILED").read_text()
+    assert not (tmp_path / "RUNNING").exists()
+
+
+def test_a_finished_list_leaves_done_and_clears_an_old_failed(tmp_path, monkeypatch):
+    (tmp_path / "FAILED").write_text("from an earlier list")
+    _fake_run(monkeypatch, "pass")
+    assert _main(tmp_path, [_hf_cell("a")]) == 0
+    assert (tmp_path / "DONE").exists() and not (tmp_path / "FAILED").exists()
+    assert json.loads((tmp_path / "status.jsonl").read_text())["outcome"] == "ok"

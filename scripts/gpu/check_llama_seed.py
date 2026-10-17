@@ -10,7 +10,6 @@ runs on llama.cpp must not be read as reproducible draw for draw.
 from __future__ import annotations
 import json
 import pathlib
-import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -25,7 +24,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     cell = {"engine": "llama_cpp", "quantization": "gguf-bf16"}
     with (out / "llama_seed_server.log").open("w") as log:
-        proc = subprocess.Popen(run_cells.server_command(cell), stdout=log, stderr=subprocess.STDOUT)
+        proc = run_cells._spawn(run_cells.server_command(cell), log)
     try:
         if not run_cells._wait_ready("llama_cpp", proc):
             raise SystemExit("llama-server did not become ready; see ~/out/checks/llama_seed_server.log")
