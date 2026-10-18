@@ -230,6 +230,14 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -
         status["finished_at"] = _now()
 
 
+def swap_devices(proc_swaps: pathlib.Path = pathlib.Path("/proc/swaps")) -> list[str]:
+    """Active swap areas. setup.sh uses swap only while it builds and converts;
+    a cell measured with swap on could be slowed by paging, so none may start."""
+    if not proc_swaps.exists():
+        return []
+    return [line.split()[0] for line in proc_swaps.read_text().splitlines()[1:] if line.strip()]
+
+
 def _mark(out: pathlib.Path, name: str, text: str | None) -> None:
     path = out / name
     if text is None:
@@ -256,6 +264,11 @@ def main(argv: list[str] | None = None) -> int:
     failure = None
     try:
         versions = json.loads((args.out / "versions.json").read_text())   # written by setup.sh
+        swaps = swap_devices()
+        if swaps:
+            failure = (f"swap is active ({', '.join(swaps)}); paging would distort the measurements. "
+                       "Turn it off (sudo swapoff -a) and start the list again")
+            cells = []
         for cell in cells:
             print(f"[{_now()}] {cell['name']}", flush=True)
             status = run_one(cell, versions, args.out)

@@ -51,6 +51,18 @@ step "system packages"
 sudo apt-get update -q
 sudo apt-get install -y -q build-essential cmake git rsync
 
+step "temporary swap for the CUDA build and the GGUF conversion"
+# 16 GB of RAM is about the size of the bf16 weights. Nothing here is expected to
+# need more, but a build or conversion killed for memory would cost the whole
+# setup again; with swap it only slows down. It is removed at the end of setup,
+# so no cell is ever measured with swap on (run_cells.py refuses to start otherwise).
+if ! grep -q /swapfile-setup /proc/swaps; then
+  sudo fallocate -l 16G /swapfile-setup
+  sudo chmod 600 /swapfile-setup
+  sudo mkswap /swapfile-setup >/dev/null
+  sudo swapon /swapfile-setup
+fi
+
 step "uv and the engine environment"
 if ! command -v uv >/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -109,6 +121,9 @@ EOF
 grep -c hermes "$OUT/checks/vllm_tool_call_parser.txt" >/dev/null && echo "hermes parser: listed" || echo "hermes parser: NOT FOUND -- check $OUT/checks/vllm_tool_call_parser.txt"
 step "does llama.cpp honour seed (runbook step 4c)"
 ~/venv/bin/python "$REPO/scripts/gpu/check_llama_seed.py" || echo "llama seed check failed -- see $OUT/checks/"
+step "removing the temporary swap"
+sudo swapoff /swapfile-setup
+sudo rm -f /swapfile-setup
 df -h / ~ > "$OUT/checks/disk.txt"; cat "$OUT/checks/disk.txt"
 step "setup done"
 touch "$OUT/SETUP_DONE"
