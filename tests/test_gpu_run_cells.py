@@ -16,6 +16,7 @@ _spec_rc = importlib.util.spec_from_file_location("run_cell", _ROOT / "scripts" 
 run_cell = importlib.util.module_from_spec(_spec_rc)
 _spec_rc.loader.exec_module(run_cell)
 
+_REAL_SWAP_DEVICES = run_cells.swap_devices   # kept before the autouse fixture replaces it
 _VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef"}
 
 
@@ -93,6 +94,12 @@ def test_a_cell_past_its_time_limit_is_stopped_and_recorded(tmp_path, monkeypatc
     assert status["outcome"] == "timeout" and status["gpu_freed"] is True
 
 
+@pytest.fixture(autouse=True)
+def _no_swap(monkeypatch):
+    # The CI runner has swap on; the guard is tested on its own below.
+    monkeypatch.setattr(run_cells, "swap_devices", lambda: [])
+
+
 def _main(tmp_path, cells):
     (tmp_path / "versions.json").write_text(json.dumps(_VERSIONS))
     path = tmp_path / "cells.json"
@@ -124,4 +131,24 @@ def test_a_finished_list_leaves_done_and_clears_an_old_failed(tmp_path, monkeypa
     _fake_run(monkeypatch, "pass")
     assert _main(tmp_path, [_hf_cell("a")]) == 0
     assert (tmp_path / "DONE").exists() and not (tmp_path / "FAILED").exists()
-    assert json.loads((tmp_path / "status.jsonl").read_text())["outcome"] == "ok"
+    status = json.loads((tmp_path / "status.jsonl").read_text())
+    assert status["outcome"] == "ok"
+    assert status["started_at"] <= status["run_started_at"] <= status["finished_at"]
+
+
+def test_swap_devices_reads_proc_swaps(tmp_path):
+    swaps = tmp_path / "swaps"
+    swaps.write_text("Filename\tType\tSize\tUsed\tPriority\n"
+                     "/swapfile-setup                         file\t\t16777212\t0\t\t-2\n")
+    assert _REAL_SWAP_DEVICES(swaps) == ["/swapfile-setup"]
+    swaps.write_text("Filename\tType\tSize\tUsed\tPriority\n")
+    assert _REAL_SWAP_DEVICES(swaps) == []
+    assert _REAL_SWAP_DEVICES(tmp_path / "absent") == []
+
+
+def test_no_cell_starts_while_swap_is_on(tmp_path, monkeypatch):
+    _fake_run(monkeypatch, "pass")
+    monkeypatch.setattr(run_cells, "swap_devices", lambda: ["/swapfile-setup"])
+    assert _main(tmp_path, [_hf_cell("a")]) == 1
+    assert "swap is active" in (tmp_path / "FAILED").read_text()
+    assert not (tmp_path / "status.jsonl").exists()

@@ -7,6 +7,7 @@ the real code path the GPU run will take.
 """
 from __future__ import annotations
 import importlib.util
+import itertools
 import json
 import pathlib
 
@@ -136,6 +137,13 @@ def fake_latency_backend(monkeypatch):
     monkeypatch.setattr(run_cell, "_build_backend", lambda args, sampling: (oracle, None))
     monkeypatch.setattr(run_cell, "_query_gpu", lambda: ("NVIDIA L4", 22.5))
     monkeypatch.setattr(run_cell, "_reset_vllm_prefix_cache", resets.append)
+    # The oracle answers instantly, so on the real clock each window's throughput is
+    # microsecond jitter and the stability rule fails at random. A clock that moves
+    # one second per reading makes every window identical.
+    ticks = itertools.count()
+    real = run_cell.run_latency_cell
+    monkeypatch.setattr(run_cell, "run_latency_cell",
+                        lambda *a, **k: real(*a, clock=lambda: float(next(ticks)), **k))
     return oracle, resets
 
 
