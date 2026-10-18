@@ -1,8 +1,13 @@
+locals {
+  instance_type = "g6.xlarge"
+}
+
 resource "aws_instance" "gpu" {
   ami           = data.aws_ssm_parameter.dlami.value
-  instance_type = "g6.xlarge"
-  # デフォルトVPCの最初のサブネット(AZ)を使う。g6.xlargeの在庫が無いAZだと
-  # InsufficientInstanceCapacityで失敗するので、その場合はindexを変えて再apply
+  instance_type = local.instance_type
+  # g6.xlargeを提供しているAZのサブネットのうち最初のものを使う(data.tf)。
+  # 提供はしていても在庫が無いとInsufficientInstanceCapacityで失敗するので、
+  # その場合はindexを変えて再apply
   subnet_id                   = element(data.aws_subnets.default.ids, 0)
   vpc_security_group_ids      = [aws_security_group.gpu_ssh.id]
   key_name                    = aws_key_pair.gpu.key_name
