@@ -68,6 +68,7 @@ def test_transformers_hf_needs_no_server_and_vllm_gets_its_startup_log(tmp_path)
     {"engine": "vllm", "quantization": "gguf-bf16"},          # and only llama_cpp runs it
     {"prefix": "dry-"},
     {"servr": {}},                                            # a typo must not be ignored
+    {"n": 1},                                                 # consistency needs two trials
 ])
 def test_validate_refuses(bad):
     cell = {"name": "x", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm",
@@ -78,7 +79,7 @@ def test_validate_refuses(bad):
 
 def _hf_cell(name, **extra):
     return {"name": name, "prefix": "smoke-", "pass_type": "accuracy", "engine": "transformers_hf",
-            "quantization": "bf16-none", "tool_stage": 10, "n": 1, **extra}
+            "quantization": "bf16-none", "tool_stage": 10, "n": 2, **extra}
 
 
 def _fake_run(monkeypatch, code, gpu_freed=True):
