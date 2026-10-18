@@ -83,6 +83,9 @@ def validate(cells: list[dict[str, Any]]) -> None:
             raise SystemExit(f"{c['name']}: unknown quantization {c['quantization']}")
         if (c["engine"] == "llama_cpp") != (c["quantization"] == "gguf-bf16"):
             raise SystemExit(f"{c['name']}: llama_cpp runs the GGUF, and only llama_cpp does")
+        # run_cell.py's default is 5; consistency needs at least two trials per case
+        if c["pass_type"] != "latency" and c.get("n", 5) < 2:
+            raise SystemExit(f"{c['name']}: accuracy passes need n >= 2")
 
 
 def server_command(cell: dict[str, Any]) -> list[str] | None:
@@ -255,6 +258,9 @@ def main(argv: list[str] | None = None) -> int:
 
     cells = json.loads(args.cells.read_text(encoding="utf-8"))
     validate(cells)
+    # Tools the engines shell out to (FlashInfer's JIT runs ninja) live in the
+    # venv, which a non-login SSH shell does not have on PATH.
+    os.environ["PATH"] = f"{VENV_BIN}{os.pathsep}{os.environ.get('PATH', '')}"
     if args.only:
         cells = [c for c in cells if c["name"] in set(args.only)]
 
