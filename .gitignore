@@ -15,3 +15,12 @@ override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
+
+# Python tooling
+.pytest_cache/
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# GPU run outputs collected by scripts/gpu/local.sh collect (summaries go in docs/)
+runs/
