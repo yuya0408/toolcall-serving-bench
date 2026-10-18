@@ -18,17 +18,40 @@ rm -f "$OUT/SETUP_DONE" "$OUT/SETUP_FAILED"
 # A marker local.sh collect stops on; the failing command is the last lines of ~/out/setup.log.
 trap 'echo "setup.sh line $LINENO: $BASH_COMMAND" > "$OUT/SETUP_FAILED"' ERR
 
+# Each step's start time, so a later apply can be planned within the 6-hour shutdown.
+step() { echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
+
+# Monitors for the whole life of the instance (they outlive this script; a rerun
+# does not start a second copy). status.jsonl's timestamps say which cell ran when.
+#   gpu.csv: VRAM, utilization, power, temperature and SM clock every 5 s -- a clock
+#            that drops under sustained load would make later latency cells look worse
+#   vmstat.log: host memory every 5 s -- 16 GB, about the size of the bf16 weights
+if ! pgrep -f "nvidia-smi --query-gpu=timestamp" >/dev/null; then
+  # Why the clock dropped, if it did; the field was renamed (clocks_event_reasons in
+  # newer drivers), and a name the driver rejects would stop the whole log.
+  GPU_FIELDS=timestamp,memory.used,memory.total,utilization.gpu,power.draw,temperature.gpu,clocks.sm
+  for reason in clocks_event_reasons.active clocks_throttle_reasons.active; do
+    if nvidia-smi --query-gpu="$GPU_FIELDS,$reason" --format=csv,noheader >/dev/null 2>&1; then
+      GPU_FIELDS="$GPU_FIELDS,$reason"; break
+    fi
+  done
+  nohup nvidia-smi --query-gpu="$GPU_FIELDS" --format=csv -l 5 > "$OUT/gpu.csv" 2>&1 < /dev/null &
+fi
+if ! pgrep -f "vmstat -t -S M 5" >/dev/null; then
+  nohup vmstat -t -S M 5 > "$OUT/vmstat.log" 2>&1 < /dev/null &
+fi
+
 export PATH="/usr/local/cuda/bin:$PATH"   # the DLAMI installs nvcc there, not always on PATH
-echo "== AMI prerequisites"
+step "AMI prerequisites"
 nvidia-smi | tee "$OUT/checks/nvidia-smi.txt"
 nvcc --version | tee "$OUT/checks/nvcc.txt"   # no nvcc -> no CUDA build of llama.cpp; stop here
 { shutdown --show 2>/dev/null || cat /run/systemd/shutdown/scheduled; } 2>&1 | tee "$OUT/checks/shutdown.txt" || true   # --show needs systemd >= 250
 
-echo "== system packages"
+step "system packages"
 sudo apt-get update -q
 sudo apt-get install -y -q build-essential cmake git rsync
 
-echo "== uv and the engine environment"
+step "uv and the engine environment"
 if ! command -v uv >/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
@@ -37,7 +60,7 @@ uv venv --allow-existing --python 3.12 ~/venv
 # vLLM brings torch and transformers; accelerate is for transformers_hf's device_map.
 uv pip install --python ~/venv/bin/python vllm accelerate -r "$REPO/requirements.txt" --torch-backend=auto
 
-echo "== llama.cpp (CUDA, L4 = sm_89)"
+step "llama.cpp (CUDA, L4 = sm_89)"
 if [ ! -d ~/llama.cpp ]; then
   git clone https://github.com/ggml-org/llama.cpp.git ~/llama.cpp
 fi
@@ -45,7 +68,7 @@ git -C ~/llama.cpp rev-parse HEAD > "$OUT/llama_cpp_commit.txt"   # never recove
 cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_CUDA_ARCHITECTURES=89
 cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" --target llama-server
 
-echo "== model weights (Hugging Face cache)"
+step "model weights (Hugging Face cache)"
 ~/venv/bin/python - <<'EOF' > "$OUT/checks/model_paths.txt"
 from huggingface_hub import snapshot_download
 for repo in ("Qwen/Qwen3-8B", "Qwen/Qwen3-8B-AWQ"):
@@ -53,7 +76,7 @@ for repo in ("Qwen/Qwen3-8B", "Qwen/Qwen3-8B-AWQ"):
 EOF
 cat "$OUT/checks/model_paths.txt"
 
-echo "== BF16 GGUF from the same safetensors (docs/engine-performance-plan.md)"
+step "BF16 GGUF from the same safetensors (docs/engine-performance-plan.md)"
 # A separate environment: the converter's requirements pin a CPU torch that
 # would replace vLLM's CUDA build.
 uv venv --allow-existing --python 3.12 ~/venv-convert
@@ -64,7 +87,7 @@ if [ ! -f "$MODELS/Qwen3-8B-bf16.gguf" ]; then
     --outtype bf16 --outfile "$MODELS/Qwen3-8B-bf16.gguf"
 fi
 
-echo "== version checks (runbook step 4)"
+step "version checks (runbook step 4)"
 ~/venv/bin/vllm serve --help=all 2>/dev/null | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || \
   ~/venv/bin/vllm serve --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || true
 ~/venv/bin/python - "$OUT" <<'EOF'
@@ -84,7 +107,8 @@ versions = {
 print(json.dumps(versions, indent=2))
 EOF
 grep -c hermes "$OUT/checks/vllm_tool_call_parser.txt" >/dev/null && echo "hermes parser: listed" || echo "hermes parser: NOT FOUND -- check $OUT/checks/vllm_tool_call_parser.txt"
-echo "== does llama.cpp honour seed (runbook step 4c)"
+step "does llama.cpp honour seed (runbook step 4c)"
 ~/venv/bin/python "$REPO/scripts/gpu/check_llama_seed.py" || echo "llama seed check failed -- see $OUT/checks/"
+df -h / ~ > "$OUT/checks/disk.txt"; cat "$OUT/checks/disk.txt"
+step "setup done"
 touch "$OUT/SETUP_DONE"
-echo "setup done"

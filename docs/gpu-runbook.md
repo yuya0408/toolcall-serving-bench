@@ -52,6 +52,18 @@ scripts/gpu/local.sh collect $IP &      # 別のターミナルで回し続け�
      みなさず、そのことを記事・結果に書く。
 6. 終わると`~/out/SETUP_DONE`ができる。
 
+あわせて、次を記録する（次のapplyの見積もりと、測定が壊れていないかの確認に使う）。
+
+- `setup.log`の各段階の見出しに開始時刻。準備は毎回やり直すので、2回目以降が6時間に収まるかの見積もりに使う。
+- `~/out/gpu.csv`：5秒ごとのGPUのメモリ・使用率・電力・温度・SMクロック（とクロックが下がった理由）。インスタンスが動いている間ずっと記録する。
+  長い負荷で熱や電力の上限によりクロックが下がると、後のセルほどlatencyが悪く出るので、セルの間の比較が壊れていないかを後から確かめる。
+- `~/out/vmstat.log`：5秒ごとのホストのメモリ。RAMは16GBで、bf16の重みとほぼ同じ大きさなので、落ちたときにメモリ不足かを切り分ける。
+- `~/out/checks/disk.txt`：準備の後のディスク使用量。
+- `status.jsonl`：セルごとに、サーバーの起動時刻・応答までの秒数（`server_ready_s`）・`run_cell.py`の開始時刻・終了時刻。
+  `gpu.csv`と`vmstat.log`のどの時間帯がどのセルかは、この時刻で対応を付ける。
+
+記録はどれも読み取りだけで、結果のファイル（manifest・生出力）や採点には触れない。
+
 進み具合は`scripts/gpu/local.sh status $IP`で見る（自動シャットダウンまでの時刻も出る）。
 
 ## 3. セルを回す
@@ -149,6 +161,9 @@ terraform -chdir=infra/gpu apply -var "ssh_allowed_cidr=$(curl -4 -s https://che
 ```
 terraform -chdir=infra/gpu destroy
 ```
+
+destroyの後、動いていた時間（インスタンスの`LaunchTime`から終了まで）×単価で費用を見積もり、翌日以降にCost Explorerの実額で確かめる。
+ADR-0003の費用の概算は、この実測で置き換える。
 
 [Source: User, GPUインスタンス起動手順書の整備, 2026-09-12]
 [Source: User, GPUでの実行を手動の操作なしでスクリプトにする, 2026-10-17]

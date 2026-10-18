@@ -124,4 +124,6 @@ def test_a_finished_list_leaves_done_and_clears_an_old_failed(tmp_path, monkeypa
     _fake_run(monkeypatch, "pass")
     assert _main(tmp_path, [_hf_cell("a")]) == 0
     assert (tmp_path / "DONE").exists() and not (tmp_path / "FAILED").exists()
-    assert json.loads((tmp_path / "status.jsonl").read_text())["outcome"] == "ok"
+    status = json.loads((tmp_path / "status.jsonl").read_text())
+    assert status["outcome"] == "ok"
+    assert status["started_at"] <= status["run_started_at"] <= status["finished_at"]

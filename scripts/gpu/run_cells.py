@@ -200,11 +200,17 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -
             (cell_dir / "server_command.txt").write_text(" ".join(server_cmd) + "\n")
             with server_log.open("w") as log:
                 server = _spawn(server_cmd, log, env)
-            if not _wait_ready(cell["engine"], server):
+            started = time.monotonic()
+            status["server_started_at"] = _now()
+            ready = _wait_ready(cell["engine"], server)
+            # What restarting the server for every cell costs (docs/gpu-runbook.md).
+            status["server_ready_s"] = round(time.monotonic() - started, 1)
+            if not ready:
                 status.update(outcome="server_not_ready", returncode=server.poll())
                 return status
         cmd = run_cell_command(cell, engine_version(cell["engine"], versions), cell_dir, server_log)
         (cell_dir / "run_cell_command.txt").write_text(" ".join(cmd) + "\n")
+        status["run_started_at"] = _now()
         with (cell_dir / "run_cell.log").open("w") as log:
             runner = _spawn(cmd, log)
         try:
