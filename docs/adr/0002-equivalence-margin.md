@@ -120,6 +120,29 @@ Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、�
 **ケース数そのものの問題**：今のケースセットは14件で、どの案でも等価性を言うには少なくとも約140件が要る。
 同じ問題は、精度パスのエンジン間の比較にも当てはまる（こちらは判定方法自体がまだ決まっていない）。ケースをどう増やすかは、別に決める。
 
+## 追記（2026-10-19）：第3パスはvLLM AWQだけで行う
+
+1回目のapply（疎通）の前に、セル一覧へllama.cpp（GGUF bf16）の負荷時の精度のセルを足していた。スキーマは第3パスをvLLM AWQに限っていたので、
+manifestの検証で拒否された（`docs/gpu-smoke-2026-10-18.md`のD3）。スキーマを広げるか、セルを外すかを検討し、**セルを外し、第3パスはvLLM AWQだけ**とした。
+
+- **第3パスの問いは「並行化のために選んだ構成が、精度を犠牲にしていないか」**（計画書「新しい問い」）。業務で並行稼働させる用途はvLLMが中心なので、
+  問いに当てはまるのはvLLMの構成になる。Dockerは「Prototype locally with llama.cpp. Scale to production with vLLM.」と役割を分けている。
+  llama.cppを業務で並行稼働させる例もある（Hugging Face Inference Endpointsは、GGUFのモデルにllama.cppのコンテナを選び、同時リクエスト数を設定できる）が、
+  文書の設定例は4リクエスト×1,024トークンと小さい。
+- **「並行数が高いならvLLM」という前提は、出どころだけに頼らず、自分のデータでも確かめる。** bf16の層で両エンジンが載る並行数（ADR-0003の全エンジン共通の1/2/4/8）の
+  latencyパスで、差が出始めるかを見る。差が出始めれば前提の一部を裏付けられ、出なければそれも結果として報告する。
+- **検討した案**
+
+  | 案 | 採否 | 理由 |
+  | --- | --- | --- |
+  | スキーマの限定を広げて、llama.cpp（GGUF bf16）を入れる | 却下 | llama.cppの現実的な使い方（並行数が小さい）は、bf16の層の低い並行数の比較で扱える。パイロットが約1.5〜2時間延びる（推定） |
+  | パイロットの後に決める | 却下 | パイロットで出るvLLMの結果は、llama.cppを入れるかの判断材料にほとんどならず、待っても決めやすくならない |
+  | llama.cppのGGUF Q4_K_Mを4bitの層に戻し、第3パスを両エンジンで回す | 却下 | 第3パスはエンジンの中で比べるので、量子化の違いによる交絡は入らない。しかし4bitの層でエンジン同士をlatencyで比べることになり、2026-08-30に避けた交絡（エンジンの違いか、Q4_K_MとAWQの違いか）を抱える。並行稼働の用途がvLLM中心である以上、その代償に見合わない |
+  | 比べた後に、勝った方だけで第3パスを回す | 却下 | 第3パスは同じ構成の並行数1と16を比べるもので、比較の結果を待つ必要が無い。また並行数16で比べる相手が、bf16の層では載らず、4bitの層にはいない |
+
+- **限界**：第3パスの結論（並行化しても精度が落ちない）は、vLLM AWQについてしか言えない。
+[Source: User, 第3パスにllama.cppを入れるかの検討, 2026-10-19]
+
 ## 参考
 
 - Qwen3 Technical Report, arXiv 2505.09388, Table 14・16・18 — https://arxiv.org/abs/2505.09388
@@ -133,4 +156,6 @@ Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、�
 - （追記）Schuirmann, A comparison of the Two One-Sided Tests Procedure and the Power Approach for assessing the equivalence of average bioavailability, J Pharmacokinet Biopharm 15, 1987（原典は未確認。TOSTと区間による判定の関係は arXiv 2306.06698 で確認）
 - （追記）Obuchowski, On the comparison of correlated proportions for clustered data, Statistics in Medicine 17(13), 1998、Yang, Sun & Hardin, A note on the tests for clustered matched-pair binary data, Biometrical Journal 52(5), 2010（式はRパッケージ clust.bin.pair の実装で確認） — https://cran.r-project.org/web/packages/clust.bin.pair/readme/README.html
 - （追記）Yang, Sun & Hardin, Testing non-inferiority for clustered matched-pair binary data in diagnostic medicine, CSDA 56(5), 2012（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v56y2012i5p1301-1320.html
+- （追記2026-10-19）Docker, Docker Model Runner Integrates vLLM for High-Throughput Inference — https://www.docker.com/blog/docker-model-runner-integrates-vllm/
+- （追記2026-10-19）Hugging Face, Inference Endpoints: llama.cpp — https://huggingface.co/docs/inference-endpoints/en/engines/llama_cpp
 - （追記）Nam, Power and sample size requirements for non-inferiority in studies comparing two matched proportions where the events are correlated, CSDA 55(10), 2011（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v55y2011i10p2880-2887.html
