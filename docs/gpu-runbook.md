@@ -93,9 +93,22 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 ## 3. セルを回す
 
 ```
-scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke.json     # 1回目のapply：疎通
-scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json     # 2回目のapply：パイロット
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke.json            # 1回目のapply：疎通
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/capacity-smoke.json   # 2回目のapply：まず容量の判定の動作確認（約10分）
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json            # 2回目のapply：確認が通ったらパイロット
 ```
+
+**2回目のapplyの順番**：容量の判定（ADR-0005）はGPUの上でまだ一度も動かしていないので、パイロットの前に`capacity-smoke.json`
+（`smoke.json`の並行数16の2セル、20件×2試行）だけを回す。`collect`で回収し、次の3点を確かめてからパイロットに進む。
+1つでも外れたら、パイロットには進まずdestroyして手元で直す。
+
+1. 2セルとも`ok`。`~/out/<セル名>/capacity_check.json`の`capacity.tokens`が読めている（vLLM AWQは約99,552、llama.cppは49,664）。
+2. 2セルのmanifestに`capacity_check`があり、`post_check.ok`が`true`。vLLMは`preemptions`が0、`queue_time.count`が0でない。
+3. llama.cppの`server_command.txt`が`--ctx-size 49664 --parallel 16 --kv-unified --fit off`。
+
+所要時間の見込み（推定）：準備約35分＋この確認約10分＋パイロット約4.9時間で、6時間の自動シャットダウンまで約20分しか残らない。
+収まらなければllama.cppの第3パスが次のapplyに回る（一覧の最後に置いてある）。ビルド済みのllama.cppを使い回して準備を短くする案は、
+今回のapplyで作ったバイナリを回収して初めて使えるので、次のapply以降の話になる。
 
 `run_cells.py`は、一覧のセルごとにエンジンのサーバーを起動し、応答するまで待ち、`scripts/run_cell.py`を呼んで、サーバーを止める。
 
