@@ -1,0 +1,4 @@
+[
+  {"name": "third-llama-gguf-c1", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "timeout_min": 180},
+  {"name": "third-llama-gguf-c16", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0}
+]
