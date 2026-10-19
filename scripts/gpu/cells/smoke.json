@@ -1,10 +1,10 @@
 [
   {"name": "acc-vllm-bf16", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "n": 2, "max_cases": 20, "server": {"max_model_len": 8192}},
   {"name": "acc-vllm-awq", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "n": 2, "max_cases": 20, "server": {"max_model_len": 8192}},
-  {"name": "acc-llama-gguf", "prefix": "smoke-", "pass_type": "accuracy", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "n": 2, "max_cases": 20, "server": {"ctx_size": 8192, "parallel": 1}},
+  {"name": "acc-llama-gguf", "prefix": "smoke-", "pass_type": "accuracy", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "n": 2, "max_cases": 20},
   {"name": "acc-hf-bf16", "prefix": "smoke-", "pass_type": "accuracy", "engine": "transformers_hf", "quantization": "bf16-none", "tool_stage": 10, "n": 2, "max_cases": 20},
   {"name": "load-vllm-awq-c16", "prefix": "smoke-", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n": 2, "max_cases": 20, "server": {"max_model_len": 8192}},
-  {"name": "load-llama-gguf-c16", "prefix": "smoke-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 2, "max_cases": 20, "server": {"ctx_size": 40960, "parallel": 16, "kv_unified": true}},
+  {"name": "load-llama-gguf-c16", "prefix": "smoke-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 2, "max_cases": 20},
   {"name": "lat-vllm-bf16-c1", "prefix": "smoke-", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 1, "n_requests": 30, "max_cases": 20, "server": {"max_model_len": 8192}},
-  {"name": "lat-llama-gguf-c1", "prefix": "smoke-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 30, "max_cases": 20, "server": {"ctx_size": 8192, "parallel": 1}}
+  {"name": "lat-llama-gguf-c1", "prefix": "smoke-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 30, "max_cases": 20}
 ]

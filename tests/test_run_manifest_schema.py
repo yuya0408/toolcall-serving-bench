@@ -103,7 +103,21 @@ def test_latency_results_without_prefix_cache_are_valid():
     _validate(manifest)
 
 
-def test_latency_manifest_requires_concurrency_and_accepts_vllm_diagnostics():
+def _capacity_check():
+    return {
+    "engine": "vllm",
+    "capacity": {"unit": "block", "unit_tokens": 16, "units": 6222, "tokens": 99552},
+    "required": {"concurrency": 16, "per_request_tokens": 3103, "margin_units": 1, "tokens": 49920},
+    "max_prompt_tokens_planned": 2591,
+    "fits": True,
+    "restarts": 0,
+    "startup_log_max_concurrency": 12.15,
+    "post_check": {"ok": True, "problems": [], "max_prompt_tokens_observed": 2590, "preemptions": 0,
+                   "queue_time": {"sum_s": 1.5, "count": 2000, "buckets": {"0.3": 1990, "+Inf": 2000}}},
+}
+
+
+def test_latency_manifest_requires_concurrency_and_accepts_capacity_check():
     manifest = {
         "run_id": "run-2",
         "created_at": "2026-09-10T00:00:00Z",
@@ -122,7 +136,8 @@ def test_latency_manifest_requires_concurrency_and_accepts_vllm_diagnostics():
         "hardware": _HARDWARE,
         "results": {
             **_latency_results(),
-            "vllm_diagnostics": {"gpu_blocks_reported": 1000, "observed_max_concurrency": 8},
+            "capacity_check": {**_capacity_check(), "required": {**_capacity_check()["required"], "concurrency": 4}},
+            "reference_accuracy": {"n": 299, "selection_mean": 0.9, "arg_exact_mean": 0.8},
         },
     }
     _validate(manifest)
@@ -170,7 +185,7 @@ def _base_accuracy_under_load_manifest():
         "repetition": {"n": 5, "seed_base": 0},
         "results": {
             **_ACCURACY_RESULTS,
-            "vllm_diagnostics": {"gpu_blocks_reported": 5000, "observed_max_concurrency": 20},
+            "capacity_check": _capacity_check(),
         },
     }
 
@@ -179,16 +194,22 @@ def test_accuracy_under_load_manifest_is_valid():
     _validate(_base_accuracy_under_load_manifest())
 
 
-def test_accuracy_under_load_rejects_non_vllm_engine():
+def test_accuracy_under_load_accepts_llama_cpp():
+    # ADR-0002 addendum 2026-10-19: every configuration that holds concurrency 16.
     manifest = _base_accuracy_under_load_manifest()
     manifest["cell"]["engine"] = "llama_cpp"
-    with pytest.raises(jsonschema.ValidationError):
-        _validate(manifest)
+    manifest["cell"]["quantization"] = "gguf-bf16"
+    manifest["results"]["capacity_check"] = {
+        **_capacity_check(), "engine": "llama_cpp",
+        "capacity": {"unit": "token", "unit_tokens": 1, "units": 49920, "tokens": 49920, "slots": 16},
+        "post_check": {"ok": True, "problems": [], "max_prompt_tokens_observed": 2586, "length_finished": 0},
+    }
+    _validate(manifest)
 
 
-def test_accuracy_under_load_rejects_non_awq_quantization():
+def test_accuracy_under_load_rejects_transformers_hf():
     manifest = _base_accuracy_under_load_manifest()
-    manifest["cell"]["quantization"] = "fp16-none"
+    manifest["cell"]["engine"] = "transformers_hf"
     with pytest.raises(jsonschema.ValidationError):
         _validate(manifest)
 
@@ -200,9 +221,16 @@ def test_accuracy_under_load_requires_concurrency():
         _validate(manifest)
 
 
-def test_vllm_diagnostics_rejects_partial_fields():
+def test_capacity_check_rejects_missing_post_check():
     manifest = _base_accuracy_under_load_manifest()
-    manifest["results"]["vllm_diagnostics"] = {"gpu_blocks_reported": 5000}
+    del manifest["results"]["capacity_check"]["post_check"]
+    with pytest.raises(jsonschema.ValidationError):
+        _validate(manifest)
+
+
+def test_capacity_check_rejects_a_failed_pre_check():
+    manifest = _base_accuracy_under_load_manifest()
+    manifest["results"]["capacity_check"]["fits"] = False
     with pytest.raises(jsonschema.ValidationError):
         _validate(manifest)
 
@@ -210,11 +238,11 @@ def test_vllm_diagnostics_rejects_partial_fields():
 if __name__ == "__main__":
     test_plain_accuracy_manifest_is_valid()
     test_plain_accuracy_manifest_rejects_concurrency()
-    test_latency_manifest_requires_concurrency_and_accepts_vllm_diagnostics()
+    test_latency_manifest_requires_concurrency_and_accepts_capacity_check()
     test_latency_manifest_without_concurrency_is_invalid()
     test_accuracy_under_load_manifest_is_valid()
-    test_accuracy_under_load_rejects_non_vllm_engine()
-    test_accuracy_under_load_rejects_non_awq_quantization()
+    test_accuracy_under_load_accepts_llama_cpp()
+    test_accuracy_under_load_rejects_transformers_hf()
     test_accuracy_under_load_requires_concurrency()
-    test_vllm_diagnostics_rejects_partial_fields()
+    test_capacity_check_rejects_missing_post_check()
     print("run_manifest schema guards ok")

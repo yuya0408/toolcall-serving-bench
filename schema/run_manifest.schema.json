@@ -164,14 +164,25 @@
                   "hit_token_ratio": { "type": "number", "minimum": 0, "maximum": 1 }
                 }
               },
-              "vllm_diagnostics": { "$ref": "#/$defs/vllm_diagnostics" }
+              "capacity_check": { "$ref": "#/$defs/capacity_check" },
+              "reference_accuracy": {
+                "type": "object",
+                "required": ["n", "selection_mean", "arg_exact_mean"],
+                "additionalProperties": false,
+                "description": "The measured requests' tool calls scored like the accuracy pass, as a reference only (docs/adr/0003 J): sampled at the cell's temperature with a request id appended to each query, so never used for a verdict.",
+                "properties": {
+                  "n": { "type": "integer", "minimum": 0 },
+                  "selection_mean": { "type": ["number", "null"] },
+                  "arg_exact_mean": { "type": ["number", "null"] }
+                }
+              }
             }
           }
         }
       }
     },
     {
-      "$comment": "The concurrency-vs-correctness probe (docs/engine-performance-plan.md > 並行負荷下でのツールコーリング精度維持). Scoped to vllm + awq-4bit (layer 2): bf16 (layer 1) leaves too little VRAM headroom under non-shared-prefix conditions to reach a meaningful high-concurrency point, see docs 'KVキャッシュブロッカーの解消'. Both the concurrency=1 control point and the high-concurrency point for this probe use this same pass_type, distinguished from each other only by cell.concurrency -- never pooled with plain accuracy's implicit concurrency=1 baseline.",
+      "$comment": "The concurrency-vs-correctness probe (the third pass, docs/adr/0002). Run on every configuration that holds concurrency 16 by the capacity check (docs/adr/0005), not on a named engine (ADR-0002 addendum 2026-10-19); transformers_hf has no concurrent serving. Both the concurrency=1 control point and the high-concurrency point use this pass_type, distinguished only by cell.concurrency -- never pooled with plain accuracy's implicit concurrency=1 baseline.",
       "if": { "properties": { "pass_type": { "const": "accuracy_under_load" } } },
       "then": {
         "required": ["repetition"],
@@ -179,13 +190,12 @@
           "cell": {
             "required": ["tool_stage", "concurrency"],
             "properties": {
-              "engine": { "const": "vllm" },
-              "quantization": { "const": "awq-4bit" }
+              "engine": { "enum": ["vllm", "llama_cpp"] }
             }
           },
           "results": {
             "allOf": [{ "$ref": "#/$defs/accuracy_results_base" }],
-            "properties": { "vllm_diagnostics": { "$ref": "#/$defs/vllm_diagnostics" } },
+            "properties": { "capacity_check": { "$ref": "#/$defs/capacity_check" } },
             "unevaluatedProperties": false
           }
         }
@@ -194,7 +204,7 @@
   ],
   "$defs": {
     "accuracy_results_base": {
-      "description": "Shared by pass_type accuracy and accuracy_under_load -- both are eval_bench.repetition.aggregate_repeated output, differing only in which cell fields are legal (see the allOf branches above) and in whether vllm_diagnostics is a defined property.",
+      "description": "Shared by pass_type accuracy and accuracy_under_load -- both are eval_bench.repetition.aggregate_repeated output, differing only in which cell fields are legal (see the allOf branches above) and in whether capacity_check is a defined property.",
       "type": "object",
       "required": ["stage_size", "n_cases", "n_trials_per_case", "selection_mean", "selection_ci95", "arg_exact_mean", "arg_semantic_mean", "consistency"],
       "properties": {
@@ -233,14 +243,64 @@
         "p99": { "type": "number" }
       }
     },
-    "vllm_diagnostics": {
+    "capacity_check": {
       "type": "object",
-      "description": "Populated whenever cell.engine == 'vllm' and cell.concurrency > 1. vLLM does not OOM when KV capacity is exceeded -- it queues excess requests -- so a concurrency>1 manifest without this cannot be trusted to reflect true concurrent batching rather than serialized queueing delay reported as if it were throughput (docs/engine-performance-plan.md 'KVキャッシュブロッカーの解消'). Not schema-required (transformers_hf/llama_cpp never populate it, and it would be vacuous at concurrency=1) -- the execution harness is responsible for refusing to write a concurrency>1 vllm manifest without it, and for discarding a run where observed_max_concurrency < cell.concurrency.",
-      "required": ["gpu_blocks_reported", "observed_max_concurrency"],
+      "description": "Whether the KV cache held every request at once (docs/adr/0005). Required by the harness (eval_bench/runner.py) for every concurrency>1 cell of a served engine; the schema cannot compare its own fields, so required.tokens <= capacity.tokens is enforced there. A cell failing the pre-check never runs (recorded unsupported); a failed post-check is written with post_check.ok=false and its numbers are not used for a verdict.",
+      "required": ["engine", "capacity", "required", "max_prompt_tokens_planned", "fits", "restarts", "post_check"],
       "additionalProperties": false,
       "properties": {
-        "gpu_blocks_reported": { "type": "integer", "description": "vLLM startup log's '# GPU blocks', for audit." },
-        "observed_max_concurrency": { "type": "number", "description": "vLLM startup log's 'Maximum concurrency for N tokens per request', evaluated at this cell's tool_stage context length. Must be >= cell.concurrency or the run measured queueing delay, not concurrent batching, and must be discarded rather than reported." }
+        "engine": { "enum": ["vllm", "llama_cpp"] },
+        "capacity": {
+          "type": "object",
+          "required": ["unit", "unit_tokens", "units", "tokens"],
+          "additionalProperties": false,
+          "description": "vLLM: /metrics vllm:cache_config_info (num_gpu_blocks x block_size). llama.cpp: /props n_ctx with --kv-unified.",
+          "properties": {
+            "unit": { "enum": ["block", "token"] },
+            "unit_tokens": { "type": "integer", "minimum": 1 },
+            "units": { "type": "integer", "minimum": 0 },
+            "tokens": { "type": "integer", "minimum": 0 },
+            "slots": { "type": ["integer", "null"] }
+          }
+        },
+        "required": {
+          "type": "object",
+          "required": ["concurrency", "per_request_tokens", "margin_units", "tokens"],
+          "additionalProperties": false,
+          "properties": {
+            "concurrency": { "type": "integer", "minimum": 2 },
+            "per_request_tokens": { "type": "integer", "description": "Longest prompt (schema/prompt_budget.json) + max_tokens." },
+            "margin_units": { "type": "integer", "minimum": 0 },
+            "tokens": { "type": "integer", "description": "concurrency x (per_request_tokens + margin) rounded up to whole units." }
+          }
+        },
+        "max_prompt_tokens_planned": { "type": "integer" },
+        "fits": { "type": "boolean", "const": true },
+        "restarts": { "type": "integer", "minimum": 0, "maximum": 1, "description": "vLLM only: restarts after a startup came out short of the requirement." },
+        "startup_log_max_concurrency": { "type": ["number", "null"], "description": "vLLM startup log's 'Maximum concurrency', for cross-checking only." },
+        "post_check": {
+          "type": "object",
+          "required": ["ok", "problems", "max_prompt_tokens_observed"],
+          "additionalProperties": false,
+          "properties": {
+            "ok": { "type": "boolean" },
+            "problems": { "type": "array", "items": { "type": "string" } },
+            "max_prompt_tokens_observed": { "type": ["integer", "null"] },
+            "preemptions": { "type": "integer", "minimum": 0, "description": "vLLM: vllm:num_preemptions delta over the cell." },
+            "queue_time": {
+              "type": "object",
+              "description": "vLLM: vllm:request_queue_time_seconds deltas, recorded only (not a discard condition, docs/adr/0005 3).",
+              "required": ["sum_s", "count", "buckets"],
+              "additionalProperties": false,
+              "properties": {
+                "sum_s": { "type": "number" },
+                "count": { "type": "integer" },
+                "buckets": { "type": "object", "additionalProperties": { "type": "integer" } }
+              }
+            },
+            "length_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: responses that stopped at the length limit." }
+          }
+        }
       }
     }
   }

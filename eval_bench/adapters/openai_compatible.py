@@ -16,6 +16,10 @@ from typing import Any, Optional
 from eval_bench.adapters.base import ModelAdapter
 from eval_bench.latency import TimedResult
 
+# Reserved keys generate() adds to the returned message JSON.
+USAGE_KEY = "_usage"
+FINISH_REASON_KEY = "_finish_reason"
+
 
 class OpenAICompatibleChatAdapter(ModelAdapter):
     name = "openai-compatible-chat"
@@ -61,7 +65,14 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
             f"{self.base_url}/v1/chat/completions", json=payload, timeout=self.timeout,
         )
         response.raise_for_status()
-        message = response.json()["choices"][0]["message"]
+        body = response.json()
+        choice = body["choices"][0]
+        message = dict(choice["message"])
+        # Kept beside the message for the raw-output log (docs/adr/0005 3: the
+        # observed prompt length and length-limited responses). The decoder
+        # reads only tool_calls, so these keys never reach scoring.
+        message[USAGE_KEY] = body.get("usage")
+        message[FINISH_REASON_KEY] = choice.get("finish_reason")
         return json.dumps(message)
 
 
@@ -85,6 +96,8 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
         timings: Optional[dict[str, Any]] = None
         content: list[str] = []
         reasoning: list[str] = []
+        tool_calls: dict[int, dict[str, str]] = {}
+        finish_reason: Optional[str] = None
 
         def timed_out() -> TimedResult:
             return TimedResult(status="timeout", total_s=time.perf_counter() - started,
@@ -122,6 +135,14 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
                         if first_delta is None and (delta.get("content") or delta.get("tool_calls")
                                                     or delta.get("reasoning_content")):
                             first_delta = now - started
+                        # Tool calls stream as fragments keyed by index: the name
+                        # once, the arguments string in pieces (OpenAI's format).
+                        for frag in delta.get("tool_calls") or []:
+                            call = tool_calls.setdefault(frag.get("index", 0), {"name": "", "arguments": ""})
+                            fn = frag.get("function") or {}
+                            call["name"] += fn.get("name") or ""
+                            call["arguments"] += fn.get("arguments") or ""
+                        finish_reason = choices[0].get("finish_reason") or finish_reason
                     usage = event.get("usage") or usage
                     timings = event.get("timings") or timings
         except requests.exceptions.Timeout:
@@ -142,6 +163,7 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
             output_tokens=usage["completion_tokens"], prompt_tokens=usage.get("prompt_tokens"),
             cached_tokens=self.cached_tokens(usage, timings),
             content="".join(content), reasoning="".join(reasoning),
+            tool_calls=[tool_calls[i] for i in sorted(tool_calls)], finish_reason=finish_reason,
         )
 
     def cached_tokens(self, usage: dict[str, Any], timings: Optional[dict[str, Any]]) -> int:

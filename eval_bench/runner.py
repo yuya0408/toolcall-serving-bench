@@ -35,67 +35,35 @@ _ORIGINAL_40_TOOL_NAMES = frozenset(load_tools().keys())
 
 _COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{7,40}$")
 
-_VLLM_GPU_BLOCKS_RE = re.compile(r"#\s*GPU blocks:\s*(\d+)")
-_VLLM_MAX_CONCURRENCY_RE = re.compile(r"[Mm]aximum concurrency for \d+ tokens per request:\s*([\d.]+)")
+def _require_capacity_check_if_needed(cell: dict[str, Any], results: dict[str, Any]) -> None:
+    """A concurrency>1 cell is only a measurement of that concurrency if the
+    engine's KV cache held every request at once (docs/adr/0005). The
+    pre-check runs before the cell (scripts/gpu/run_cells.py) and a cell that
+    fails it never runs, so a manifest reaching here must carry a passed
+    pre-check and a post-check. The schema cannot compare two of its own
+    fields, so the inequality is enforced here, the harness's job.
 
-
-def parse_vllm_diagnostics(startup_log: str) -> dict[str, Any]:
-    """Best-effort parse of vLLM's startup log for '# GPU blocks' and
-    'Maximum concurrency for N tokens per request'.
-
-    The exact wording is UNVERIFIED against a real vLLM version -- docs/
-    engine-performance-plan.md flags both the version floor and this log
-    format as boot-time confirmation items. If these regexes don't match
-    the real log, fix them here; _require_vllm_diagnostics_if_needed below
-    (the actual safety guard) doesn't change either way -- it only cares
-    about the parsed dict's shape, not how it was produced.
+    A failed post-check is still written (the raw data is kept), flagged
+    `post_check.ok = false`: ADR-0005 3 says such a cell's numbers are not
+    used for a verdict, not that they are thrown away.
     """
-    blocks_match = _VLLM_GPU_BLOCKS_RE.search(startup_log)
-    concurrency_match = _VLLM_MAX_CONCURRENCY_RE.search(startup_log)
-    if blocks_match is None or concurrency_match is None:
-        raise ValueError(
-            "could not find '# GPU blocks' and/or 'Maximum concurrency for N tokens "
-            "per request' in the given vLLM startup log -- verify these regexes against "
-            "the actual log wording for the vLLM version running (unverified, see "
-            "docs/engine-performance-plan.md's 'depends on vllm serve --help at boot')"
-        )
-    return {
-        "gpu_blocks_reported": int(blocks_match.group(1)),
-        "observed_max_concurrency": float(concurrency_match.group(1)),
-    }
-
-
-def _require_vllm_diagnostics_if_needed(cell: dict[str, Any], results: dict[str, Any]) -> None:
-    """vLLM does not OOM when KV capacity is exceeded -- it queues excess
-    requests -- so a concurrency>1 vllm manifest without vllm_diagnostics,
-    or with observed_max_concurrency below what was requested, cannot be
-    trusted to reflect true concurrent batching rather than serialized
-    queueing delay reported as throughput/accuracy-under-load
-    (schema/run_manifest.schema.json's vllm_diagnostics description;
-    docs/engine-performance-plan.md's '要実装'). Refuses to build the
-    manifest rather than persisting data that can't be trusted -- this is
-    "the execution harness['s] responsib[ility]" the schema explicitly
-    delegates, since the schema itself can't check an inequality between
-    two of its own fields.
-    """
-    if cell.get("engine") != "vllm" or cell.get("concurrency", 1) <= 1:
+    if cell.get("concurrency", 1) <= 1 or cell.get("engine") == "transformers_hf":
         return
-    diagnostics = results.get("vllm_diagnostics")
-    if diagnostics is None:
+    check = results.get("capacity_check")
+    if check is None:
         raise ValueError(
-            f"cell.concurrency={cell['concurrency']} with engine=vllm requires "
-            "results['vllm_diagnostics'] (gpu_blocks_reported, observed_max_concurrency) -- "
-            "refusing to write a manifest that can't be trusted to reflect true concurrent "
-            "batching rather than serialized queueing delay"
-        )
-    observed = diagnostics["observed_max_concurrency"]
-    requested = cell["concurrency"]
-    if observed < requested:
+            f"cell.concurrency={cell['concurrency']} requires results['capacity_check'] "
+            "(docs/adr/0005): refusing to write a manifest that cannot show the KV cache "
+            "held every request at once")
+    if not check["fits"] or check["required"]["tokens"] > check["capacity"]["tokens"]:
         raise ValueError(
-            f"observed_max_concurrency ({observed}) < cell.concurrency ({requested}): "
-            "this run measured queueing delay, not concurrent batching -- discard it, "
-            "do not report it (docs/engine-performance-plan.md '要実装')"
-        )
+            f"capacity pre-check failed (required {check['required']['tokens']} > capacity "
+            f"{check['capacity']['tokens']} tokens): this cell should have been recorded "
+            "unsupported, not run")
+    if check["required"]["concurrency"] != cell["concurrency"]:
+        raise ValueError("capacity_check was computed for a different concurrency than the cell's")
+    if "post_check" not in check:
+        raise ValueError("capacity_check has no post_check (docs/adr/0005 3)")
 
 
 def validate_cell_invariants(pass_type: str, cell: dict[str, Any],
@@ -193,7 +161,7 @@ def build_manifest(
     if repetition is not None:
         manifest["repetition"] = repetition
 
-    _require_vllm_diagnostics_if_needed(cell, results)
+    _require_capacity_check_if_needed(cell, results)
 
     # Normalize to what will actually be written/read as JSON (e.g.
     # aggregate_repeated's selection_ci95 is a Python tuple; jsonschema's

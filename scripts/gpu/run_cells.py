@@ -10,13 +10,21 @@ server: run_cell.py loads the model in-process.
 Every cell gets a fresh server, for every engine. llama.cpp has no API that
 empties its prompt cache (docs/adr/0003), so it must be restarted between
 cells; doing the same for vLLM costs a minute or two per cell and gives each
-cell its own startup log, which the queueing guard reads
-(eval_bench/runner.py parse_vllm_diagnostics). run_cell.py still resets
-vLLM's prefix cache before a latency cell.
+cell its own startup log. run_cell.py still resets vLLM's prefix cache before
+a latency cell.
+
+Memory is sized to the requirement, never searched (docs/adr/0005 1): vLLM
+keeps its default --gpu-memory-utilization; llama.cpp gets
+--ctx-size = concurrency x the longest request (schema/prompt_budget.json +
+max_tokens), --kv-unified and --fit off. Before a concurrency>1 cell runs, the
+capacity pre-check reads what the server actually holds (vLLM /metrics,
+llama.cpp /props); a vLLM startup that comes out short is restarted once
+(some first startups on a fresh instance came out exactly 1 GiB short), and a
+cell that still does not fit is recorded unsupported without running.
 
 Writes to --out (default ~/out), which scripts/gpu/local.sh collect copies
 back while the run goes on:
-  <cell name>/            the cell's manifest, raw log and server log
+  <cell name>/            the cell's manifest, raw log, server log and capacity_check.json
   status.jsonl            one line per finished cell: outcome, exit code, timing
   RUNNING / DONE / FAILED markers; DONE names the cell list that finished,
                           FAILED says why the list stopped early
@@ -41,6 +49,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 _ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_ROOT))
+
+from eval_bench import capacity  # noqa: E402
 HOME = pathlib.Path.home()
 VENV_BIN = HOME / "venv" / "bin"
 LLAMA_SERVER = HOME / "llama.cpp" / "build" / "bin" / "llama-server"
@@ -55,6 +66,11 @@ MODELS = {   # quantization -> the model id the manifest records and vLLM serves
 # Arguments a cell may pass through to run_cell.py, as written in the cell list.
 RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurrency", "n",
                  "n_requests", "temperature", "max_cases", "seed_base", "request_timeout")
+# run_cell.py's --max-tokens default: the requirement's output half (ADR-0005 1).
+MAX_TOKENS = 512
+# Server settings a cell may set. llama.cpp's context, slots and unified KV are
+# derived from the cell's concurrency (llama_server_settings), never written by hand.
+SERVER_KEYS = {"vllm": {"max_model_len"}, "llama_cpp": set()}
 # A cell's wall-clock limit unless it sets timeout_min: catches a hung server or
 # cell before it holds the list until the auto-shutdown. Not a measured
 # duration -- set timeout_min on cells expected to run longer.
@@ -86,9 +102,21 @@ def validate(cells: list[dict[str, Any]]) -> None:
         # run_cell.py's default is 5; consistency needs at least two trials per case
         if c["pass_type"] != "latency" and c.get("n", 5) < 2:
             raise SystemExit(f"{c['name']}: accuracy passes need n >= 2")
+        extra = set(c.get("server", {})) - SERVER_KEYS.get(c["engine"], set())
+        if extra:
+            raise SystemExit(f"{c['name']}: server settings {sorted(extra)} are not set by hand for "
+                             f"{c['engine']} (docs/adr/0005 1)")
 
 
-def server_command(cell: dict[str, Any]) -> list[str] | None:
+def llama_server_settings(cell: dict[str, Any], max_prompt_tokens: int) -> dict[str, int]:
+    """--parallel and --ctx-size for a llama.cpp cell: one slot per concurrent
+    request, sharing one KV cache sized to exactly the requirement."""
+    concurrency = cell.get("concurrency", 1)
+    per_request = capacity.per_request_max(max_prompt_tokens, MAX_TOKENS)
+    return {"parallel": concurrency, "ctx_size": capacity.llama_ctx_size(per_request, concurrency)}
+
+
+def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None) -> list[str] | None:
     """The engine server for one cell, or None when the engine runs in-process."""
     server = cell.get("server", {})
     if cell["engine"] == "vllm":
@@ -101,13 +129,14 @@ def server_command(cell: dict[str, Any]) -> list[str] | None:
             cmd += ["--max-model-len", str(server["max_model_len"])]
         return cmd
     if cell["engine"] == "llama_cpp":
-        cmd = [str(LLAMA_SERVER), "-m", str(GGUF), "--jinja", "-ngl", "999",
-               "--host", "127.0.0.1", "--port", str(PORT["llama_cpp"]),
-               "--ctx-size", str(server.get("ctx_size", 8192)),
-               "--parallel", str(server.get("parallel", 1))]
-        if server.get("kv_unified"):
-            cmd.append("--kv-unified")
-        return cmd
+        if max_prompt_tokens is None:
+            raise ValueError("a llama.cpp server is sized from the prompt budget")
+        settings = llama_server_settings(cell, max_prompt_tokens)
+        # --fit off: the default (on) may quietly shrink unset arguments to fit memory.
+        return [str(LLAMA_SERVER), "-m", str(GGUF), "--jinja", "-ngl", "999",
+                "--host", "127.0.0.1", "--port", str(PORT["llama_cpp"]),
+                "--ctx-size", str(settings["ctx_size"]), "--parallel", str(settings["parallel"]),
+                "--kv-unified", "--fit", "off"]
     return None
 
 
@@ -117,7 +146,7 @@ def engine_version(engine: str, versions: dict[str, Any]) -> str:
 
 
 def run_cell_command(cell: dict[str, Any], version: str, cell_dir: pathlib.Path,
-                     server_log: pathlib.Path | None) -> list[str]:
+                     capacity_check: pathlib.Path | None) -> list[str]:
     cmd = [str(VENV_BIN / "python"), str(_ROOT / "scripts" / "run_cell.py"),
            "--model", MODELS[cell["quantization"]], "--engine-version", version,
            "--run-id-prefix", cell["prefix"], "--out-dir", str(cell_dir)]
@@ -126,9 +155,20 @@ def run_cell_command(cell: dict[str, Any], version: str, cell_dir: pathlib.Path,
             cmd += ["--" + key.replace("_", "-"), str(cell[key])]
     if cell["engine"] in PORT:
         cmd += ["--base-url", f"http://127.0.0.1:{PORT[cell['engine']]}"]
-    if cell["engine"] == "vllm" and server_log is not None:
-        cmd += ["--vllm-startup-log", str(server_log)]
+    if capacity_check is not None:
+        cmd += ["--capacity-check", str(capacity_check)]
     return cmd
+
+
+def needs_capacity_check(cell: dict[str, Any]) -> bool:
+    return cell["engine"] in PORT and cell.get("concurrency", 1) > 1
+
+
+def read_capacity(engine: str) -> dict[str, Any]:
+    base = f"http://127.0.0.1:{PORT[engine]}"
+    if engine == "vllm":
+        return capacity.vllm_capacity(capacity.fetch_metrics(base))
+    return capacity.llama_capacity(capacity.fetch_props(base))
 
 
 def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
@@ -189,29 +229,69 @@ def _wait_gpu_free(limit_mib: int = 1024, timeout_s: int = 120) -> bool:
     return False
 
 
-def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -> dict[str, Any]:
+def _start_server(cell: dict[str, Any], server_cmd: list[str], server_log: pathlib.Path,
+                  status: dict[str, Any]) -> tuple[subprocess.Popen, bool]:
+    env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1"} if cell["engine"] == "vllm" else None
+    with server_log.open("w") as log:
+        server = _spawn(server_cmd, log, env)
+    started = time.monotonic()
+    status["server_started_at"] = _now()
+    ready = _wait_ready(cell["engine"], server)
+    # What restarting the server for every cell costs (docs/gpu-runbook.md).
+    status["server_ready_s"] = round(time.monotonic() - started, 1)
+    return server, ready
+
+
+def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
+            budget: dict[str, Any] | None = None) -> dict[str, Any]:
     cell_dir = out / cell["name"]
     cell_dir.mkdir(parents=True, exist_ok=True)
     status: dict[str, Any] = {"name": cell["name"], "started_at": _now()}
-    server_cmd = server_command(cell)
+    max_prompt = budget["max_prompt_tokens"] if budget else None
+    server_cmd = server_command(cell, max_prompt)
     server_log = cell_dir / "server.log" if server_cmd else None
     timeout_s = 60 * cell.get("timeout_min", DEFAULT_TIMEOUT_MIN)
     server = runner = None
+    check_path = None
     try:
         if server_cmd:
-            env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1"} if cell["engine"] == "vllm" else None
             (cell_dir / "server_command.txt").write_text(" ".join(server_cmd) + "\n")
-            with server_log.open("w") as log:
-                server = _spawn(server_cmd, log, env)
-            started = time.monotonic()
-            status["server_started_at"] = _now()
-            ready = _wait_ready(cell["engine"], server)
-            # What restarting the server for every cell costs (docs/gpu-runbook.md).
-            status["server_ready_s"] = round(time.monotonic() - started, 1)
-            if not ready:
-                status.update(outcome="server_not_ready", returncode=server.poll())
-                return status
-        cmd = run_cell_command(cell, engine_version(cell["engine"], versions), cell_dir, server_log)
+            restarts = 0
+            while True:
+                server, ready = _start_server(cell, server_cmd, server_log, status)
+                if not ready:
+                    status.update(outcome="server_not_ready", returncode=server.poll())
+                    return status
+                if cell["engine"] == "vllm":
+                    # Every vLLM startup's capacity, to see whether the short ones recur (ADR-0005).
+                    status.setdefault("kv_capacity_tokens", []).append(read_capacity("vllm")["tokens"])
+                if not needs_capacity_check(cell):
+                    break
+                pre = capacity.pre_check(cell["engine"], read_capacity(cell["engine"]),
+                                         max_prompt, MAX_TOKENS, cell["concurrency"])
+                if pre["fits"] or cell["engine"] != "vllm" or restarts == 1:
+                    break
+                restarts += 1            # a short vLLM startup: restart once (ADR-0005 2)
+                _stop(server)
+                server = None
+                # Keep the short startup's log: why some startups come out short is still open.
+                server_log.replace(cell_dir / "server-short-startup.log")
+                if not _wait_gpu_free():
+                    status.update(outcome="error", reason="GPU not freed for the capacity restart")
+                    return status
+            if needs_capacity_check(cell):
+                pre["restarts"] = restarts
+                pre["startup_log_max_concurrency"] = (
+                    capacity.startup_log_max_concurrency(server_log.read_text(errors="replace"))
+                    if cell["engine"] == "vllm" else None)
+                check_path = cell_dir / "capacity_check.json"
+                check_path.write_text(json.dumps(pre, indent=2) + "\n")
+                status["capacity_fits"] = pre["fits"]
+                if not pre["fits"]:
+                    # ADR-0003's "unsupported": a result, recorded without running.
+                    status.update(outcome="unsupported", reason="capacity pre-check (docs/adr/0005)")
+                    return status
+        cmd = run_cell_command(cell, engine_version(cell["engine"], versions), cell_dir, check_path)
         (cell_dir / "run_cell_command.txt").write_text(" ".join(cmd) + "\n")
         status["run_started_at"] = _now()
         with (cell_dir / "run_cell.log").open("w") as log:
@@ -222,8 +302,10 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -
             # A hung server or cell would otherwise hold the list until the auto-shutdown.
             status.update(outcome="timeout", returncode=None, timeout_min=timeout_s / 60)
             return status
-        # run_cell.py exits 2 for an aborted latency cell, which it records as "unsupported".
-        status.update(outcome={0: "ok", 2: "unsupported"}.get(rc, "error"), returncode=rc)
+        # run_cell.py exits 2 for an aborted latency cell, which it records as "unsupported",
+        # and 3 when the capacity post-check failed (the manifest is kept, not used for a verdict).
+        status.update(outcome={0: "ok", 2: "unsupported", 3: "capacity_misestimate"}.get(rc, "error"),
+                      returncode=rc)
         return status
     finally:
         for proc in (runner, server):
@@ -231,6 +313,22 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path) -
                 _stop(proc)
         status["gpu_freed"] = _wait_gpu_free()
         status["finished_at"] = _now()
+
+
+def load_budget(cells: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """The counted longest prompt (schema/prompt_budget.json), checked against
+    the catalog and the whole case set: a cell running a subset (max_cases)
+    stays within the set's longest prompt."""
+    stages = {c["tool_stage"] for c in cells if c["engine"] in PORT}
+    if not stages:
+        return None
+    if len(stages) > 1:
+        raise SystemExit("one cell list per tool_stage: the prompt budget is per stage")
+    from eval_bench.dataset.loader import load_cases
+    stage = stages.pop()
+    catalog = _ROOT / "schema" / ("tools.json" if stage == 10 else "tools_extended.json")
+    version = json.loads(catalog.read_text(encoding="utf-8"))["version"]
+    return capacity.load_prompt_budget(stage, version, load_cases(_ROOT / "data"))
 
 
 def swap_devices(proc_swaps: pathlib.Path = pathlib.Path("/proc/swaps")) -> list[str]:
@@ -270,6 +368,7 @@ def main(argv: list[str] | None = None) -> int:
     failure = None
     try:
         versions = json.loads((args.out / "versions.json").read_text())   # written by setup.sh
+        budget = load_budget(cells)
         swaps = swap_devices()
         if swaps:
             failure = (f"swap is active ({', '.join(swaps)}); paging would distort the measurements. "
@@ -277,7 +376,7 @@ def main(argv: list[str] | None = None) -> int:
             cells = []
         for cell in cells:
             print(f"[{_now()}] {cell['name']}", flush=True)
-            status = run_one(cell, versions, args.out)
+            status = run_one(cell, versions, args.out, budget)
             print(f"[{_now()}] {cell['name']}: {status['outcome']}", flush=True)
             with (args.out / "status.jsonl").open("a") as f:
                 f.write(json.dumps(status) + "\n")

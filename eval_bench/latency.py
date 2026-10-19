@@ -30,7 +30,7 @@ from __future__ import annotations
 import math
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 # ADR-0003 table: MLPerf Inference's Llama 3.1 8B limits.
@@ -72,6 +72,8 @@ class TimedResult:
     cached_tokens: Optional[int] = None
     content: str = ""
     reasoning: str = ""
+    tool_calls: list[dict[str, str]] = field(default_factory=list)   # [{"name", "arguments"}], streamed
+    finish_reason: Optional[str] = None
 
     @property
     def tpot_s(self) -> Optional[float]:
@@ -292,6 +294,7 @@ def _log_row(row: _Row, measure_from: Optional[int], n_requests: int, t0: float)
         "tpot_ms": ms(r.tpot_s), "total_ms": ms(r.total_s),
         "output_tokens": r.output_tokens, "prompt_tokens": r.prompt_tokens,
         "cached_tokens": r.cached_tokens, "content": r.content,
+        "tool_calls": r.tool_calls, "finish_reason": r.finish_reason,
     }
 
 
