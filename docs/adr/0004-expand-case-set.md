@@ -196,7 +196,10 @@ LLMはクエリの文だけを書き、正解の値には触れない（同ル�
 | case_0101 | 2023年度の有価証券報告書から従業員数を調べて | 正解（`search_report`）が`metric: employee_count`と`query_text: 従業員数`の両方を求めていた。`metric`の説明は「定型指標。定型外は query_text のみ使う」で、従業員数は定型の指標なので、`metric`だけを渡すのが説明どおり | 正解から`query_text`を外す。採点は正解に書いたキーしか見ない（`eval_bench/scorers/separated.py`の`score_arg_exact`）ので、`query_text`を足して呼んだ場合も正解になる |
 | case_0102 | 有報の従業員数、2020年度から2023年度でどう推移した？ | 正解が`compare_report_metric`だった。`trend_report_metric`の説明は「区間内の推移そのものが必要な場合に使う」で、4年度の推移を聞くこのクエリに合う。一方`compare_report_metric`の説明にも「推移や増減が求められている場合に使う」とあり、説明が重なっていた。200件の中でも、「推移」と言うcase_1152・1154はtrend、「比較」「比べて」と言うcase_1031〜1033はcompareで、case_0102だけが食い違っていた | 正解を`trend_report_metric`に変える。`compare_report_metric`の説明から「推移」を外し、2年度間の差・増減に絞る |
 
-- **ツールの説明の変更**：`compare_report_metric`の説明は、`schema/tools.json`と`schema/tools_extended.json`の両方で変える。カタログの版が変わり、
+- **case_0102の紛らわしいツール**：正解をtrendに変えるので、`compare_report_metric`を`distractor_tools`の先頭に足す。trendが正解の他のケース（case_1152〜1154）と同じ形にし、
+  紛らわしいツールがステージ10の集合に必ず入るようにする。
+- **ツールの説明の変更**：`compare_report_metric`の説明を「同一指標を2年度間で比較し、差・増減を返す。単年度の記載値取得や、区間内の各年度の値の並び（trend_report_metric）ではなく、
+  2時点の比較が求められている場合に使う。」に変える。`schema/tools.json`（2.1.0→2.1.1）と`schema/tools_extended.json`（ext100-1.1.0→ext100-1.1.1）の両方で変える。カタログの版が変わり、
   プロンプトの長さも変わるので、[[docs/adr/0005-capacity-check|ADR-0005]]の1リクエストの最大は直した後に数え直す。説明の重なりは、「推移」と言う
   case_1152・1154の判定にも効くので、ラベルだけでなく説明も直す。
 - **同じ型の問題は、200件の中で他に無かった**（手元で機械的に走査）。定型の指標なのに`query_text`を正解に含める`search_report`のケースはcase_0101だけ、

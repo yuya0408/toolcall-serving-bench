@@ -144,7 +144,7 @@ def _query_gpu() -> tuple[str, float]:
 
 def _no_semantic_judge(expected: str, predicted: str) -> bool:
     raise RuntimeError(
-        "a semantic-scored field was scored, but schema/tools.json 2.1.0 has none -- "
+        "a semantic-scored field was scored, but schema/tools.json 2.1.1 has none -- "
         "the catalog or a case changed without choosing a judge"
     )
 
