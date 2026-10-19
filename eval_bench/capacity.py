@@ -53,7 +53,7 @@ def load_prompt_budget(stage: int, catalog_version: str, cases: list[dict[str, A
     entry = budgets.get(str(stage))
     if entry is None:
         raise ValueError(f"{path.name} has no entry for tool_stage {stage}: "
-                         "run scripts/count_prompt_tokens.py --tool-stage {stage} --write-budget")
+                         f"run scripts/count_prompt_tokens.py --tool-stage {stage} --write-budget")
     if entry["tool_catalog_version"] != catalog_version or entry["cases_sha256"] != cases_digest(cases):
         raise ValueError(f"{path.name} (tool_stage {stage}) was counted against another catalog or case set: "
                          f"recount with scripts/count_prompt_tokens.py --tool-stage {stage} --write-budget")
