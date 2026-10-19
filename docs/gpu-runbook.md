@@ -95,7 +95,8 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 ```
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke.json            # 1回目のapply：疎通
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/capacity-smoke.json   # 2回目のapply：まず容量の判定の動作確認（約10分）
-scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json            # 2回目のapply：確認が通ったらパイロット
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-1.json          # 2回目のapply：確認が通ったらパイロットの前半
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目のapply：パイロットの後半（llama.cppの第3パス）
 ```
 
 **2回目のapplyの順番**：容量の判定（ADR-0005）はGPUの上でまだ一度も動かしていないので、パイロットの前に`capacity-smoke.json`
@@ -106,9 +107,11 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json            # 2回目
 2. 2セルのmanifestに`capacity_check`があり、`post_check.ok`が`true`。vLLMは`preemptions`が0、`queue_time.count`が0でない。
 3. llama.cppの`server_command.txt`が`--ctx-size 49664 --parallel 16 --kv-unified --fit off`。
 
-所要時間の見込み（推定）：準備約35分＋この確認約10分＋パイロット約4.9時間で、6時間の自動シャットダウンまで約20分しか残らない。
-収まらなければllama.cppの第3パスが次のapplyに回る（一覧の最後に置いてある）。ビルド済みのllama.cppを使い回して準備を短くする案は、
-今回のapplyで作ったバイナリを回収して初めて使えるので、次のapply以降の話になる。
+**パイロットは2回のapplyに分ける。** 1回に詰めると、6時間の自動シャットダウンまでの余りが約20分以下になる（下の「2回目・3回目：パイロット」）。
+見積もりが外れるとセルが途中で切れ、そのセルは丸ごと回し直しになる。そこで、llama.cppの第3パスの2セルだけを`pilot-2.json`に分け、
+3回目のapplyで回す。第3パスは同じエンジンの並行数1と16を比べるので、2セルが同じインスタンスにあれば足りる。並行数1のlatencyの3エンジンは
+`pilot-1.json`にまとめて残す。あわせて、vLLM AWQの第3パスの結果（ADR-0002の分岐）を見てから3回目に進める。
+ビルド済みのllama.cppを使い回して3回目の準備を短くする案は、2回目のapplyで作ったバイナリを回収して初めて使えるので、今回は扱わない。
 
 `run_cells.py`は、一覧のセルごとにエンジンのサーバーを起動し、応答するまで待ち、`scripts/run_cell.py`を呼んで、サーバーを止める。
 
@@ -139,9 +142,9 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json            # 2回目
 | `load-llama-gguf-c16` | 要件ぶんの`--ctx-size`で起動でき、`/props`から容量が読めるか |
 | `lat-*-c1` | `ttft_ms`と`first_delta_ms`の差。生出力のキャッシュ済みトークン数（vLLMは`usage.prompt_tokens_details.cached_tokens`、llama.cppは`timings.cache_n`）が、起動直後のセルで0になっているか |
 
-### 2回目：パイロット（`cells/pilot.json`、すべて`pilot-`・200件）
+### 2回目・3回目：パイロット（`cells/pilot-1.json`・`pilot-2.json`、すべて`pilot-`・200件）
 
-パイロットのデータは本番の判定に混ぜない（ADR-0002）。
+パイロットのデータは本番の判定に混ぜない（ADR-0002）。表の最後の行（`third-llama-gguf-*`）が`pilot-2.json`で、残りが`pilot-1.json`。
 
 | セル | 決まること |
 | --- | --- |
@@ -153,12 +156,15 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot.json            # 2回目
 一覧から外したセル（ADR-0003の追記H）：vLLM bf16の並行数16・32とvLLM AWQの並行数32は事前の判定で「対応していない」、
 llama.cppの並行数32は空きメモリに入らない見込み。本番では、事前の判定や起動の失敗がそのまま記録する。
 
-安定判定の窓はケースセット1周分なので、200件ではウォームアップだけで最低600リクエストかかる。所要時間は約5.5時間の見込み（推定）。
-6時間に収まらなかったときに備えて、一覧は大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16 → llama.cppの第3パス）に並べてある。
-残ったセルは、次のapplyで準備の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
+安定判定の窓はケースセット1周分なので、200件ではウォームアップだけで最低600リクエストかかる。パイロット全体の所要時間の見込みは
+約4.9〜5.5時間（推定。2つの見積もりがあり、どちらが近いかは2回目のapplyの実測で分かる）。そのうちllama.cppの第3パスは約1.3時間
+（推定：並行数1は疎通の1件約3.6秒×1,000リクエストで約1時間、並行数16はそれより短い）なので、`pilot-1.json`は約3.6〜4.2時間、
+2回目のapplyは準備と確認を足して約4.4〜5時間になる。
+`pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
+`pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 
 ```
-ssh -n -i ~/.ssh/id_ed25519 ubuntu@$IP "setsid nohup ~/venv/bin/python ~/toolcall-serving-bench/scripts/gpu/run_cells.py ~/toolcall-serving-bench/scripts/gpu/cells/pilot.json --only third-llama-gguf-c1 third-llama-gguf-c16 > ~/out/cells-rest.log 2>&1 < /dev/null &"
+ssh -n -i ~/.ssh/id_ed25519 ubuntu@$IP "setsid nohup ~/venv/bin/python ~/toolcall-serving-bench/scripts/gpu/run_cells.py ~/toolcall-serving-bench/scripts/gpu/cells/pilot-1.json --only <残ったセル名> > ~/out/cells-rest.log 2>&1 < /dev/null &"
 ```
 
 ## 4. 疎通の後：パイロットに進むか、止めるか
@@ -174,7 +180,7 @@ destroyしてから原因を手元で調べる（GPUの時間を、原因の分�
 5. `lat-*-c1`の生出力で、起動直後のセルのキャッシュ済みトークン数が0。
 
 `load-llama-gguf-c16`が`server_not_ready`や`unsupported`になるのは、止める理由にしない。llama.cppがその並行数で動かないこと自体が
-ADR-0003の結果（「対応していない」）である。その場合は、パイロットのllama.cppの並行数16のセル（latencyと第3パス）を外す（外したことはPRに書く）。
+ADR-0003の結果（「対応していない」）である。その場合は、パイロットのllama.cppの並行数16のセル（`pilot-1.json`のlatencyと`pilot-2.json`の第3パス）を外す（外したことはPRに書く）。
 
 `checks/llama_seed.json`の`same_seed_identical`が`false`でも止めない。llama.cppの結果は1回ごとに再現するとはみなさない、と記録する。
 
