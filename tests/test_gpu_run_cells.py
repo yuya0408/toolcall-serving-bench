@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import sys
 
 import pytest
 
@@ -29,9 +30,9 @@ def test_cell_lists_are_valid_and_every_cell_parses_as_run_cell_arguments(path, 
     cells = json.loads(path.read_text(encoding="utf-8"))
     run_cells.validate(cells)
     for cell in cells:
-        log = tmp_path / "server.log" if cell["engine"] == "vllm" else None
+        check = tmp_path / "capacity_check.json" if run_cells.needs_capacity_check(cell) else None
         cmd = run_cells.run_cell_command(cell, run_cells.engine_version(cell["engine"], _VERSIONS),
-                                         tmp_path, log)
+                                         tmp_path, check)
         run_cell._parse_args(cmd[2:])   # the same guards run_cell.py applies on the instance
 
 
@@ -45,20 +46,26 @@ def test_vllm_server_has_the_flags_the_adrs_require():
     assert cmd[cmd.index("--max-model-len") + 1] == "8192"
 
 
-def test_llama_server_runs_the_gguf_with_jinja_and_the_cells_slots():
-    cmd = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16",
-                                    "server": {"ctx_size": 40960, "parallel": 16, "kv_unified": True}})
+def test_llama_server_is_sized_to_the_requirement():
+    # ADR-0005 1: --ctx-size = concurrency x (longest prompt + max_tokens + 1-token margin),
+    # rounded up to 256; one slot per request on one shared cache; --fit off.
+    cmd = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16", "concurrency": 16},
+                                   max_prompt_tokens=2591)
     assert "--jinja" in cmd and "--kv-unified" in cmd
+    assert cmd[cmd.index("--fit") + 1] == "off"
     assert cmd[cmd.index("--parallel") + 1] == "16"
+    assert cmd[cmd.index("--ctx-size") + 1] == str(16 * 3104 + 0) or int(cmd[cmd.index("--ctx-size") + 1]) == 49664
     assert cmd[cmd.index("-m") + 1].endswith("Qwen3-8B-bf16.gguf")
+    one = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16"}, max_prompt_tokens=2591)
+    assert one[one.index("--parallel") + 1] == "1" and one[one.index("--ctx-size") + 1] == "3328"
 
 
-def test_transformers_hf_needs_no_server_and_vllm_gets_its_startup_log(tmp_path):
+def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_check(tmp_path):
     assert run_cells.server_command({"engine": "transformers_hf", "quantization": "bf16-none"}) is None
     cell = {"name": "x", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "vllm",
             "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0}
-    cmd = run_cells.run_cell_command(cell, "0.20.0", tmp_path, tmp_path / "server.log")
-    assert cmd[cmd.index("--vllm-startup-log") + 1].endswith("server.log")
+    cmd = run_cells.run_cell_command(cell, "0.20.0", tmp_path, tmp_path / "capacity_check.json")
+    assert cmd[cmd.index("--capacity-check") + 1].endswith("capacity_check.json")
     assert cmd[cmd.index("--engine-version") + 1] == "0.20.0"
     assert cmd[cmd.index("--model") + 1] == "Qwen/Qwen3-8B-AWQ"
 
@@ -69,6 +76,8 @@ def test_transformers_hf_needs_no_server_and_vllm_gets_its_startup_log(tmp_path)
     {"prefix": "dry-"},
     {"servr": {}},                                            # a typo must not be ignored
     {"n": 1},                                                 # consistency needs two trials
+    {"engine": "llama_cpp", "quantization": "gguf-bf16",
+     "server": {"ctx_size": 40960}},                          # llama.cpp is sized from the budget
 ])
 def test_validate_refuses(bad):
     cell = {"name": "x", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm",
@@ -153,3 +162,80 @@ def test_no_cell_starts_while_swap_is_on(tmp_path, monkeypatch):
     assert _main(tmp_path, [_hf_cell("a")]) == 1
     assert "swap is active" in (tmp_path / "FAILED").read_text()
     assert not (tmp_path / "status.jsonl").exists()
+
+
+# ---------------------------------------------------------------- the capacity pre-check (ADR-0005 2)
+
+_BUDGET = {"max_prompt_tokens": 2591}
+
+
+class _FakeServer:
+    def poll(self):
+        return None
+
+
+def _served(monkeypatch, tmp_path, capacities):
+    """run_one with the server and run_cell.py faked: each startup reports the
+    next capacity in `capacities`; returns the list of run_cell commands."""
+    seq = iter(capacities)
+    starts, runs = [], []
+
+    def start(cell, cmd, log, status):
+        log.write_text("Maximum concurrency for 8,192 tokens per request: 12.15x\n")
+        starts.append(1)
+        return _FakeServer(), True
+
+    def fake_run_cell_command(cell, version, cell_dir, check):
+        runs.append(check)
+        return [sys.executable, "-c", "pass"]
+
+    monkeypatch.setattr(run_cells, "_start_server", start)
+    monkeypatch.setattr(run_cells, "read_capacity", lambda engine: next(seq))
+    monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
+    monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
+    monkeypatch.setattr(run_cells, "run_cell_command", fake_run_cell_command)
+    return starts, runs
+
+
+def _vllm_cap(tokens):
+    return {"unit": "block", "unit_tokens": 16, "units": tokens // 16, "tokens": tokens}
+
+
+def _loaded(engine="vllm", quantization="awq-4bit", concurrency=16):
+    return {"name": "load", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": engine,
+            "quantization": quantization, "tool_stage": 10, "concurrency": concurrency, "n": 2, "temperature": 0}
+
+
+def test_a_short_vllm_startup_is_restarted_once_and_then_runs(tmp_path, monkeypatch):
+    # The 2026-10-18 smoke: the first startup came out exactly 1 GiB short.
+    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(48000), _vllm_cap(48000), _vllm_cap(99552), _vllm_cap(99552)])
+    status = run_cells.run_one(_loaded(), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and len(starts) == 2
+    check = json.loads((tmp_path / "load" / "capacity_check.json").read_text())
+    assert check["fits"] and check["restarts"] == 1 and check["startup_log_max_concurrency"] == 12.15
+    assert check["required"]["tokens"] == 16 * 3120
+    assert (tmp_path / "load" / "server-short-startup.log").exists()
+    assert runs == [tmp_path / "load" / "capacity_check.json"]
+
+
+def test_a_cell_that_still_does_not_fit_is_unsupported_without_running(tmp_path, monkeypatch):
+    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(99552)] * 4)
+    status = run_cells.run_one(_loaded(concurrency=32), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "unsupported" and len(starts) == 2 and runs == []
+    check = json.loads((tmp_path / "load" / "capacity_check.json").read_text())
+    assert not check["fits"] and check["required"]["tokens"] == 32 * 3120   # 99,840 > 99,552
+
+
+def test_llama_cpp_is_never_restarted_for_capacity(tmp_path, monkeypatch):
+    llama = {"unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "slots": 16}
+    starts, runs = _served(monkeypatch, tmp_path, [llama])
+    status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and len(starts) == 1
+    assert "kv_capacity_tokens" not in status
+
+
+def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):
+    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(30240)])
+    status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and runs == [None]
+    assert status["kv_capacity_tokens"] == [30240]

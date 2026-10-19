@@ -49,10 +49,11 @@ from eval_bench.latency import (  # noqa: E402
 )
 from eval_bench.pipeline import assert_no_thinking, make_predict_fn  # noqa: E402
 from eval_bench.repetition import trial_order  # noqa: E402
+from eval_bench import capacity  # noqa: E402
 from eval_bench.runner import (  # noqa: E402
-    build_manifest, parse_vllm_diagnostics, run_accuracy_cell, validate_cell_invariants,
-    write_manifest,
+    build_manifest, run_accuracy_cell, validate_cell_invariants, write_manifest,
 )
+from eval_bench.scorers.separated import score_case  # noqa: E402
 
 _CATALOGS = {
     10: _ROOT / "schema" / "tools.json",            # Article-1 overlay point: original 40 only
@@ -89,8 +90,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--min-p", type=float, default=_QWEN3_NON_THINKING["min_p"])
     p.add_argument("--max-tokens", type=int, default=512)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--vllm-startup-log", type=pathlib.Path,
-                   help="required for vllm at concurrency > 1 (the queueing guard)")
+    p.add_argument("--capacity-check", type=pathlib.Path,
+                   help="the pre-check scripts/gpu/run_cells.py wrote; required for a served engine "
+                        "at concurrency > 1 (docs/adr/0005)")
     p.add_argument("--run-id-prefix", default="", help="smoke- / pilot- / empty for main runs")
     p.add_argument("--max-cases", type=int,
                    help="smoke- / pilot- only: run the first N cases (by id); a main run uses them all")
@@ -104,8 +106,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         p.error(f"--base-url is required for --engine {args.engine}")
     if args.pass_type == "accuracy" and args.concurrency != 1:
         p.error("plain accuracy is concurrency=1 by definition; use --pass-type accuracy_under_load")
-    if args.engine == "vllm" and args.concurrency > 1 and args.vllm_startup_log is None:
-        p.error("--vllm-startup-log is required for vllm at concurrency > 1")
+    if args.engine in ("vllm", "llama_cpp") and args.concurrency > 1 and args.capacity_check is None:
+        p.error("--capacity-check is required for a served engine at concurrency > 1 (docs/adr/0005)")
     trial_run = args.run_id_prefix.startswith(("smoke-", "pilot-"))
     if args.max_cases is not None and not trial_run:
         p.error("--max-cases is for smoke-/pilot- runs only: the case set is fixed for main runs (docs/adr/0004)")
@@ -144,7 +146,7 @@ def _query_gpu() -> tuple[str, float]:
 
 def _no_semantic_judge(expected: str, predicted: str) -> bool:
     raise RuntimeError(
-        "a semantic-scored field was scored, but schema/tools.json 2.1.0 has none -- "
+        "a semantic-scored field was scored, but schema/tools.json 2.1.1 has none -- "
         "the catalog or a case changed without choosing a judge"
     )
 
@@ -224,11 +226,40 @@ def _write_jsonl(path: pathlib.Path, rows: list[dict[str, Any]]) -> None:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+class _CapacityWatch:
+    """The post-check's bookkeeping around one cell (docs/adr/0005 3): vLLM's
+    cumulative /metrics counters read before and after; nothing to read for
+    llama.cpp, whose check comes from the raw output alone."""
+
+    def __init__(self, args):
+        self.args = args
+        self.pre = None
+        self.before = None
+        if args.capacity_check is not None:
+            self.pre = json.loads(args.capacity_check.read_text(encoding="utf-8"))
+            expected = capacity.per_request_max(self.pre["max_prompt_tokens_planned"], args.max_tokens)
+            if (self.pre["required"]["per_request_tokens"] != expected
+                    or self.pre["required"]["concurrency"] != args.concurrency):
+                raise SystemExit("--capacity-check was computed for another max_tokens or concurrency")
+
+    def start(self) -> None:
+        if self.pre is not None and self.args.engine == "vllm":
+            self.before = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
+
+    def result(self, prompt_tokens, length_finished: int) -> dict[str, Any] | None:
+        if self.pre is None:
+            return None
+        delta = None
+        if self.args.engine == "vllm":
+            after = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
+            delta = capacity.vllm_counter_delta(self.before, after)
+        post = capacity.post_check(self.args.engine, self.pre["max_prompt_tokens_planned"],
+                                   prompt_tokens, vllm_delta=delta, length_finished=length_finished)
+        return {**self.pre, "post_check": post}
+
+
 def _finish(args, run_id: str, cell: dict[str, Any], results: dict[str, Any],
             repetition: dict[str, Any] | None) -> pathlib.Path:
-    if args.engine == "vllm" and args.concurrency > 1:
-        results["vllm_diagnostics"] = parse_vllm_diagnostics(
-            args.vllm_startup_log.read_text(encoding="utf-8", errors="replace"))
     gpu, vram_gb = _query_gpu()
     hardware = {"instance_type": args.instance_type, "gpu": gpu, "vram_gb": vram_gb,
                 "region": args.region}
@@ -238,9 +269,33 @@ def _finish(args, run_id: str, cell: dict[str, Any], results: dict[str, Any],
     return manifest_path
 
 
-def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter) -> int:
+def _reference_accuracy(rows, cases, decoder, engine: str) -> dict[str, Any]:
+    """The measured requests' tool calls scored like the accuracy pass, as a
+    reference only (docs/adr/0003 J): sampled, with a request id appended to
+    each query, so never a verdict."""
+    by_id = {c["id"]: c for c in cases}
+    scores = []
+    for row in rows:
+        if row["phase"] != "measured" or row["status"] != "ok":
+            continue
+        if engine == "transformers_hf":
+            raw = row["content"]
+        else:
+            raw = json.dumps({"tool_calls": [{"function": tc} for tc in row.get("tool_calls") or []]})
+        scores.append(score_case(by_id[row["case_id"]], decoder.decode(raw, {}), _no_semantic_judge))
+
+    def mean(xs):
+        return round(sum(xs) / len(xs), 4) if xs else None
+    exact = [float(sc.arg_exact) for sc in scores if sc.arg_exact is not None]
+    return {"n": len(scores), "selection_mean": mean([float(sc.selection) for sc in scores]),
+            "arg_exact_mean": mean(exact)}
+
+
+def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter, decoder) -> int:
     if args.engine == "vllm":
         _reset_vllm_prefix_cache(args.base_url)
+    watch = _CapacityWatch(args)
+    watch.start()
     send = _make_sender(adapter, cases, tools, args.tool_stage, args.request_timeout,
                         run_tag=secrets.token_hex(4))
     raw_path = args.out_dir / f"{run_id}.raw.jsonl"
@@ -258,10 +313,15 @@ def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter)
         return 2
     _write_jsonl(raw_path, rows)
     print(f"wrote {raw_path}")
+    results["reference_accuracy"] = _reference_accuracy(rows, cases, decoder, args.engine)
+    check = watch.result([r["prompt_tokens"] for r in rows],
+                         sum(1 for r in rows if r.get("finish_reason") == "length"))
+    if check is not None:
+        results["capacity_check"] = check
     _finish(args, run_id, cell, results, repetition=None)
     print(json.dumps({name: (v["verdict"], v["exceeded"], v["n"]) for name, v in results["slo"].items()},
                      ensure_ascii=False))
-    return 0
+    return _post_check_exit(check)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -297,19 +357,51 @@ def main(argv: list[str] | None = None) -> int:
     adapter, decoder = _build_backend(args, sampling)
     if args.pass_type == "latency":
         validate_cell_invariants(args.pass_type, cell, tools)
-        return _run_latency(args, run_id, cell, cases, tools, adapter)
+        return _run_latency(args, run_id, cell, cases, tools, adapter, decoder)
 
     raw_log = _RawLog(cases, tools, args.tool_stage, args.n, args.seed_base)
     predict = make_predict_fn(adapter, decoder, tools, recorder=raw_log)
 
+    watch = _CapacityWatch(args)
+    watch.start()
     results = run_accuracy_cell(cases, tools, cell, args.pass_type, predict,
                                 _no_semantic_judge, n=args.n, seed_base=args.seed_base)
     raw_path = args.out_dir / f"{run_id}.raw.jsonl"
     raw_log.write(raw_path)
     print(f"wrote {raw_path}")
+    prompt_tokens, length_finished = _usage_of(raw_log.rows)
+    check = watch.result(prompt_tokens, length_finished)
+    if check is not None:
+        results["capacity_check"] = check
     _finish(args, run_id, cell, results, repetition={"n": args.n, "seed_base": args.seed_base})
     print(json.dumps({k: results[k] for k in ("selection_mean", "selection_ci95", "consistency")},
                      ensure_ascii=False))
+    return _post_check_exit(check)
+
+
+def _usage_of(rows) -> tuple[list, int]:
+    """Prompt lengths and length-limited responses from the accuracy passes'
+    raw outputs (the reserved keys the OpenAI-compatible adapter adds)."""
+    from eval_bench.adapters.openai_compatible import FINISH_REASON_KEY, USAGE_KEY
+    prompt_tokens, length_finished = [], 0
+    for row in rows:
+        try:
+            message = json.loads(row["raw_output"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(message, dict):
+            continue
+        prompt_tokens.append((message.get(USAGE_KEY) or {}).get("prompt_tokens"))
+        length_finished += message.get(FINISH_REASON_KEY) == "length"
+    return prompt_tokens, length_finished
+
+
+def _post_check_exit(check) -> int:
+    """3 = the manifest was written but the capacity post-check failed: the
+    cell's numbers are not used for a verdict (docs/adr/0005 3)."""
+    if check is not None and not check["post_check"]["ok"]:
+        print(f"capacity post-check failed: {check['post_check']['problems']}")
+        return 3
     return 0
 
 

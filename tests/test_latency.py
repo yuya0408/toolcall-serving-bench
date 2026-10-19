@@ -207,6 +207,22 @@ def test_vllm_stream_reads_ttft_tokens_and_cached_tokens():
     assert (result.output_tokens, result.prompt_tokens, result.cached_tokens) == (30, 2200, 2048)
 
 
+def test_streamed_tool_call_fragments_are_assembled():
+    # docs/adr/0003 J: the latency pass keeps the tool call for the reference accuracy.
+    stream = [
+        {"choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"name": "get_inventory", "arguments": ""}}]}}]},
+        {"choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": '{"item'}}]}}]},
+        {"choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "function": {"arguments": '": "A1"}'}}]}}]},
+        {"choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}]},
+        {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 9,
+                                  "prompt_tokens_details": {"cached_tokens": 0}}},
+    ]
+    with _streaming_post(_sse(*stream)):
+        result = VLLMAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
+    assert result.tool_calls == [{"name": "get_inventory", "arguments": '{"item": "A1"}'}]
+    assert result.finish_reason == "tool_calls"
+
+
 def test_vllm_without_prompt_tokens_details_is_a_configuration_error():
     usage = {"prompt_tokens": 2200, "completion_tokens": 30}
     with _streaming_post(_sse(*_TOOL_CALL_STREAM, {"choices": [], "usage": usage})):

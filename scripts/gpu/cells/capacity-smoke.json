@@ -1,0 +1,4 @@
+[
+  {"name": "load-vllm-awq-c16", "prefix": "smoke-", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n": 2, "max_cases": 20, "server": {"max_model_len": 8192}},
+  {"name": "load-llama-gguf-c16", "prefix": "smoke-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 2, "max_cases": 20}
+]

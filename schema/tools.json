@@ -1,6 +1,6 @@
 {
   "$comment": "Canonical tool definitions for toolcall-serving-bench. Generic-ERP vocabulary only, expanded from the standard ERP module set (master/sales/purchase/inventory/accounting/hr/report). Near-duplicate functions are placed WITHIN each module on purpose so that selection difficulty grows with tool-set size. Argument scoring mode is carried by x-scoring and is stripped from the model-facing view.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "scoring_convention": {
     "exact": [
       "enum",
@@ -1061,7 +1061,7 @@
     {
       "name": "compare_report_metric",
       "module": "report",
-      "description": "同一指標を複数年度間で比較する。単年度の記載値取得ではなく、推移や増減が求められている場合に使う。",
+      "description": "同一指標を2年度間で比較し、差・増減を返す。単年度の記載値取得や、区間内の各年度の値の並び（trend_report_metric）ではなく、2時点の比較が求められている場合に使う。",
       "parameters": {
         "type": "object",
         "required": [

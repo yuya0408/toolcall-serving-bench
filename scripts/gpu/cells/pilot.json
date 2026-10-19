@@ -2,10 +2,10 @@
   {"name": "third-vllm-awq-c1", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}, "timeout_min": 180},
   {"name": "third-vllm-awq-c16", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}},
   {"name": "lat-vllm-bf16-c1", "prefix": "pilot-", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 1, "n_requests": 100, "server": {"max_model_len": 8192}, "timeout_min": 150},
-  {"name": "lat-llama-gguf-c1", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 100, "server": {"ctx_size": 8192, "parallel": 1}, "timeout_min": 150},
+  {"name": "lat-llama-gguf-c1", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 100, "timeout_min": 150},
   {"name": "lat-hf-bf16-c1", "prefix": "pilot-", "pass_type": "latency", "engine": "transformers_hf", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 1, "n_requests": 100, "timeout_min": 150},
-  {"name": "lat-vllm-bf16-c16", "prefix": "pilot-", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n_requests": 300, "server": {"max_model_len": 8192}},
-  {"name": "lat-vllm-bf16-c32", "prefix": "pilot-", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 32, "n_requests": 300, "server": {"max_model_len": 8192}},
-  {"name": "lat-llama-gguf-c16", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n_requests": 300, "server": {"ctx_size": 40960, "parallel": 16, "kv_unified": true}},
-  {"name": "lat-llama-gguf-c32", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 32, "n_requests": 300, "server": {"ctx_size": 40960, "parallel": 32, "kv_unified": true}}
+  {"name": "lat-vllm-awq-c16", "prefix": "pilot-", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n_requests": 300, "server": {"max_model_len": 8192}},
+  {"name": "lat-llama-gguf-c16", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n_requests": 300},
+  {"name": "third-llama-gguf-c1", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "timeout_min": 180},
+  {"name": "third-llama-gguf-c16", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0}
 ]

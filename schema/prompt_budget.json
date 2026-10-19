@@ -1,0 +1,13 @@
+{
+  "10": {
+    "tool_stage": 10,
+    "cases": 200,
+    "max_prompt_tokens": 2591,
+    "max_case": "case_1132",
+    "median_prompt_tokens": 2310.0,
+    "tag_draws": 32,
+    "tokenizer_revision": "b968826d9c46dd6066d109eabc6255188de91218",
+    "tool_catalog_version": "2.1.1",
+    "cases_sha256": "eefa0240539bddd38e58920056cca8bccce4e309723dd554c42286ff0c88cfb0"
+  }
+}

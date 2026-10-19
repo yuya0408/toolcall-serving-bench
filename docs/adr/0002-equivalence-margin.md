@@ -120,6 +120,38 @@ Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、�
 **ケース数そのものの問題**：今のケースセットは14件で、どの案でも等価性を言うには少なくとも約140件が要る。
 同じ問題は、精度パスのエンジン間の比較にも当てはまる（こちらは判定方法自体がまだ決まっていない）。ケースをどう増やすかは、別に決める。
 
+## 追記（2026-10-19）：第3パスの対象は「並行数16で対応できる構成すべて」とする
+
+1回目のapply（疎通）の前に、セル一覧へllama.cpp（GGUF bf16）の負荷時の精度のセルを足していた。スキーマは第3パスをvLLM AWQに限っていたので、
+manifestの検証で拒否された（`docs/gpu-smoke-2026-10-18.md`のD3）。
+
+**決定**：第3パスの対象をエンジン名で決めず、**並行数16で対応できる構成（[[docs/adr/0005-capacity-check|ADR-0005]]の容量の判定を通る構成）すべて**とする。
+各構成の中で並行数1と16を比べる。今の見込みでは、対象はvLLM AWQとllama.cpp bf16になる。vLLM bf16は並行数16に載らないこと自体が結果で、
+transformers_hfは並行処理をしない。
+
+- **問いを直す**：計画書の問い「並行性のために選んだvLLMが、精度を犠牲にしていないか」は、vLLMを選ぶことを確かめる形で、どれを選ぶかを決める形になっていなかった。
+  「並行数16で提供できる構成のうち、負荷の下で精度を保つのはどれか」に直す。
+- **交絡は入らない**：比べるのは各構成の中の並行数1と16なので、量子化の違いは入らない。並行数16での「llama.cpp bf16とvLLM AWQのどちらを選ぶか」は、
+  精度パス・第3パス・latencyパスの結果をそろえた上で、エンジンと量子化の差が混ざった**構成の比較**として示す。
+- **経緯**：同じ日に、いったん「vLLM AWQだけ」と決めた。根拠は「業務の並行稼働はvLLMが中心」（Dockerは「Prototype locally with llama.cpp. Scale to production with vLLM.」と
+  役割を分けている）と、「llama.cpp bf16は並行数16に載らない」の2つだった。後者は誤りで、容量の見込みではllama.cpp bf16は並行数16に載る（ADR-0005）。
+  前者は出どころとしては正しいが、自分のデータより先に置くと、vLLMを既定の答えにした非対称な設計になる。そこで決めを覆した。
+- **検討した案**
+
+  | 案 | 採否 | 理由 |
+  | --- | --- | --- |
+  | vLLM AWQだけ（当初の限定どおり） | 却下 | 上の経緯のとおり |
+  | vLLM AWQが精度パスでbf16より劣ったときだけ、llama.cppの第3パスを追加する | 却下 | vLLM AWQを既定の答えにし、反証されたときだけ他を見る非対称な形になる |
+  | llama.cppのGGUF Q4_K_Mを4bitの層に戻し、両エンジンを4bitで比べる | 却下 | 4bitの層でエンジン同士をlatencyで比べると、2026-08-30に避けた交絡（エンジンの違いか、Q4_K_MとAWQの違いか）を抱える |
+  | パイロットの後に決める | 却下 | 対象は容量の判定で決まるので、待つ理由が無い |
+
+- **並行数と精度の傾きは、参考として見る**：第3パスは並行数1と16の2点なので、並行数を上げたときの傾きは見えない。並行数が精度を変える仕組みは
+  バッチの組み方による計算の順序の変化（Atil et al.）で、並行数1では起きず2以上で起きうるので、1と16の比較で影響を押さえる、という考え方だが、
+  影響が並行数に対して単調である保証は無い。そこで、latencyパス（全エンジン・全並行数）のツール呼び出しも保存して採点し、並行数ごとの正解率を**参考値**として出す。
+  latencyパスはtemperature 0.7でクエリの末尾にリクエストIDが付くので、等価性の判定には使わない。
+- **限界**：第3パスの結論は、並行数16で対応できた構成についてしか言えない。
+[Source: User, 第3パスの対象と選定の中立性の検討, 2026-10-19]
+
 ## 参考
 
 - Qwen3 Technical Report, arXiv 2505.09388, Table 14・16・18 — https://arxiv.org/abs/2505.09388
@@ -133,4 +165,6 @@ Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、�
 - （追記）Schuirmann, A comparison of the Two One-Sided Tests Procedure and the Power Approach for assessing the equivalence of average bioavailability, J Pharmacokinet Biopharm 15, 1987（原典は未確認。TOSTと区間による判定の関係は arXiv 2306.06698 で確認）
 - （追記）Obuchowski, On the comparison of correlated proportions for clustered data, Statistics in Medicine 17(13), 1998、Yang, Sun & Hardin, A note on the tests for clustered matched-pair binary data, Biometrical Journal 52(5), 2010（式はRパッケージ clust.bin.pair の実装で確認） — https://cran.r-project.org/web/packages/clust.bin.pair/readme/README.html
 - （追記）Yang, Sun & Hardin, Testing non-inferiority for clustered matched-pair binary data in diagnostic medicine, CSDA 56(5), 2012（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v56y2012i5p1301-1320.html
+- （追記2026-10-19）Docker, Docker Model Runner Integrates vLLM for High-Throughput Inference — https://www.docker.com/blog/docker-model-runner-integrates-vllm/
+- （追記2026-10-19）Hugging Face, Inference Endpoints: llama.cpp — https://huggingface.co/docs/inference-endpoints/en/engines/llama_cpp
 - （追記）Nam, Power and sample size requirements for non-inferiority in studies comparing two matched proportions where the events are correlated, CSDA 55(10), 2011（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v55y2011i10p2880-2887.html
