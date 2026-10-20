@@ -29,7 +29,6 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
-import secrets
 import subprocess
 import sys
 import threading
@@ -45,7 +44,7 @@ from eval_bench.dataset.tools import load_tools  # noqa: E402
 from eval_bench.dataset.tools import to_openai_tools_subset  # noqa: E402
 from eval_bench.dataset.toolsets import build_tool_set  # noqa: E402
 from eval_bench.latency import (  # noqa: E402
-    MIN_REQUESTS, CellAborted, run_latency_cell, tagged_query,
+    MIN_REQUESTS, CellAborted, new_run_tag, run_latency_cell, tagged_query,
 )
 from eval_bench.pipeline import assert_no_thinking, make_predict_fn  # noqa: E402
 from eval_bench.repetition import trial_order  # noqa: E402
@@ -297,7 +296,7 @@ def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter,
     watch = _CapacityWatch(args)
     watch.start()
     send = _make_sender(adapter, cases, tools, args.tool_stage, args.request_timeout,
-                        run_tag=secrets.token_hex(4))
+                        run_tag=new_run_tag())
     raw_path = args.out_dir / f"{run_id}.raw.jsonl"
     try:
         rows, results = run_latency_cell(cases, send, args.concurrency, args.n_requests)

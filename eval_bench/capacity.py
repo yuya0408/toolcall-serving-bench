@@ -30,9 +30,11 @@ from typing import Any, Iterable, Optional
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 PROMPT_BUDGET_PATH = _ROOT / "schema" / "prompt_budget.json"
 
-# One allocation unit on top of the counted length, to absorb tokenizer
-# differences between engines (ADR-0005 2). The offline count matched vLLM's
-# prompt_tokens exactly and llama.cpp's was 4 tokens lower (2026-10-18 smoke).
+# One allocation unit on top of the counted length, for tokenizer differences
+# between engines that were not checked (ADR-0005 2). The offline count matched
+# vLLM's prompt_tokens, and llama.cpp renders the same tokens as HF; the 4 tokens
+# llama.cpp seemed to lack in the 2026-10-18 smoke were the random hex request
+# id, not the engine (2026-10-20).
 MARGIN_UNITS = 1
 
 

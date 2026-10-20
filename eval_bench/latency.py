@@ -28,6 +28,7 @@ data point.
 """
 from __future__ import annotations
 import math
+import secrets
 import threading
 import time
 from dataclasses import dataclass, field
@@ -86,6 +87,14 @@ class TimedResult:
 
 # A sender takes (case, request index) and returns that request's timing.
 SendFn = Callable[[dict[str, Any], int], TimedResult]
+
+
+def new_run_tag() -> str:
+    """Eight random digits, one per cell. Qwen3's tokenizer splits digits one
+    per token, so every tag costs the same number of tokens. A random hex tag
+    cost 16-22 tokens depending on how its letters merged, which made the
+    prompts of two cells differ by a few tokens (2026-10-20)."""
+    return f"{secrets.randbelow(10**8):08d}"
 
 
 def tagged_query(query: str, run_tag: str, index: int) -> str:
