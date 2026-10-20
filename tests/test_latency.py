@@ -19,7 +19,7 @@ from eval_bench.adapters.openai_compatible import LlamaCppAdapter, VLLMAdapter
 from eval_bench.adapters.transformers_hf import TransformersHFAdapter
 from eval_bench.latency import (
     SLO_CLASSES, CellAborted, TimedResult, clopper_pearson_one_sided, exceeds, is_stable,
-    percentiles, run_latency_cell, tagged_query, verdict,
+    new_run_tag, percentiles, run_latency_cell, tagged_query, verdict,
 )
 
 _CASES = [{"id": f"case_{i:02d}", "query": f"q{i}"} for i in range(14)]
@@ -79,6 +79,14 @@ def test_tagged_queries_are_unique_and_keep_the_query_first():
     tagged = {tagged_query("在庫は?", "ab12", i) for i in range(1000)}
     assert len(tagged) == 1000
     assert all(t.startswith("在庫は?") for t in tagged)
+
+
+def test_run_tags_are_eight_digits():
+    # Digits only: every value then costs the same number of tokens, so two
+    # cells' prompts do not differ by the tag (scripts/count_prompt_tokens.py).
+    tags = [new_run_tag() for _ in range(200)]
+    assert all(len(tag) == 8 and tag.isdigit() for tag in tags)
+    assert len(set(tags)) > 1
 
 
 # -------------------------------------------------------------------- driver
