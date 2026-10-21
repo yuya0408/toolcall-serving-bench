@@ -54,8 +54,8 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 
 1. **AMIの前提の確認**：`nvidia-smi`と`nvcc --version`。`nvcc`が無ければllama.cppのCUDAビルドができないので、ここで止まる
    （AMI `base-oss-nvidia-driver-gpu-ubuntu-22.04`の前提が崩れたということ）。自動シャットダウンの予定（`shutdown --show`）も記録する。
-2. vLLM・transformers（accelerate）の環境を`uv`で作る（`~/venv`）。
-3. llama.cppをCUDA（L4はsm_89）でビルドする。**コミットハッシュは`~/out/llama_cpp_commit.txt`にすぐ書く**。destroyの後は二度と取れず、
+2. vLLM・transformers（accelerate）の環境を`uv`で作る（`~/venv`）。版は`scripts/gpu/pins.sh`で固定している（ADR-0006）。
+3. llama.cppを`pins.sh`のコミットにして、CUDA（L4はsm_89）でビルドする。**コミットハッシュは`~/out/llama_cpp_commit.txt`にすぐ書く**。destroyの後は二度と取れず、
    manifestの`engine_version`がこの形式（`^[0-9a-f]{7,40}$`）を求める。
 4. `Qwen/Qwen3-8B`と`Qwen/Qwen3-8B-AWQ`をHugging Faceのキャッシュへダウンロードし、`Qwen/Qwen3-8B`のsafetensorsから
    BF16のGGUFを作る（[[docs/engine-performance-plan|計画書]]の「BF16 GGUF変換手順」。変換は別の環境`~/venv-convert`で行う。
@@ -65,7 +65,8 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
    - b. `--tool-call-parser hermes`があるか → `checks/vllm_tool_call_parser.txt`（ログの最後に「hermes parser: listed」と出る）
    - c. llama.cppが`seed`を守るか → `checks/llama_seed.json`。同じseedで2回送った答えが違えば、llama.cppの実行は1回ごとに再現するとは
      みなさず、そのことを記事・結果に書く。
-6. 終わると`~/out/SETUP_DONE`ができる。
+6. 5のaで`versions.json`を書いた直後に、`pins.sh`と突き合わせ、エンジンの版かモデルのリビジョンが1つでも違えば、準備を失敗させる（`SETUP_FAILED`に「not the pinned versions」）。
+7. 終わると`~/out/SETUP_DONE`ができる。
 
 あわせて、次を記録する（次のapplyの見積もりと、測定が壊れていないかの確認に使う）。
 

@@ -13,6 +13,7 @@ set -euo pipefail
 OUT=~/out
 MODELS=~/models
 REPO=~/toolcall-serving-bench
+source "$REPO/scripts/gpu/pins.sh"   # the engine versions and model revisions every apply runs
 mkdir -p "$OUT/checks" "$MODELS"
 rm -f "$OUT/SETUP_DONE" "$OUT/SETUP_FAILED"
 # A marker local.sh collect stops on; the failing command is the last lines of ~/out/setup.log.
@@ -70,12 +71,14 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 uv venv --allow-existing --python 3.12 ~/venv
 # vLLM brings torch and transformers; accelerate is for transformers_hf's device_map.
-uv pip install --python ~/venv/bin/python vllm accelerate -r "$REPO/requirements.txt" --torch-backend=auto
+uv pip install --python ~/venv/bin/python "vllm==$VLLM_VERSION" "transformers==$TRANSFORMERS_VERSION" \
+  accelerate -r "$REPO/requirements.txt" --torch-backend=auto
 
 step "llama.cpp (CUDA, L4 = sm_89)"
 if [ ! -d ~/llama.cpp ]; then
   git clone https://github.com/ggml-org/llama.cpp.git ~/llama.cpp
 fi
+git -C ~/llama.cpp checkout -q --detach "$LLAMA_CPP_COMMIT"
 git -C ~/llama.cpp rev-parse HEAD > "$OUT/llama_cpp_commit.txt"   # never recoverable after destroy
 cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_CUDA_ARCHITECTURES=89
 cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" --target llama-server
@@ -117,6 +120,19 @@ versions = {
 }
 (out / "versions.json").write_text(json.dumps(versions, indent=2) + "\n")
 print(json.dumps(versions, indent=2))
+EOF
+# Anything other than scripts/gpu/pins.sh would be a different measurement: stop here.
+~/venv/bin/python - "$OUT/versions.json" "$VLLM_VERSION" "$TRANSFORMERS_VERSION" "$LLAMA_CPP_COMMIT" \
+  "$QWEN3_8B_REVISION" "$QWEN3_8B_AWQ_REVISION" <<'EOF'
+import json, sys
+got = json.load(open(sys.argv[1]))
+want = {"vllm": sys.argv[2], "transformers": sys.argv[3], "llama_cpp_commit": sys.argv[4],
+        "Qwen/Qwen3-8B": sys.argv[5], "Qwen/Qwen3-8B-AWQ": sys.argv[6]}
+have = {**{k: got[k] for k in ("vllm", "transformers", "llama_cpp_commit")}, **got["model_revisions"]}
+wrong = {k: (have.get(k), v) for k, v in want.items() if have.get(k) != v}
+if wrong:
+    sys.exit("not the pinned versions (installed, pinned): " + json.dumps(wrong))
+print("pinned versions: ok")
 EOF
 grep -c hermes "$OUT/checks/vllm_tool_call_parser.txt" >/dev/null && echo "hermes parser: listed" || echo "hermes parser: NOT FOUND -- check $OUT/checks/vllm_tool_call_parser.txt"
 step "does llama.cpp honour seed (runbook step 4c)"
