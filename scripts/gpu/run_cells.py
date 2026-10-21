@@ -17,8 +17,9 @@ Memory is sized to the requirement, never searched (docs/adr/0005 1): vLLM
 keeps its default --gpu-memory-utilization; llama.cpp gets
 --ctx-size = concurrency x the longest request (schema/prompt_budget.json +
 max_tokens), --kv-unified and --fit off. Before a concurrency>1 cell runs, the
-capacity pre-check reads what the server actually holds (vLLM /metrics,
-llama.cpp /props); a vLLM startup that comes out short is restarted once
+capacity pre-check reads what the server actually holds (vLLM /metrics;
+llama.cpp reports no total, so its --ctx-size, with /props n_ctx as the
+per-slot limit); a vLLM startup that comes out short is restarted once
 (some first startups on a fresh instance came out exactly 1 GiB short), and a
 cell that still does not fit is recorded unsupported without running.
 
@@ -164,11 +165,11 @@ def needs_capacity_check(cell: dict[str, Any]) -> bool:
     return cell["engine"] in PORT and cell.get("concurrency", 1) > 1
 
 
-def read_capacity(engine: str) -> dict[str, Any]:
+def read_capacity(engine: str, ctx_size: int | None = None) -> dict[str, Any]:
     base = f"http://127.0.0.1:{PORT[engine]}"
     if engine == "vllm":
         return capacity.vllm_capacity(capacity.fetch_metrics(base))
-    return capacity.llama_capacity(capacity.fetch_props(base))
+    return capacity.llama_capacity(capacity.fetch_props(base), ctx_size)
 
 
 def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
@@ -267,7 +268,9 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                     status.setdefault("kv_capacity_tokens", []).append(read_capacity("vllm")["tokens"])
                 if not needs_capacity_check(cell):
                     break
-                pre = capacity.pre_check(cell["engine"], read_capacity(cell["engine"]),
+                ctx_size = (llama_server_settings(cell, max_prompt)["ctx_size"]
+                            if cell["engine"] == "llama_cpp" else None)
+                pre = capacity.pre_check(cell["engine"], read_capacity(cell["engine"], ctx_size),
                                          max_prompt, MAX_TOKENS, cell["concurrency"])
                 if pre["fits"] or cell["engine"] != "vllm" or restarts == 1:
                     break
