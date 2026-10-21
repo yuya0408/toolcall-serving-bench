@@ -190,7 +190,7 @@ def _served(monkeypatch, tmp_path, capacities):
         return [sys.executable, "-c", "pass"]
 
     monkeypatch.setattr(run_cells, "_start_server", start)
-    monkeypatch.setattr(run_cells, "read_capacity", lambda engine: next(seq))
+    monkeypatch.setattr(run_cells, "read_capacity", lambda engine, ctx_size=None: next(seq))
     monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
     monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
     monkeypatch.setattr(run_cells, "run_cell_command", fake_run_cell_command)
@@ -227,11 +227,46 @@ def test_a_cell_that_still_does_not_fit_is_unsupported_without_running(tmp_path,
 
 
 def test_llama_cpp_is_never_restarted_for_capacity(tmp_path, monkeypatch):
-    llama = {"unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "slots": 16}
+    llama = {"unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "per_slot_tokens": 40960,
+             "slots": 16}
     starts, runs = _served(monkeypatch, tmp_path, [llama])
     status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and len(starts) == 1
     assert "kv_capacity_tokens" not in status
+
+
+def test_llama_cpp_capacity_is_read_with_the_ctx_size_it_was_started_with(tmp_path, monkeypatch):
+    seen = []
+    starts, runs = _served(monkeypatch, tmp_path, [])
+    props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
+
+    def read(engine, ctx_size=None):
+        seen.append(ctx_size)
+        return run_cells.capacity.llama_capacity(props, ctx_size)
+
+    monkeypatch.setattr(run_cells, "read_capacity", read)
+    status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and seen == [49664]
+
+
+def test_the_seed_check_starts_a_sized_llama_server(tmp_path, monkeypatch):
+    # 2026-10-21: it called server_command without the budget and never ran.
+    spec = importlib.util.spec_from_file_location("check_llama_seed",
+                                                  _ROOT / "scripts" / "gpu" / "check_llama_seed.py")
+    seed = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(seed)
+    commands = []
+
+    def spawn(cmd, log):
+        commands.append(cmd)
+        raise RuntimeError("stop here")
+
+    monkeypatch.setattr(pathlib.Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(seed.run_cells, "_spawn", spawn)
+    with pytest.raises(RuntimeError, match="stop here"):
+        seed.main()
+    cmd = commands[0]
+    assert cmd[cmd.index("--ctx-size") + 1] == "3328" and cmd[cmd.index("--parallel") + 1] == "1"
 
 
 def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):

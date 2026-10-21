@@ -254,12 +254,13 @@
           "type": "object",
           "required": ["unit", "unit_tokens", "units", "tokens"],
           "additionalProperties": false,
-          "description": "vLLM: /metrics vllm:cache_config_info (num_gpu_blocks x block_size). llama.cpp: /props n_ctx with --kv-unified.",
+          "description": "vLLM: /metrics vllm:cache_config_info (num_gpu_blocks x block_size). llama.cpp: the --ctx-size the server was started with (--kv-unified: one cache shared by every slot; llama-server reports no total), plus /props n_ctx as per_slot_tokens.",
           "properties": {
             "unit": { "enum": ["block", "token"] },
             "unit_tokens": { "type": "integer", "minimum": 1 },
             "units": { "type": "integer", "minimum": 0 },
             "tokens": { "type": "integer", "minimum": 0 },
+            "per_slot_tokens": { "type": "integer", "minimum": 0, "description": "llama.cpp: /props n_ctx, the per-slot limit; capped at the model's training context (Qwen3-8B: 40,960) when --ctx-size exceeds it. The longest request must fit in it." },
             "slots": { "type": ["integer", "null"] }
           }
         },

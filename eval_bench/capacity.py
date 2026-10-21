@@ -7,7 +7,8 @@ does the arithmetic and reads the engines' machine-facing endpoints:
 
 - the pre-check, before the cell runs: c x (the longest request, rounded up
   to the engine's allocation unit) <= the KV capacity the server reports
-  (vLLM: /metrics `vllm:cache_config_info`; llama.cpp: /props `n_ctx`);
+  (vLLM: /metrics `vllm:cache_config_info`; llama.cpp: the --ctx-size it was
+  started with, and /props `n_ctx` as the per-slot limit);
 - the post-check, after: vLLM preempted nothing (the `vllm:num_preemptions`
   counter's delta); llama.cpp, which has no such counter, returned no
   response cut off by the length limit;
@@ -165,11 +166,17 @@ def startup_log_max_concurrency(startup_log: str) -> Optional[float]:
 
 # ---------------------------------------------------------------- llama.cpp /props
 
-def llama_capacity(props: dict[str, Any]) -> dict[str, Any]:
-    """KV capacity from /props. With --kv-unified every slot can use the whole
-    shared cache, so the per-slot n_ctx is the total."""
-    n_ctx = int(props["default_generation_settings"]["n_ctx"])
-    return {"unit": "token", "unit_tokens": 1, "units": n_ctx, "tokens": n_ctx,
+def llama_capacity(props: dict[str, Any], ctx_size: int) -> dict[str, Any]:
+    """KV capacity of a server started with --ctx-size ctx_size --kv-unified.
+
+    llama-server reports no total: /props n_ctx is the per-slot limit. It equals
+    the total only while the total is within the model's training context
+    (Qwen3-8B: 40,960); past that the server caps each slot there and keeps the
+    whole shared cache (2026-10-21, b11716 and b11785). So the total is the
+    --ctx-size we set, the documented meaning of --kv-unified, and /props n_ctx
+    is kept as the per-slot limit every request must also fit in."""
+    return {"unit": "token", "unit_tokens": 1, "units": ctx_size, "tokens": ctx_size,
+            "per_slot_tokens": int(props["default_generation_settings"]["n_ctx"]),
             "slots": int(props.get("total_slots", 0)) or None}
 
 
@@ -195,13 +202,17 @@ def pre_check(engine: str, capacity: dict[str, Any], max_prompt_tokens: int, max
               concurrency: int) -> dict[str, Any]:
     per_request = per_request_max(max_prompt_tokens, max_tokens)
     required = required_tokens(per_request, concurrency, capacity["unit_tokens"])
+    fits = required <= capacity["tokens"]
+    if capacity.get("per_slot_tokens") is not None:
+        # llama.cpp: the longest request must also fit in one slot.
+        fits = fits and required_tokens(per_request, 1, capacity["unit_tokens"]) <= capacity["per_slot_tokens"]
     return {
         "engine": engine,
         "capacity": capacity,
         "required": {"concurrency": concurrency, "per_request_tokens": per_request,
                      "margin_units": MARGIN_UNITS, "tokens": required},
         "max_prompt_tokens_planned": max_prompt_tokens,
-        "fits": required <= capacity["tokens"],
+        "fits": fits,
     }
 
 

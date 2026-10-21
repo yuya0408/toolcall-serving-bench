@@ -22,9 +22,11 @@ def main() -> int:
     import requests
     out = pathlib.Path.home() / "out" / "checks"
     out.mkdir(parents=True, exist_ok=True)
-    cell = {"engine": "llama_cpp", "quantization": "gguf-bf16"}
+    # Sized like a concurrency-1 cell of the cell lists (a llama.cpp server is sized from the budget).
+    cell = {"engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10}
+    budget = run_cells.load_budget([cell])
     with (out / "llama_seed_server.log").open("w") as log:
-        proc = run_cells._spawn(run_cells.server_command(cell), log)
+        proc = run_cells._spawn(run_cells.server_command(cell, budget["max_prompt_tokens"]), log)
     try:
         if not run_cells._wait_ready("llama_cpp", proc):
             raise SystemExit("llama-server did not become ready; see ~/out/checks/llama_seed_server.log")

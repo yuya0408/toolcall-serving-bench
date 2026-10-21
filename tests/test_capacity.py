@@ -64,10 +64,20 @@ def test_llama_ctx_size_is_the_requirement_rounded_to_256():
     assert capacity.llama_ctx_size(3103, 1) == 3328
 
 
-def test_llama_capacity_reads_props():
-    props = {"default_generation_settings": {"n_ctx": 49664}, "total_slots": 16}
-    assert capacity.llama_capacity(props) == {"unit": "token", "unit_tokens": 1, "units": 49664,
-                                              "tokens": 49664, "slots": 16}
+def test_llama_capacity_is_the_ctx_size_and_props_is_the_per_slot_limit():
+    # The 2026-10-21 apply: --ctx-size 49664 --parallel 16 --kv-unified, and /props
+    # n_ctx capped at Qwen3-8B's training context.
+    props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
+    assert capacity.llama_capacity(props, 49664) == {"unit": "token", "unit_tokens": 1, "units": 49664,
+                                                     "tokens": 49664, "per_slot_tokens": 40960, "slots": 16}
+
+
+def test_llama_pre_check_fits_when_the_total_and_one_slot_both_hold():
+    props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
+    assert capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49664), 2591, 512, 16)["fits"]
+    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49408), 2591, 512, 16)["fits"]
+    short_slot = {"default_generation_settings": {"n_ctx": 3103}, "total_slots": 16}
+    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(short_slot, 49664), 2591, 512, 16)["fits"]
 
 
 def test_pre_check_fits_only_when_every_request_can_grow_to_the_longest():

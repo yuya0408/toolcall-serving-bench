@@ -36,7 +36,7 @@
   上げても判定が変わるセルが無い（bf16の16は0.97にしても約12本で届かず、AWQの32は既定で載る。導出）。エンジンの既定値を使えば、余白の量という根拠の無い数字を持ち込まない。
 - **llama.cpp**：セルごとに`--ctx-size` ＝ c × 1リクエストの最大（を切り上げた値）にし、`--kv-unified`で全スロットが共有する。`--fit off`を明示する
   （既定のonでは、設定していない引数をメモリに収まるよう黙って縮めうるため。使うコミットに`--fit`が無ければ指定しない）。
-  起動したときにllama.cppが報告する実際の`n_ctx`を容量として記録する。
+  起動したときにllama.cppが報告する実際の`n_ctx`を容量として記録する。（2026-10-21訂正：`n_ctx`は1スロットの上限で、総容量ではなかった。総容量は`--ctx-size`から取る。末尾の追記を参照）
 - **上限は探さない。** 探しても判定は変わらず、併記する数字の精度が上がるだけである。
 
 ### 2. 事前の判定：GPUの時間を使う前に、入りきるかを計算で確かめる
@@ -49,7 +49,7 @@
   latencyパスはクエリの末尾の識別子（約22トークン）も含める。疎通の実測では、この数え方はvLLMの`prompt_tokens`と90件すべてで一致し（識別子の分で±1）、
   llama.cppは常に4トークン少なかった。数えた値に割り当ての単位1つ分（vLLMは16トークン）を足して、エンジン間のずれを吸収する。
   （2026-10-20訂正：「llama.cppは常に4トークン少ない」はエンジンの差ではなかった。識別子がランダムな16進数で、英字のまとまり方によってトークン数が変わり（末尾の識別子全体で16〜22）、vLLMのセルとllama.cppのセルで違う識別子を引いていたためである。llama.cppは同じテンプレートをHFと1トークンも違わず描画する（手元のb11716で確認）。識別子は数字8桁に変え、値によらずトークン数が一定になった。数え直した最大値は2,591のままで、判定は変わらない）余裕の1単位は、確かめていないエンジン間の差への備えとして残す。
-- **容量**は、vLLMは`/metrics`の`vllm:cache_config_info`（`num_gpu_blocks` × `block_size`）から、サーバーの起動後に1回読む。llama.cppは起動時に報告された`n_ctx`。
+- **容量**は、vLLMは`/metrics`の`vllm:cache_config_info`（`num_gpu_blocks` × `block_size`）から、サーバーの起動後に1回読む。llama.cppは起動時に報告された`n_ctx`。（2026-10-21訂正：llama.cppは`--ctx-size`を総容量とし、`/props`の`n_ctx`は1スロットの上限として別に確かめる。末尾の追記を参照）
 - **足りないとき**：
   - vLLMは、サーバーを1回だけ起動し直して読み直す（少なく出たのは、新しいインスタンスで最初の起動だけだったため）。それでも足りなければ「対応していない」。起動し直したことも記録する。
   - llama.cppは、要件どおりの`--ctx-size`で起動できなければ（`server_not_ready`）「対応していない」。
@@ -122,11 +122,45 @@ vLLM専用の`vllm_diagnostics`を、全エンジン共通の`capacity_check`に
 - **1GiB少ない起動の原因は分かっていない。** 次のapplyでも起動ごとの容量を記録し、起きるかを確かめる（手順書に書く）。
 - **ADR-0003の2節「vLLMは既存の`Maximum concurrency`ガードを、latencyパスでもそのまま使う」は、このADRで置き換える。**
 
+## 追記（2026-10-21）：llama.cppの総容量は`--ctx-size`から取り、`/props`の`n_ctx`は1スロットの上限として確かめる
+
+**起きたこと。** 2回目のapplyの`capacity-smoke.json`で、llama.cppの並行数16のセルが事前の判定で`unsupported`になった。
+`--ctx-size 49664 --parallel 16 --kv-unified`で起動したが、`/props`の`n_ctx`は40,960だった。起動ログには
+「the slot context (49664) exceeds the training context of the model (40960) - capping」「n_slots = 16, n_ctx_slot = 40960」とある。
+llama-serverは、1スロットの文脈長をモデルの学習時の長さ（Qwen3-8Bの`n_ctx_train` 40,960）までに切り詰め、共有するKVキャッシュは`--ctx-size`のまま確保する。
+`/props`の`n_ctx`は1スロットの上限で、総容量と一致するのは、総容量が学習時の長さ以内のときだけだった。
+疎通（2026-10-18）は`--ctx-size 40960`で起動しており、ちょうど上限で切り詰めが起きなかったため、この違いが見えなかった。
+
+**版の違いではない。** 2回目のapplyのllama.cpp（b11785、8baabd5）は疎通（848bbda）と違うが、手元のb11716（CPU版）とQwen3-0.6B
+（`n_ctx_train`は同じ40,960）で同じ起動をすると、同じく40,960に切り詰められた。2節の「llama.cppは起動時に報告された`n_ctx`」が、
+総容量が学習時の長さを超える場合を想定していなかった。容量そのものは足りていた。
+
+**総容量を返す口が無い。** llama-serverのREADMEでは、`/props`の`n_ctx`も`/slots`の各スロットの`n_ctx`も1スロットあたりの値で、
+`/metrics`にも容量の項目は無い（あるのは実際に使った最大の`n_tokens_max`）。起動ログの警告には`n_ctx_seq (49664)`と総量が出るが、
+上限を超えたときにしか出ず、文言は版で変わりうる。
+
+**決めたこと。**
+- llama.cppの総容量（`capacity.tokens`）は、起動に使った`--ctx-size`とする。根拠は`--kv-unified`の仕様（全スロットで1つのKVバッファを共有する、README）。
+- `/props`の`n_ctx`は`capacity.per_slot_tokens`として記録し、「1リクエストの最大＋余裕1単位 ≤ 1スロットの上限」も判定に加える。総容量と1スロットの両方が足りるときだけ`fits`。
+- 事後の確かめ（3節：長さの上限で止まった応答とエラーが0）は変えない。総容量の見立てが外れていれば、ここで捕まる。
+- この判定で、2回目のapplyの値は総容量49,664 ≥ 必要49,664、1スロット40,960 ≥ 3,104で`fits`になる。
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| 総容量を起動ログの警告（`n_ctx_seq`）から読む | 却下 | 上限を超えたときにしか出ない。文言は版で予告なく変わる（vLLMの起動ログを却下したのと同じ理由） |
+| llama.cppのコミットを疎通の版に固定して直す | この件では却下 | 疎通の版でも同じく切り詰める（手元のb11716で確認）。apply間で版を固定するかは別に扱う |
+| YaRNで学習時の長さを延ばし、切り詰めを避ける | 却下 | モデルの振る舞いが変わり、vLLMと同じ条件で比べられなくなる |
+
+**あわせて直したもの。** `scripts/gpu/check_llama_seed.py`が、プロンプトの予算を渡さずにllama.cppのサーバーのコマンドを作っており
+（このADRで`--ctx-size`を予算から決めるようにした後）、2回目のapplyで落ちて`checks/llama_seed.json`が作られなかった。
+並行数1のセルと同じ大きさで起動するようにした。
+
 ## 参考
 
 - vLLM v0.31.0 ソース：`vllm/v1/metrics/loggers.py`（`vllm:cache_config_info`・`vllm:num_preemptions`・`vllm:request_queue_time_seconds`・`vllm:num_requests_waiting_by_reason`）、`vllm/config/cache.py`、`vllm/v1/worker/gpu_worker.py` — https://github.com/vllm-project/vllm
 - vLLM, Optimization and Tuning（preemptionと`gpu_memory_utilization`） — https://docs.vllm.ai/en/stable/configuration/optimization
-- ggml-org/llama.cpp, server README（`--fit`・`--fit-target`・`--ctx-size`・`--kv-unified`） — https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- ggml-org/llama.cpp, server README（`--fit`・`--fit-target`・`--ctx-size`・`--kv-unified`・`/props`・`/slots`・`/metrics`） — https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
 - ggml-org/llama.cpp, fit-params README — https://github.com/ggml-org/llama.cpp/blob/master/tools/fit-params/README.md
 - ggml-org/llama.cpp Issue #18390（`--fit-target`のデバイスごとの値） — https://github.com/ggml-org/llama.cpp/issues/18390
+- ggml-org/llama.cpp Discussion #22658（`--ctx-size`が統合KVの総量と1リクエストの上限を兼ねる） — https://github.com/ggml-org/llama.cpp/discussions/22658
 - mlcommons/inference_policies, inference_rules.adoc（Closed部門） — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc

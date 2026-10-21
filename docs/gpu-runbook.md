@@ -103,7 +103,9 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目
 （`smoke.json`の並行数16の2セル、20件×2試行）だけを回す。`collect`で回収し、次の3点を確かめてからパイロットに進む。
 1つでも外れたら、パイロットには進まずdestroyして手元で直す。
 
-1. 2セルとも`ok`。`~/out/<セル名>/capacity_check.json`の`capacity.tokens`が読めている（vLLM AWQは約99,552、llama.cppは49,664）。
+1. 2セルとも`ok`。`~/out/<セル名>/capacity_check.json`の`capacity.tokens`が読めている（vLLM AWQは約99,552、llama.cppは`--ctx-size`の49,664）。
+   llama.cppは`capacity.per_slot_tokens`が40,960（モデルの学習時の長さで切り詰めた1スロットの上限、ADR-0005の追記2026-10-21）。
+   あわせて`checks/llama_seed.json`ができている（2026-10-21のapplyでは不具合で作られなかった）。
 2. 2セルのmanifestに`capacity_check`があり、`post_check.ok`が`true`。vLLMは`preemptions`が0、`queue_time.count`が0でない。
 3. llama.cppの`server_command.txt`が`--ctx-size 49664 --parallel 16 --kv-unified --fit off`。
 
