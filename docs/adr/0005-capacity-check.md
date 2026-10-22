@@ -84,7 +84,7 @@ vLLM専用の`vllm_diagnostics`を、全エンジン共通の`capacity_check`に
 | `required` | （1リクエストの最大 ＋ 余裕）を単位で切り上げ、c倍したもの | 事前の計算 |
 | `max_prompt_tokens_planned`・`max_prompt_tokens_observed` | 事前に数えた値と、実測の最大値 | 手元のトークン化、`usage` |
 | `restarts` | 容量が足りずにサーバーを起動し直した回数（vLLMのみ。0か1） | `run_cell` |
-| `post_check` | vLLMは中断の回数。llama.cppはエラーの件数と打ち切りの件数 | `/metrics`の前後の差、生出力 |
+| `post_check` | vLLMは中断の回数。llama.cppはエラーの件数と打ち切りの件数（`max_tokens`まで出して止まったものは除く。追記2026-10-23） | `/metrics`の前後の差、生出力 |
 | `queue_time`（vLLMのみ） | 待ち時間の合計・件数・ヒストグラムの区間ごとの件数（記録だけ） | `/metrics`の前後の差 |
 | `startup_log_max_concurrency`（vLLMのみ、任意） | 起動ログの`Maximum concurrency`（照合用。読めなければ省く） | 起動ログ |
 
@@ -154,6 +154,33 @@ llama-serverは、1スロットの文脈長をモデルの学習時の長さ（Q
 **あわせて直したもの。** `scripts/gpu/check_llama_seed.py`が、プロンプトの予算を渡さずにllama.cppのサーバーのコマンドを作っており
 （このADRで`--ctx-size`を予算から決めるようにした後）、2回目のapplyで落ちて`checks/llama_seed.json`が作られなかった。
 並行数1のセルと同じ大きさで起動するようにした。
+
+## 追記（2026-10-23）：llama.cppの事後の確かめは、max_tokensまで出して止まった応答を数えない
+
+**起きたこと。** 2回目のapply（pilot-1）で、llama.cpp bf16の並行数16のlatencyのセルが事後の確かめに落ちた（`capacity_misestimate`）。
+原因は、cooldownの1件（case_1120、ツールを呼ばずに文章で答えるケース）が`max_tokens`の512トークンを出し切って止まったことだった。
+同じケースは並行数1でも毎回512で止まっている。server.logの各応答の`truncated`は933件すべて0で、文脈が尽きて止まった応答は無かった。
+
+**原因。** OpenAI互換APIの`finish_reason`は、`max_tokens`に達したときも文脈が尽きたときも`"length"`を返す。llama-serverは内部では
+文脈が尽きたときに`truncated`を立てる（`tools/server/server-context.cpp`、コミット848bbda）。独自の`/completion`とログにはこの値を出すが、
+`/v1/chat/completions`の応答には載せない。3節は`"length"`をすべて容量不足の目印として数えていた。
+
+**決めたこと。**
+- `"length"`で止まった応答のうち、出力が`max_tokens`に達したもの（`usage.completion_tokens`、latencyでは`output_tokens`）は数えない。
+  出力の上限は事前の判定で1リクエストぶん確保している（2節の「プロンプトの最大＋512」）ので、容量の見積もりとは関係がない。
+  数えるのは、`max_tokens`に届かずに止まったもの（文脈が尽きたもの）だけにする。
+- 出力の長さが読めない応答は区別できないので、これまでどおり数える。
+- マニフェストの`length_finished`は意味を変えずに残し（`"length"`で止まった全件）、そのうち`max_tokens`に達したものを`output_limit_finished`として記録する。
+  これを持たない前のマニフェストもスキーマを通る。
+- warmup・cooldownも含めて、全区間の応答を数える（変更なし）。事後の確かめが見るのは数値ではなく見積もりの正しさで、
+  文脈が尽きたのなら区間によらずスロットの文脈が足りなかったことになり、計測区間でも同じことが起こりうる。
+- この判定で、pilot-1の該当セルは事後の確かめを通る（`length_finished` 1、`output_limit_finished` 1）。
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| 計測区間（measured）の応答だけを数える | 却下 | 見積もりの誤りは区間を選ばない。今回の誤検知は数え方の誤りで、区間を絞っても、計測区間で同じ形の応答があれば同じく落ちる |
+| server.logの`truncated = 1`も数える | 今回は見送り | エンジン内部の値なので直接的だが、ログの書式は版で変わりうる（起動ログを却下したのと同じ理由）。応答側の判定はソースの条件と一致しており、ログは食い違いが出たときの確かめに使う |
+| llama.cppに、互換APIの応答にも`truncated`を載せるよう要望する | 見送り | `finish_reason`の曖昧さはOpenAIの仕様に由来する（vLLMも同じ）。応答側の回避策で足りている |
 
 ## 参考
 
