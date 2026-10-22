@@ -253,3 +253,9 @@ def test_a_capacity_check_for_another_concurrency_is_refused(tmp_path, fake_late
     check = _pre_check(tmp_path, concurrency=4)
     with pytest.raises(SystemExit):
         _run_latency(tmp_path, "--concurrency", "2", "--capacity-check", str(check))
+
+
+def test_length_stops_separate_the_output_limit_from_the_context():
+    finishes = [("length", 512), ("length", 300), ("length", None), ("stop", 512), ("tool_calls", 40)]
+    # An unknown output length cannot be told apart, so it stays a problem.
+    assert run_cell._length_stops(finishes, 512) == (3, 1)

@@ -245,7 +245,8 @@ class _CapacityWatch:
         if self.pre is not None and self.args.engine == "vllm":
             self.before = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
 
-    def result(self, prompt_tokens, length_finished: int) -> dict[str, Any] | None:
+    def result(self, prompt_tokens, length_finished: int,
+               output_limit_finished: int) -> dict[str, Any] | None:
         if self.pre is None:
             return None
         delta = None
@@ -253,7 +254,8 @@ class _CapacityWatch:
             after = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
             delta = capacity.vllm_counter_delta(self.before, after)
         post = capacity.post_check(self.args.engine, self.pre["max_prompt_tokens_planned"],
-                                   prompt_tokens, vllm_delta=delta, length_finished=length_finished)
+                                   prompt_tokens, vllm_delta=delta, length_finished=length_finished,
+                                   output_limit_finished=output_limit_finished)
         return {**self.pre, "post_check": post}
 
 
@@ -314,7 +316,8 @@ def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter,
     print(f"wrote {raw_path}")
     results["reference_accuracy"] = _reference_accuracy(rows, cases, decoder, args.engine)
     check = watch.result([r["prompt_tokens"] for r in rows],
-                         sum(1 for r in rows if r.get("finish_reason") == "length"))
+                         *_length_stops([(r.get("finish_reason"), r.get("output_tokens")) for r in rows],
+                                        args.max_tokens))
     if check is not None:
         results["capacity_check"] = check
     _finish(args, run_id, cell, results, repetition=None)
@@ -368,8 +371,8 @@ def main(argv: list[str] | None = None) -> int:
     raw_path = args.out_dir / f"{run_id}.raw.jsonl"
     raw_log.write(raw_path)
     print(f"wrote {raw_path}")
-    prompt_tokens, length_finished = _usage_of(raw_log.rows)
-    check = watch.result(prompt_tokens, length_finished)
+    prompt_tokens, finishes = _usage_of(raw_log.rows)
+    check = watch.result(prompt_tokens, *_length_stops(finishes, args.max_tokens))
     if check is not None:
         results["capacity_check"] = check
     _finish(args, run_id, cell, results, repetition={"n": args.n, "seed_base": args.seed_base})
@@ -378,11 +381,11 @@ def main(argv: list[str] | None = None) -> int:
     return _post_check_exit(check)
 
 
-def _usage_of(rows) -> tuple[list, int]:
-    """Prompt lengths and length-limited responses from the accuracy passes'
-    raw outputs (the reserved keys the OpenAI-compatible adapter adds)."""
+def _usage_of(rows) -> tuple[list, list]:
+    """Prompt lengths and (finish_reason, completion tokens) from the accuracy
+    passes' raw outputs (the reserved keys the OpenAI-compatible adapter adds)."""
     from eval_bench.adapters.openai_compatible import FINISH_REASON_KEY, USAGE_KEY
-    prompt_tokens, length_finished = [], 0
+    prompt_tokens, finishes = [], []
     for row in rows:
         try:
             message = json.loads(row["raw_output"])
@@ -390,9 +393,18 @@ def _usage_of(rows) -> tuple[list, int]:
             continue
         if not isinstance(message, dict):
             continue
-        prompt_tokens.append((message.get(USAGE_KEY) or {}).get("prompt_tokens"))
-        length_finished += message.get(FINISH_REASON_KEY) == "length"
-    return prompt_tokens, length_finished
+        usage = message.get(USAGE_KEY) or {}
+        prompt_tokens.append(usage.get("prompt_tokens"))
+        finishes.append((message.get(FINISH_REASON_KEY), usage.get("completion_tokens")))
+    return prompt_tokens, finishes
+
+
+def _length_stops(finishes, max_tokens: int) -> tuple[int, int]:
+    """Responses that stopped at the length limit, and those of them that had
+    generated max_tokens (their own output limit, not the context). One whose
+    output length is unknown is not counted as the output limit."""
+    lengths = [n for reason, n in finishes if reason == "length"]
+    return len(lengths), sum(1 for n in lengths if n is not None and n >= max_tokens)
 
 
 def _post_check_exit(check) -> int:

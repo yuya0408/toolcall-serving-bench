@@ -98,6 +98,14 @@ def test_post_check_for_llama_cpp_counts_length_limited_responses():
     assert not capacity.post_check("llama_cpp", 2591, [2587], length_finished=2)["ok"]
 
 
+def test_post_check_for_llama_cpp_does_not_count_responses_at_max_tokens():
+    # Pilot-1's llama.cpp c16 latency cell: one cooldown response generated all 512 tokens.
+    post = capacity.post_check("llama_cpp", 2591, [2250], length_finished=1, output_limit_finished=1)
+    assert post["ok"] and post["output_limit_finished"] == 1
+    assert not capacity.post_check("llama_cpp", 2591, [2250], length_finished=2,
+                                   output_limit_finished=1)["ok"]
+
+
 def test_the_committed_budget_matches_the_current_cases_and_catalog():
     # Editing a case or the catalog without recounting must fail here, not on the GPU.
     version = json.loads(open("schema/tools.json", encoding="utf-8").read())["version"]

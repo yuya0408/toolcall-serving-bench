@@ -299,7 +299,8 @@
                 "buckets": { "type": "object", "additionalProperties": { "type": "integer" } }
               }
             },
-            "length_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: responses that stopped at the length limit." }
+            "length_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: responses that stopped at the length limit." },
+            "output_limit_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: of length_finished, those that had generated max_tokens (the output limit the pre-check reserved, not a problem)." }
           }
         }
       }
