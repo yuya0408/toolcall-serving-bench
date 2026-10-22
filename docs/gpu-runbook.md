@@ -80,6 +80,11 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
   `gpu.csv`と`vmstat.log`のどの時間帯がどのセルかは、この時刻で対応を付ける。
 - `status.jsonl`の`kv_capacity_tokens`：vLLMの起動ごとのKVキャッシュの容量。2026-10-18の疎通では、新しいインスタンスで最初の2回の起動だけが
   ちょうど1GiB少なかった（原因不明、ADR-0005）。同じことが起きるかを、この値で確かめる。
+- `~/out/<セル名>/engine-*`：エンジンが自分について報告する状態。`run_cell.py`の前後に`/metrics`（`engine-metrics-before.txt`・`-after.txt`。差がそのセルのスケジューラの数字で、
+  llama.cppでは`n_decode_total`・`n_busy_slots_per_decode`・プロンプトと生成の処理時間）、llama.cppは前に`/props`と`/slots`も保存する。
+  llama-serverは`-lv 4`で起動し、実際に決まった設定（`resolve_fused_ops: Flash Attention enabled`・`n_batch`・`n_ubatch`・`kv_unified`）を`server.log`に残す
+  （vLLMは既定のログに出る）。2026-10-22のpilot-1では、llama.cppのこれらが残っておらず、並行数16が遅い理由をエンジンの側から確かめられなかった。
+  方針は「エンジンが実際に使った設定と、スケジューラの数字の前後の差を、全エンジンで同じ粒度で残す」。読めなかったものは`status.jsonl`の`engine_state_failed`に出る。
 
 記録はどれも読み取りだけで、結果のファイル（manifest・生出力）や採点には触れない。
 
