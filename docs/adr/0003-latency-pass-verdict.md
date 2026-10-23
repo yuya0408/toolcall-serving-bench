@@ -292,6 +292,10 @@ MLPerfに提出されたLlama 3.1 8Bの結果と数値を比べることはし�
 - 「Qwen3-8BにLlama 3.1 8B向けの基準を当てるのはおかしい」：基準は8Bクラスのサービスとしての目標として借りており、判定はQwen3-8Bそのものが目標を満たすかである。
   1トークンの計算量はほぼ同じで、違いはKVの大きさとトークンの粒度にとどまり、上の表のとおり報告に添える。
 - 「MLPerfの結果と比べられる数字なのか」：比べない。ハードウェアも、ワークロード（ツール呼び出し、プロンプト約2,300トークン）も違う。
+- 「MLPerfにはQwen3-8Bがあるのに、なぜLlama 3.1 8Bの基準なのか」：Qwen3-8BがあるのはMLPerf Client（PCで1人が使う場面のベンチマーク）で、
+  試験的な区分である。TTFTとTPSは測って報告するだけで遅延の合否の基準は無く、合否は精度（MMLU 67以上）だけで決まる（2026-10-23に確認）。
+  遅延の基準が決められているのはMLPerf InferenceのLlama3.1-8Bで、Inferenceのルール文書にQwen3-8Bは無い（QwenはQwen3-VL-235B-A22Bと、
+  精度だけを見るエッジのAgentic Function CallingのQwen3.6-27B）。
 
 [Source: User, MLPerfの基準をQwen3-8Bに使うことの確認, 2026-10-23]
 
@@ -352,6 +356,7 @@ Hで、本番の件数nと、安定判定の扱いはパイロットで決める
 ## 参考
 
 - MLCommons, MLPerf Inference 5.1: Benchmarking Small LLMs with Llama3.1-8B (2025-09-09) — https://mlcommons.org/2025/09/small-llm-inference-5-1/
+- MLCommons, MLPerf Client — https://mlcommons.org/benchmarks/client/
 - mlcommons/inference_policies, inference_rules.adoc — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
 - Zhong et al., DistServe (OSDI'24), arXiv 2401.09670 — https://arxiv.org/abs/2401.09670
 - vLLM, vllm bench serve CLI — https://docs.vllm.ai/en/latest/cli/bench/serve.html
