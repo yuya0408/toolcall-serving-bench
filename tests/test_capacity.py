@@ -59,25 +59,42 @@ def test_required_tokens_round_each_request_up_to_whole_blocks():
     assert capacity.required_tokens(per_request, 9, 16) <= 30240 < capacity.required_tokens(per_request, 10, 16)
 
 
-def test_llama_ctx_size_is_the_requirement_rounded_to_256():
-    assert capacity.llama_ctx_size(3103, 16) == 49664      # 16 x 3,104 = 49,664
+def test_llama_ctx_size_is_the_requirement_padded_as_the_server_pads_it():
+    # Split: every slot is padded to 256 tokens (3,104 -> 3,328), as llama-server
+    # does itself (src/llama-context.cpp), so --ctx-size is what it allocates.
+    assert capacity.llama_ctx_size(3103, 16) == 16 * 3328 == 53248
     assert capacity.llama_ctx_size(3103, 1) == 3328
+    # Unified: the total is padded once.
+    assert capacity.llama_ctx_size(3103, 16, "unified") == 49664      # 16 x 3,104 = 49,664
+    assert capacity.llama_ctx_size(3103, 1, "unified") == 3328
 
 
-def test_llama_capacity_is_the_ctx_size_and_props_is_the_per_slot_limit():
+def test_llama_split_capacity_is_what_props_reports_per_slot_times_the_slots():
+    # Local b11716 check (2026-10-23): -c 12416 -np 4 --no-kv-unified gave /props n_ctx 3,328.
+    props = {"default_generation_settings": {"n_ctx": 3328}, "total_slots": 16}
+    assert capacity.llama_capacity(props, 53248) == {"unit": "token", "unit_tokens": 1, "units": 53248,
+                                                     "tokens": 53248, "per_slot_tokens": 3328, "slots": 16}
+    assert capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 53248), 2591, 512, 16)["fits"]
+    short_slot = {"default_generation_settings": {"n_ctx": 3072}, "total_slots": 16}
+    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(short_slot, 49152), 2591, 512, 16)["fits"]
+
+
+def test_llama_unified_capacity_is_the_ctx_size_and_props_is_the_per_slot_limit():
     # The 2026-10-21 apply: --ctx-size 49664 --parallel 16 --kv-unified, and /props
     # n_ctx capped at Qwen3-8B's training context.
     props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
-    assert capacity.llama_capacity(props, 49664) == {"unit": "token", "unit_tokens": 1, "units": 49664,
-                                                     "tokens": 49664, "per_slot_tokens": 40960, "slots": 16}
+    assert capacity.llama_capacity(props, 49664, "unified") == {
+        "unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "per_slot_tokens": 40960, "slots": 16}
 
 
-def test_llama_pre_check_fits_when_the_total_and_one_slot_both_hold():
+def test_llama_unified_pre_check_fits_when_the_total_and_one_slot_both_hold():
     props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
-    assert capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49664), 2591, 512, 16)["fits"]
-    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49408), 2591, 512, 16)["fits"]
+    assert capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49664, "unified"), 2591, 512, 16)["fits"]
+    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(props, 49408, "unified"),
+                                  2591, 512, 16)["fits"]
     short_slot = {"default_generation_settings": {"n_ctx": 3103}, "total_slots": 16}
-    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(short_slot, 49664), 2591, 512, 16)["fits"]
+    assert not capacity.pre_check("llama_cpp", capacity.llama_capacity(short_slot, 49664, "unified"),
+                                  2591, 512, 16)["fits"]
 
 
 def test_pre_check_fits_only_when_every_request_can_grow_to_the_longest():

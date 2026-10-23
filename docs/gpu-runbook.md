@@ -110,11 +110,13 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目
 （`smoke.json`の並行数16の2セル、20件×2試行）だけを回す。`collect`で回収し、次の3点を確かめてからパイロットに進む。
 1つでも外れたら、パイロットには進まずdestroyして手元で直す。
 
-1. 2セルとも`ok`。`~/out/<セル名>/capacity_check.json`の`capacity.tokens`が読めている（vLLM AWQは約99,552、llama.cppは`--ctx-size`の49,664）。
-   llama.cppは`capacity.per_slot_tokens`が40,960（モデルの学習時の長さで切り詰めた1スロットの上限、ADR-0005の追記2026-10-21）。
+1. 2セルとも`ok`。`~/out/<セル名>/capacity_check.json`の`capacity.tokens`が読めている（vLLM AWQは約99,552、llama.cppは53,248）。
+   llama.cppは`llama_kv`が`split`、`capacity.per_slot_tokens`が3,328（3,104を256の倍数に切り上げた1スロットの長さ、ADR-0005の追記2026-10-23）。
+   `split`で起動できず`unified`に切り替わった場合は、49,664と40,960になり、`server-split-startup.log`が残る（これも結果として記録する）。
    あわせて`checks/llama_seed.json`ができている（2026-10-21のapplyでは不具合で作られなかった）。
 2. 2セルのmanifestに`capacity_check`があり、`post_check.ok`が`true`。vLLMは`preemptions`が0、`queue_time.count`が0でない。
-3. llama.cppの`server_command.txt`が`--ctx-size 49664 --parallel 16 --kv-unified --fit off`。
+3. llama.cppの`server_command.txt`が`--ctx-size 53248 --parallel 16 --no-kv-unified --fit off -lv 4 --metrics`
+   （切り替わった場合は`--ctx-size 49664 --parallel 16 --kv-unified ...`）。
 
 **パイロットは2回のapplyに分ける。** 1回に詰めると、6時間の自動シャットダウンまでの余りが約20分以下になる（下の「2回目・3回目：パイロット」）。
 見積もりが外れるとセルが途中で切れ、そのセルは丸ごと回し直しになる。そこで、llama.cppの第3パスの2セルだけを`pilot-2.json`に分け、
@@ -135,8 +137,11 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目
 - vLLMは`VLLM_SERVER_DEV_MODE=1`で、`--enable-auto-tool-choice --tool-call-parser hermes --enable-prompt-tokens-details`を付けて起動する。
   `--max-model-len 8192`は、tool_stage 10のプロンプト（約2,200トークン、計画書の1リクエスト約306MiBから）と出力の上限512トークンに余裕を持たせた値。
   既定の40,960トークンだと、bf16の重みを載せた後のKVキャッシュに収まらず、起動できない可能性がある。
-- llama.cppは`--jinja --kv-unified --fit off`で起動する。`--parallel`はセルの並行数、`--ctx-size`は「並行数 × 1リクエストの最大」を256の倍数に切り上げた値で、
-  セル一覧には書かない（ADR-0005：各エンジンは要件ぶんだけメモリを載せる）。この大きさで起動できなければ`server_not_ready`で、その並行数は「対応していない」。
+- llama.cppは`--jinja --no-kv-unified --fit off -lv 4 --metrics`で起動する。KVキャッシュはスロットごとに分かれる（`--parallel`を指定したときのllama.cppの既定）。
+  `--parallel`はセルの並行数、`--ctx-size`は「1リクエストの最大」を256の倍数に切り上げた値 × 並行数で（llama.cppがスロットごとにそう切り上げるため）、
+  セル一覧には書かない（ADR-0005：各エンジンは要件ぶんだけメモリを載せる）。並行数2以上でこの大きさで起動できなければ、1回だけ全スロットで共有する
+  KVキャッシュ（`--kv-unified`、全体を1回だけ切り上げる）で起動し直す（ADR-0005の追記2026-10-23）。それでも起動できなければ`server_not_ready`で、
+  その並行数は「対応していない」。どちらで回ったかは`status.jsonl`と`capacity_check.json`の`llama_kv`に残る。
 - transformers_hfはサーバーを使わず、`run_cell.py`の中でモデルを読む。
 - 結果は`~/out/<セル名>/`に、manifest・生出力・サーバーのログ・実行したコマンドとともに残る。`~/out/status.jsonl`にはセルごとの結果
   （`ok`／`unsupported`＝ADR-0003の「対応していない」／`capacity_misestimate`＝回したが容量の事後の確かめが通らなかった／`error`／`server_not_ready`）を書く。
