@@ -136,9 +136,9 @@
               },
               "warmup": {
                 "type": "object",
-                "required": ["window_requests", "windows", "warmup_requests", "stability_pct"],
+                "required": ["window_requests", "warmup_requests"],
                 "additionalProperties": false,
-                "description": "Perf Analyzer's stability rule in count_windows form: one window = one cycle of the case set.",
+                "description": "Requests sent before measuring. Since 2026-10-23 one cycle of the case set (ADR-0003); manifests before that warmed up until Perf Analyzer's stability rule held over the last 3 windows and also carry windows and stability_pct.",
                 "properties": {
                   "window_requests": { "type": "integer", "minimum": 1 },
                   "windows": {
@@ -152,6 +152,26 @@
                   },
                   "warmup_requests": { "type": "integer", "minimum": 0 },
                   "stability_pct": { "type": "number" }
+                }
+              },
+              "measured_stability": {
+                "type": "object",
+                "required": ["window_requests", "windows", "stability_pct", "stable"],
+                "additionalProperties": false,
+                "description": "Whether the measured span was steady (ADR-0003, 2026-10-23): the measured requests in completion order, in whole windows of one case-set cycle; stable when every window's throughput and mean latency have max/min within stability_pct. null when fewer than 3 whole windows. An unsteady cell keeps its verdict and is flagged.",
+                "properties": {
+                  "window_requests": { "type": "integer", "minimum": 1 },
+                  "windows": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["throughput_rps", "mean_latency_s"],
+                      "additionalProperties": false,
+                      "properties": { "throughput_rps": { "type": "number" }, "mean_latency_s": { "type": "number" } }
+                    }
+                  },
+                  "stability_pct": { "type": "number" },
+                  "stable": { "type": ["boolean", "null"] }
                 }
               },
               "prefix_cache": {

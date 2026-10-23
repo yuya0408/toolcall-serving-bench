@@ -199,7 +199,7 @@ def test_aborted_latency_cell_is_recorded_as_unsupported(tmp_path, fake_latency_
 
 
 @pytest.mark.parametrize("bad", [
-    ["--n-requests", "100", "--run-id-prefix", ""],                    # main runs need >= 299
+    ["--n-requests", "299", "--run-id-prefix", ""],                    # main runs use the fixed n
     ["--engine", "transformers_hf", "--concurrency", "2"],             # control point is c=1 only
     [],                                                                # --n-requests is required
 ])
@@ -207,11 +207,18 @@ def test_latency_argument_guards(bad):
     base = {"--pass-type": "latency", "--engine": "vllm", "--base-url": "http://x", "--model": "m",
             "--quantization": "q", "--engine-version": "v", "--tool-stage": "10"}
     if bad:
-        base["--n-requests"] = "299"
+        base["--n-requests"] = "1000"
     merged = {**base, **dict(zip(bad[::2], bad[1::2]))}
     argv = [tok for kv in merged.items() for tok in kv]
     with pytest.raises(SystemExit):
         run_cell._parse_args(argv)
+
+
+def test_a_main_latency_run_takes_the_fixed_n():
+    args = run_cell._parse_args(["--pass-type", "latency", "--engine", "vllm", "--base-url", "http://x",
+                                 "--model", "m", "--quantization", "q", "--engine-version", "v",
+                                 "--tool-stage", "10", "--n-requests", "1000"])
+    assert args.n_requests == 1000
 
 
 # ------------------------------------------------------------- capacity post-check (docs/adr/0005 3)
