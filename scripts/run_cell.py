@@ -44,7 +44,7 @@ from eval_bench.dataset.tools import load_tools  # noqa: E402
 from eval_bench.dataset.tools import to_openai_tools_subset  # noqa: E402
 from eval_bench.dataset.toolsets import build_tool_set  # noqa: E402
 from eval_bench.latency import (  # noqa: E402
-    MIN_REQUESTS, CellAborted, new_run_tag, run_latency_cell, tagged_query,
+    MAIN_N_REQUESTS, CellAborted, new_run_tag, run_latency_cell, tagged_query,
 )
 from eval_bench.pipeline import assert_no_thinking, make_predict_fn  # noqa: E402
 from eval_bench.repetition import trial_order  # noqa: E402
@@ -77,7 +77,7 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--concurrency", type=int, default=1)
     p.add_argument("--n", type=int, default=5, help="accuracy passes: trials per case")
     p.add_argument("--n-requests", type=int,
-                   help=f"latency: measured requests, fixed before the run (>= {MIN_REQUESTS} "
+                   help=f"latency: measured requests, fixed before the run ({MAIN_N_REQUESTS} "
                         "unless --run-id-prefix is smoke-/pilot-)")
     p.add_argument("--request-timeout", type=float, default=120.0,
                    help="latency: a request past this counts as an exceedance")
@@ -113,8 +113,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if args.pass_type == "latency":
         if args.n_requests is None:
             p.error("--n-requests is required for --pass-type latency")
-        if args.n_requests < MIN_REQUESTS and not trial_run:
-            p.error(f"--n-requests must be >= {MIN_REQUESTS} for a main run (docs/adr/0003)")
+        if args.n_requests != MAIN_N_REQUESTS and not trial_run:
+            p.error(f"--n-requests must be {MAIN_N_REQUESTS} for a main run (docs/adr/0003, 2026-10-23)")
         if args.engine == "transformers_hf" and args.concurrency != 1:
             p.error("transformers_hf is the concurrency=1 control point only")
     return args

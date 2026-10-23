@@ -112,14 +112,17 @@ class _VirtualEngine:
                            prompt_tokens=2200, cached_tokens=self.cached(index))
 
 
-def test_steady_engine_measures_exactly_n_after_three_windows():
+def test_steady_engine_measures_exactly_n_after_one_cycle():
     engine = _VirtualEngine()
     rows, results = run_latency_cell(_CASES, engine.send, concurrency=1, n_requests=30,
                                      clock=engine.clock)
-    assert results["warmup"]["warmup_requests"] == 3 * 14     # stable on the first 3 windows
+    assert results["warmup"]["warmup_requests"] == 14         # one cycle of the case set
     measured = [r for r in rows if r["phase"] == "measured"]
-    assert [r["index"] for r in measured] == list(range(42, 72))
+    assert [r["index"] for r in measured] == list(range(14, 44))
     assert results["n_requests"] == 30
+    # 30 measured = 2 whole windows of 14: too few to judge steadiness.
+    assert results["measured_stability"]["stable"] is None
+    assert len(results["measured_stability"]["windows"]) == 2
     assert results["slo"]["conversational"]["n"] == 30
     assert results["prefix_cache"]["hit_token_ratio"] == pytest.approx(2000 / 2200)
 
@@ -141,13 +144,28 @@ def test_concurrent_cell_finishes_every_measured_request():
     assert [r["index"] for r in measured] == list(range(start, start + 40))
 
 
-def test_unstable_engine_aborts_after_max_windows_and_keeps_the_log():
+def test_steady_measured_span_is_marked_stable():
+    engine = _VirtualEngine()
+    _, results = run_latency_cell(_CASES, engine.send, concurrency=1, n_requests=42, clock=engine.clock)
+    stability = results["measured_stability"]
+    assert stability["stable"] is True and len(stability["windows"]) == 3
+    assert stability["windows"][0] == {"throughput_rps": 1.0, "mean_latency_s": 1.0}
+
+
+def test_unsteady_measured_span_is_flagged_not_dropped():
     # Alternating 1s / 2s windows: throughput and latency never settle within 10%.
     engine = _VirtualEngine(duration=lambda i: 1.0 if (i // 14) % 2 == 0 else 2.0)
-    with pytest.raises(CellAborted, match="not stable") as exc_info:
-        run_latency_cell(_CASES, engine.send, concurrency=1, n_requests=30, clock=engine.clock)
-    assert len(exc_info.value.rows) == 10 * 14
-    assert {r["phase"] for r in exc_info.value.rows} == {"warmup"}
+    rows, results = run_latency_cell(_CASES, engine.send, concurrency=1, n_requests=42, clock=engine.clock)
+    assert results["measured_stability"]["stable"] is False
+    assert results["n_requests"] == 42 and "slo" in results
+    assert sum(r["phase"] == "measured" for r in rows) == 42
+
+
+def test_concurrent_cell_judges_steadiness_on_measured_requests_only():
+    engine = _VirtualEngine()
+    _, results = run_latency_cell(_CASES, engine.send, concurrency=4, n_requests=56, clock=engine.clock)
+    stability = results["measured_stability"]
+    assert len(stability["windows"]) == 4 and stability["stable"] is True
 
 
 def test_engine_error_aborts_the_cell():

@@ -6,16 +6,17 @@ One cell = one engine x quantization x tool_stage x concurrency. Within it:
      i is case i mod len(cases), with that case's stage tool set in its fixed
      seed-0 order and a per-request identifier appended to the query, so the
      tool definitions hit the prefix cache and the query never does.
-  2. Warmup ends when the engine is stable, judged with NVIDIA Perf
-     Analyzer's rule in its count_windows form: a window is one cycle of the
-     case set (len(cases) completions, so every window carries the same query
-     mix); the last 3 windows' throughput and mean latency must each have
-     max/min within 10%; give up after 10 windows (Perf Analyzer's
-     --max-trials). Perf Analyzer terminates on instability; so does this.
+  2. Warmup is one cycle of the case set (len(cases) completions): enough
+     for every engine in the pilot to settle (ADR-0003, 2026-10-23).
   3. The next `n_requests` requests sent after that point are measured. The
      workers keep sending until every measured request has finished, so each
      one ran under the full concurrency (the extra ones are logged as
-     cooldown and not counted).
+     cooldown and not counted). Whether the measured span was steady is
+     checked afterwards with NVIDIA Perf Analyzer's rule in its count_windows
+     form: a window is one cycle of the case set (so every window carries the
+     same query mix), and every measured window's throughput and mean latency
+     must have max/min within 10%. An unsteady cell is flagged, not dropped:
+     slowing down under sustained load is how the engine behaves.
   4. Each measured request either meets a latency class's TTFT and TPOT
      limits or exceeds them (DistServe's goodput counting); a timeout is an
      exceedance. The exceedance rate is judged against 1% with one-sided 95%
@@ -42,12 +43,16 @@ SLO_CLASSES: dict[str, dict[str, float]] = {
 EXCEEDANCE_LIMIT = 0.01      # judged at p99 (MLPerf Server's 99% tail)
 CONFIDENCE = 0.95            # one-sided, per bound
 MIN_REQUESTS = 299           # smallest n where 0 exceedances can show <= 1% (0.99^n <= 0.05)
+# The main run's n, fixed after the pilot (ADR-0003, 2026-10-23): five cycles of
+# the 200-case set; meets with >= 80% chance at a true rate of 0.3% and fails
+# with >= 80% at 2%.
+MAIN_N_REQUESTS = 1000
 
 # NVIDIA Perf Analyzer defaults (--stability-percentage, the "recent 3
-# measurements", --max-trials).
+# measurements"). STABLE_WINDOWS is the fewest windows the check needs.
 STABILITY_PCT = 10.0
 STABLE_WINDOWS = 3
-MAX_WINDOWS = 10
+WARMUP_CYCLES = 1            # cycles of the case set sent before measuring (ADR-0003, 2026-10-23)
 
 
 class CellAborted(RuntimeError):
@@ -202,43 +207,30 @@ class _Row:
 
 
 def run_latency_cell(cases: list[dict[str, Any]], send: SendFn, concurrency: int,
-                     n_requests: int, max_windows: int = MAX_WINDOWS,
-                     clock: Callable[[], float] = time.perf_counter,
+                     n_requests: int, clock: Callable[[], float] = time.perf_counter,
                      ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Drive one cell; return (per-request log rows, the manifest's results).
 
-    Raises CellAborted when the engine errors, never stabilizes, or did not
-    start from an empty prefix cache. The rows collected so far are attached
+    Raises CellAborted when the engine errors or did not start from an empty
+    prefix cache. The rows collected so far are attached
     to the exception (`.rows`) so the caller can still keep the raw log.
     `clock` exists for tests; window throughput is measured on it.
     """
     window_size = len(cases)
+    warmup_size = WARMUP_CYCLES * window_size
     lock = threading.Lock()
     stop = threading.Event()
     state: dict[str, Any] = {"next": 0, "measure_from": None, "error": None}
     rows: dict[int, _Row] = {}
     completions: list[_Row] = []
-    windows: list[dict[str, float]] = []
     t0 = clock()
 
     def on_complete(row: _Row) -> None:
         # Caller holds the lock.
         rows[row.index] = row
         completions.append(row)
-        if state["measure_from"] is None and len(completions) % window_size == 0:
-            chunk = completions[-window_size:]
-            start = completions[-window_size - 1].done_at if len(completions) > window_size else t0
-            windows.append({
-                "throughput_rps": window_size / (chunk[-1].done_at - start),
-                "mean_latency_s": sum(r.result.total_s for r in chunk) / window_size,
-            })
-            if is_stable(windows):
-                state["measure_from"] = state["next"]   # first request sent after this point
-            elif len(windows) >= max_windows:
-                state["error"] = CellAborted(
-                    f"not stable after {max_windows} windows of {window_size} requests "
-                    f"(Perf Analyzer's rule: last {STABLE_WINDOWS} within {STABILITY_PCT:g}%)")
-                stop.set()
+        if state["measure_from"] is None and len(completions) == warmup_size:
+            state["measure_from"] = state["next"]   # first request sent after this point
         start_idx = state["measure_from"]
         if start_idx is not None and all(i in rows for i in range(start_idx, start_idx + n_requests)):
             stop.set()
@@ -279,12 +271,40 @@ def run_latency_cell(cases: list[dict[str, Any]], send: SendFn, concurrency: int
         raise
     start_idx = state["measure_from"]
     measured = [rows[i].result for i in range(start_idx, start_idx + n_requests)]
-    return log, summarize(measured, warmup={
+    windows = measured_windows(completions, range(start_idx, start_idx + n_requests), window_size, t0)
+    results = summarize(measured, warmup={"window_requests": window_size, "warmup_requests": start_idx})
+    results["measured_stability"] = {
         "window_requests": window_size,
         "windows": windows,
-        "warmup_requests": start_idx,
         "stability_pct": STABILITY_PCT,
-    })
+        # None: too few whole windows to judge (fewer than Perf Analyzer's 3).
+        "stable": is_stable(windows, last=len(windows)) if len(windows) >= STABLE_WINDOWS else None,
+    }
+    return log, results
+
+
+def measured_windows(completions: list[_Row], measured: range, window_size: int,
+                     t0: float) -> list[dict[str, float]]:
+    """The measured requests in the order they finished, cut into whole
+    windows of `window_size`; each window's throughput runs from the end of
+    the one before (the first: from the last completion before it)."""
+    windows = []
+    start = t0
+    chunk: list[_Row] = []
+    for row in completions:
+        if row.index not in measured:
+            if not windows and not chunk:
+                start = row.done_at
+            continue
+        chunk.append(row)
+        if len(chunk) == window_size:
+            windows.append({
+                "throughput_rps": window_size / (chunk[-1].done_at - start),
+                "mean_latency_s": sum(r.result.total_s for r in chunk) / window_size,
+            })
+            start = chunk[-1].done_at
+            chunk = []
+    return windows
 
 
 def _log_row(row: _Row, measure_from: Optional[int], n_requests: int, t0: float) -> dict[str, Any]:

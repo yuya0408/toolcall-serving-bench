@@ -75,9 +75,12 @@ def _latency_results(cached: bool = True) -> dict:
                             prompt_tokens=2200, cached_tokens=2000 if cached else None)
                 for i in range(299)]
     measured[0] = TimedResult(status="timeout", total_s=120.0)
-    warmup = {"window_requests": 14, "windows": [{"throughput_rps": 1.0, "mean_latency_s": 1.0}] * 3,
-              "warmup_requests": 42, "stability_pct": 10.0}
-    return summarize(measured, warmup)
+    warmup = {"window_requests": 14, "warmup_requests": 14}
+    results = summarize(measured, warmup)
+    # run_latency_cell adds this after summarize.
+    results["measured_stability"] = {"window_requests": 14, "stability_pct": 10.0, "stable": True,
+                                     "windows": [{"throughput_rps": 1.0, "mean_latency_s": 1.0}] * 21}
+    return results
 
 
 def test_latency_results_without_prefix_cache_are_valid():
