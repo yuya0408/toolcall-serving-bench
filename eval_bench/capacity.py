@@ -74,9 +74,20 @@ def required_tokens(per_request: int, concurrency: int, unit_tokens: int,
     return units * unit_tokens * concurrency
 
 
-def llama_ctx_size(per_request: int, concurrency: int, round_to: int = 256) -> int:
-    """llama.cpp's --ctx-size for a cell: exactly the requirement (ADR-0005 1),
-    rounded up so the server's own padding cannot leave it short."""
+# llama.cpp's KV layouts in the order a cell tries them (ADR-0005, 2026-10-23):
+# one cache per slot (the default with a fixed --parallel), then one cache shared
+# by every slot if the per-slot padding no longer fits in memory.
+LLAMA_KV_LAYOUTS = ("split", "unified")
+
+
+def llama_ctx_size(per_request: int, concurrency: int, kv: str = "split", round_to: int = 256) -> int:
+    """llama.cpp's --ctx-size for a cell: the requirement (ADR-0005 1), rounded
+    up the way the server pads it, so what we pass is what it allocates. A
+    split cache pads every slot to round_to tokens (src/llama-context.cpp); a
+    unified one pads the total once."""
+    if kv == "split":
+        per_slot = required_tokens(per_request, 1, unit_tokens=1)
+        return math.ceil(per_slot / round_to) * round_to * concurrency
     need = required_tokens(per_request, concurrency, unit_tokens=1)
     return math.ceil(need / round_to) * round_to
 
@@ -166,15 +177,24 @@ def startup_log_max_concurrency(startup_log: str) -> Optional[float]:
 
 # ---------------------------------------------------------------- llama.cpp /props
 
-def llama_capacity(props: dict[str, Any], ctx_size: int) -> dict[str, Any]:
-    """KV capacity of a server started with --ctx-size ctx_size --kv-unified.
+def llama_capacity(props: dict[str, Any], ctx_size: int, kv: str = "split") -> dict[str, Any]:
+    """KV capacity of a server started with --ctx-size ctx_size.
 
-    llama-server reports no total: /props n_ctx is the per-slot limit. It equals
+    Split (--no-kv-unified): every slot holds its own cache of /props n_ctx
+    tokens, so the total is n_ctx x total_slots, all from what the server reports.
+
+    Unified (--kv-unified): llama-server reports no total: /props n_ctx is the
+    per-slot limit. It equals
     the total only while the total is within the model's training context
     (Qwen3-8B: 40,960); past that the server caps each slot there and keeps the
     whole shared cache (2026-10-21, b11716 and b11785). So the total is the
     --ctx-size we set, the documented meaning of --kv-unified, and /props n_ctx
     is kept as the per-slot limit every request must also fit in."""
+    if kv == "split":
+        per_slot = int(props["default_generation_settings"]["n_ctx"])
+        slots = int(props.get("total_slots", 0))
+        return {"unit": "token", "unit_tokens": 1, "units": per_slot * slots, "tokens": per_slot * slots,
+                "per_slot_tokens": per_slot, "slots": slots or None}
     return {"unit": "token", "unit_tokens": 1, "units": ctx_size, "tokens": ctx_size,
             "per_slot_tokens": int(props["default_generation_settings"]["n_ctx"]),
             "slots": int(props.get("total_slots", 0)) or None}

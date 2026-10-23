@@ -47,15 +47,19 @@ def test_vllm_server_has_the_flags_the_adrs_require():
 
 
 def test_llama_server_is_sized_to_the_requirement():
-    # ADR-0005 1: --ctx-size = concurrency x (longest prompt + max_tokens + 1-token margin),
-    # rounded up to 256; one slot per request on one shared cache; --fit off.
+    # ADR-0005 1 and its 2026-10-23 addendum: one slot per request, each with its own
+    # cache of (longest prompt + max_tokens + 1-token margin) padded to 256; --fit off.
     cmd = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16", "concurrency": 16},
                                    max_prompt_tokens=2591)
-    assert "--jinja" in cmd and "--kv-unified" in cmd and "--metrics" in cmd
+    assert "--jinja" in cmd and "--no-kv-unified" in cmd and "--metrics" in cmd
+    assert "--kv-unified" not in cmd
     assert cmd[cmd.index("-lv") + 1] == "4"   # the resolved settings (flash attention, batch) reach the log
     assert cmd[cmd.index("--fit") + 1] == "off"
     assert cmd[cmd.index("--parallel") + 1] == "16"
-    assert cmd[cmd.index("--ctx-size") + 1] == str(16 * 3104 + 0) or int(cmd[cmd.index("--ctx-size") + 1]) == 49664
+    assert cmd[cmd.index("--ctx-size") + 1] == "53248"     # 16 x 3,328
+    unified = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16", "concurrency": 16},
+                                       max_prompt_tokens=2591, kv="unified")
+    assert "--kv-unified" in unified and unified[unified.index("--ctx-size") + 1] == "49664"
     assert cmd[cmd.index("-m") + 1].endswith("Qwen3-8B-bf16.gguf")
     one = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16"}, max_prompt_tokens=2591)
     assert one[one.index("--parallel") + 1] == "1" and one[one.index("--ctx-size") + 1] == "3328"
@@ -194,7 +198,7 @@ def _served(monkeypatch, tmp_path, capacities):
         return [sys.executable, "-c", "pass"]
 
     monkeypatch.setattr(run_cells, "_start_server", start)
-    monkeypatch.setattr(run_cells, "read_capacity", lambda engine, ctx_size=None: next(seq))
+    monkeypatch.setattr(run_cells, "read_capacity", lambda engine, ctx_size=None, kv="split": next(seq))
     monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
     monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
     monkeypatch.setattr(run_cells, "run_cell_command", fake_run_cell_command)
@@ -233,7 +237,7 @@ def test_a_cell_that_still_does_not_fit_is_unsupported_without_running(tmp_path,
 
 
 def test_llama_cpp_is_never_restarted_for_capacity(tmp_path, monkeypatch):
-    llama = {"unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "per_slot_tokens": 40960,
+    llama = {"unit": "token", "unit_tokens": 1, "units": 53248, "tokens": 53248, "per_slot_tokens": 3328,
              "slots": 16}
     starts, runs, snapshots = _served(monkeypatch, tmp_path, [llama])
     status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
@@ -282,15 +286,62 @@ def test_engine_state_snapshot_saves_the_reads_and_returns_the_failures(tmp_path
 def test_llama_cpp_capacity_is_read_with_the_ctx_size_it_was_started_with(tmp_path, monkeypatch):
     seen = []
     starts, runs, snapshots = _served(monkeypatch, tmp_path, [])
-    props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
+    props = {"default_generation_settings": {"n_ctx": 3328}, "total_slots": 16}
 
-    def read(engine, ctx_size=None):
-        seen.append(ctx_size)
-        return run_cells.capacity.llama_capacity(props, ctx_size)
+    def read(engine, ctx_size=None, kv="split"):
+        seen.append((ctx_size, kv))
+        return run_cells.capacity.llama_capacity(props, ctx_size, kv)
 
     monkeypatch.setattr(run_cells, "read_capacity", read)
     status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
-    assert status["outcome"] == "ok" and seen == [49664]
+    assert status["outcome"] == "ok" and seen == [(53248, "split")] and status["llama_kv"] == "split"
+    check = json.loads((tmp_path / "load" / "capacity_check.json").read_text())
+    assert check["llama_kv"] == "split" and check["capacity"]["tokens"] == 53248
+
+
+def _failing_split(monkeypatch, tmp_path):
+    """run_one where llama.cpp's split-KV startup fails and the unified one starts."""
+    commands = []
+    seen = []
+
+    def start(cell, cmd, log, status):
+        commands.append(cmd)
+        log.write_text("out of memory\n" if "--no-kv-unified" in cmd else "ok\n")
+        return _FakeServer(), "--kv-unified" in cmd
+
+    def read(engine, ctx_size=None, kv="split"):
+        seen.append((ctx_size, kv))
+        return run_cells.capacity.llama_capacity(
+            {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}, ctx_size, kv)
+
+    monkeypatch.setattr(run_cells, "_start_server", start)
+    monkeypatch.setattr(run_cells, "read_capacity", read)
+    monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
+    monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
+    monkeypatch.setattr(run_cells, "run_cell_command", lambda *a: [sys.executable, "-c", "pass"])
+    monkeypatch.setattr(run_cells, "snapshot_engine_state", lambda engine, cell_dir, tag: [])
+    return commands, seen
+
+
+def test_a_split_llama_cache_that_does_not_start_falls_back_to_unified(tmp_path, monkeypatch):
+    commands, seen = _failing_split(monkeypatch, tmp_path)
+    status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and status["llama_kv"] == "unified"
+    assert ["--no-kv-unified" in c for c in commands] == [True, False]
+    assert seen == [(49664, "unified")]
+    cell_dir = tmp_path / "load"
+    assert (cell_dir / "server-split-startup.log").read_text() == "out of memory\n"
+    assert "--kv-unified" in (cell_dir / "server_command.txt").read_text()
+    assert json.loads((cell_dir / "capacity_check.json").read_text())["llama_kv"] == "unified"
+
+
+def test_a_single_slot_llama_cell_has_no_unified_fallback(tmp_path, monkeypatch):
+    # With one slot the two layouts are the same cache: a failed start is just server_not_ready.
+    commands, seen = _failing_split(monkeypatch, tmp_path)
+    cell = {"name": "lat", "prefix": "pilot-", "pass_type": "latency", "engine": "llama_cpp",
+            "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 10}
+    status = run_cells.run_one(cell, _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "server_not_ready" and len(commands) == 1 and seen == []
 
 
 def test_the_seed_check_starts_a_sized_llama_server(tmp_path, monkeypatch):

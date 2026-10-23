@@ -16,10 +16,13 @@ a latency cell.
 Memory is sized to the requirement, never searched (docs/adr/0005 1): vLLM
 keeps its default --gpu-memory-utilization; llama.cpp gets
 --ctx-size = concurrency x the longest request (schema/prompt_budget.json +
-max_tokens), --kv-unified and --fit off. Before a concurrency>1 cell runs, the
+max_tokens), one KV cache per slot (--no-kv-unified, the default with a fixed
+--parallel) and --fit off; a concurrency>1 cell whose split cache does not
+start tries once more with one cache shared by every slot (--kv-unified,
+padded once instead of per slot). Before a concurrency>1 cell runs, the
 capacity pre-check reads what the server actually holds (vLLM /metrics;
-llama.cpp reports no total, so its --ctx-size, with /props n_ctx as the
-per-slot limit); a vLLM startup that comes out short is restarted once
+llama.cpp /props, or for the unified cache, which reports no total, its
+--ctx-size); a vLLM startup that comes out short is restarted once
 (some first startups on a fresh instance came out exactly 1 GiB short), and a
 cell that still does not fit is recorded unsupported without running.
 
@@ -110,16 +113,18 @@ def validate(cells: list[dict[str, Any]]) -> None:
                              f"{c['engine']} (docs/adr/0005 1)")
 
 
-def llama_server_settings(cell: dict[str, Any], max_prompt_tokens: int) -> dict[str, int]:
+def llama_server_settings(cell: dict[str, Any], max_prompt_tokens: int, kv: str = "split") -> dict[str, int]:
     """--parallel and --ctx-size for a llama.cpp cell: one slot per concurrent
-    request, sharing one KV cache sized to exactly the requirement."""
+    request, the KV cache sized to the requirement in the given layout."""
     concurrency = cell.get("concurrency", 1)
     per_request = capacity.per_request_max(max_prompt_tokens, MAX_TOKENS)
-    return {"parallel": concurrency, "ctx_size": capacity.llama_ctx_size(per_request, concurrency)}
+    return {"parallel": concurrency, "ctx_size": capacity.llama_ctx_size(per_request, concurrency, kv)}
 
 
-def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None) -> list[str] | None:
-    """The engine server for one cell, or None when the engine runs in-process."""
+def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
+                   kv: str = "split") -> list[str] | None:
+    """The engine server for one cell, or None when the engine runs in-process.
+    kv is llama.cpp's KV layout (capacity.LLAMA_KV_LAYOUTS)."""
     server = cell.get("server", {})
     if cell["engine"] == "vllm":
         model = MODELS[cell["quantization"]]
@@ -133,14 +138,15 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None) -
     if cell["engine"] == "llama_cpp":
         if max_prompt_tokens is None:
             raise ValueError("a llama.cpp server is sized from the prompt budget")
-        settings = llama_server_settings(cell, max_prompt_tokens)
+        settings = llama_server_settings(cell, max_prompt_tokens, kv)
         # --fit off: the default (on) may quietly shrink unset arguments to fit memory.
         # -lv 4 logs the settings llama.cpp resolved (flash attention, n_batch,
         # n_ubatch, the KV layout), which -lv 3 leaves out; --metrics opens /metrics.
         return [str(LLAMA_SERVER), "-m", str(GGUF), "--jinja", "-ngl", "999",
                 "--host", "127.0.0.1", "--port", str(PORT["llama_cpp"]),
                 "--ctx-size", str(settings["ctx_size"]), "--parallel", str(settings["parallel"]),
-                "--kv-unified", "--fit", "off", "-lv", "4", "--metrics"]
+                "--kv-unified" if kv == "unified" else "--no-kv-unified",
+                "--fit", "off", "-lv", "4", "--metrics"]
     return None
 
 
@@ -168,11 +174,11 @@ def needs_capacity_check(cell: dict[str, Any]) -> bool:
     return cell["engine"] in PORT and cell.get("concurrency", 1) > 1
 
 
-def read_capacity(engine: str, ctx_size: int | None = None) -> dict[str, Any]:
+def read_capacity(engine: str, ctx_size: int | None = None, kv: str = "split") -> dict[str, Any]:
     base = f"http://127.0.0.1:{PORT[engine]}"
     if engine == "vllm":
         return capacity.vllm_capacity(capacity.fetch_metrics(base))
-    return capacity.llama_capacity(capacity.fetch_props(base), ctx_size)
+    return capacity.llama_capacity(capacity.fetch_props(base), ctx_size, kv)
 
 
 def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list[str]:
@@ -278,7 +284,8 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
     cell_dir.mkdir(parents=True, exist_ok=True)
     status: dict[str, Any] = {"name": cell["name"], "started_at": _now()}
     max_prompt = budget["max_prompt_tokens"] if budget else None
-    server_cmd = server_command(cell, max_prompt)
+    kv = capacity.LLAMA_KV_LAYOUTS[0] if cell["engine"] == "llama_cpp" else None
+    server_cmd = server_command(cell, max_prompt, kv) if kv else server_command(cell, max_prompt)
     server_log = cell_dir / "server.log" if server_cmd else None
     timeout_s = 60 * cell.get("timeout_min", DEFAULT_TIMEOUT_MIN)
     server = runner = None
@@ -289,6 +296,21 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
             restarts = 0
             while True:
                 server, ready = _start_server(cell, server_cmd, server_log, status)
+                if not ready and kv == "split" and needs_capacity_check(cell):
+                    # The split cache pads every slot; if it does not start, try the
+                    # unified one once (ADR-0005, 2026-10-23). Keep the failed log.
+                    _stop(server)
+                    server = None
+                    server_log.replace(cell_dir / "server-split-startup.log")
+                    if not _wait_gpu_free():
+                        status.update(outcome="error", reason="GPU not freed for the unified-KV restart")
+                        return status
+                    kv = "unified"
+                    server_cmd = server_command(cell, max_prompt, kv)
+                    (cell_dir / "server_command.txt").write_text(" ".join(server_cmd) + "\n")
+                    continue
+                if kv is not None:
+                    status["llama_kv"] = kv
                 if not ready:
                     status.update(outcome="server_not_ready", returncode=server.poll())
                     return status
@@ -297,10 +319,11 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                     status.setdefault("kv_capacity_tokens", []).append(read_capacity("vllm")["tokens"])
                 if not needs_capacity_check(cell):
                     break
-                ctx_size = (llama_server_settings(cell, max_prompt)["ctx_size"]
-                            if cell["engine"] == "llama_cpp" else None)
-                pre = capacity.pre_check(cell["engine"], read_capacity(cell["engine"], ctx_size),
-                                         max_prompt, MAX_TOKENS, cell["concurrency"])
+                if kv is not None:
+                    held = read_capacity("llama_cpp", llama_server_settings(cell, max_prompt, kv)["ctx_size"], kv)
+                else:
+                    held = read_capacity(cell["engine"])
+                pre = capacity.pre_check(cell["engine"], held, max_prompt, MAX_TOKENS, cell["concurrency"])
                 if pre["fits"] or cell["engine"] != "vllm" or restarts == 1:
                     break
                 restarts += 1            # a short vLLM startup: restart once (ADR-0005 2)
@@ -313,6 +336,8 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                     return status
             if needs_capacity_check(cell):
                 pre["restarts"] = restarts
+                if kv is not None:
+                    pre["llama_kv"] = kv
                 pre["startup_log_max_concurrency"] = (
                     capacity.startup_log_max_concurrency(server_log.read_text(errors="replace"))
                     if cell["engine"] == "vllm" else None)
