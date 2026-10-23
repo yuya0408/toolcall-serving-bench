@@ -217,10 +217,13 @@ def pre_check(engine: str, capacity: dict[str, Any], max_prompt_tokens: int, max
 
 
 def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Iterable[Optional[int]],
-               vllm_delta: Optional[dict[str, Any]] = None, length_finished: int = 0) -> dict[str, Any]:
+               vllm_delta: Optional[dict[str, Any]] = None, length_finished: int = 0,
+               output_limit_finished: int = 0) -> dict[str, Any]:
     """Whether the run stayed within what the pre-check assumed. Anything off
     means the estimate was wrong: the cell's numbers are not used for a
-    verdict (ADR-0005 3)."""
+    verdict (ADR-0005 3). For llama.cpp, a response that stopped at the length
+    limit after generating max_tokens hit its own output limit, which the
+    pre-check reserved; only the rest (cut short by the context) count."""
     observed = [t for t in observed_prompt_tokens if t is not None]
     observed_max = max(observed) if observed else None
     result: dict[str, Any] = {"max_prompt_tokens_observed": observed_max}
@@ -236,8 +239,10 @@ def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Ite
             problems.append(f"{vllm_delta['preemptions']} preemptions")
     else:
         result["length_finished"] = length_finished
-        if length_finished > 0:
-            problems.append(f"{length_finished} responses stopped at the length limit")
+        result["output_limit_finished"] = output_limit_finished
+        context_limited = length_finished - output_limit_finished
+        if context_limited > 0:
+            problems.append(f"{context_limited} responses stopped at the length limit before max_tokens")
     result["ok"] = not problems
     result["problems"] = problems
     return result
