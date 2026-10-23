@@ -25,7 +25,8 @@ cell that still does not fit is recorded unsupported without running.
 
 Writes to --out (default ~/out), which scripts/gpu/local.sh collect copies
 back while the run goes on:
-  <cell name>/            the cell's manifest, raw log, server log and capacity_check.json
+  <cell name>/            the cell's manifest, raw log, server log and capacity_check.json,
+                          and the engine's state around the run (engine-*, see snapshot_engine_state)
   status.jsonl            one line per finished cell: outcome, exit code, timing
   RUNNING / DONE / FAILED markers; DONE names the cell list that finished,
                           FAILED says why the list stopped early
@@ -134,10 +135,12 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None) -
             raise ValueError("a llama.cpp server is sized from the prompt budget")
         settings = llama_server_settings(cell, max_prompt_tokens)
         # --fit off: the default (on) may quietly shrink unset arguments to fit memory.
+        # -lv 4 logs the settings llama.cpp resolved (flash attention, n_batch,
+        # n_ubatch, the KV layout), which -lv 3 leaves out; --metrics opens /metrics.
         return [str(LLAMA_SERVER), "-m", str(GGUF), "--jinja", "-ngl", "999",
                 "--host", "127.0.0.1", "--port", str(PORT["llama_cpp"]),
                 "--ctx-size", str(settings["ctx_size"]), "--parallel", str(settings["parallel"]),
-                "--kv-unified", "--fit", "off"]
+                "--kv-unified", "--fit", "off", "-lv", "4", "--metrics"]
     return None
 
 
@@ -170,6 +173,32 @@ def read_capacity(engine: str, ctx_size: int | None = None) -> dict[str, Any]:
     if engine == "vllm":
         return capacity.vllm_capacity(capacity.fetch_metrics(base))
     return capacity.llama_capacity(capacity.fetch_props(base), ctx_size)
+
+
+def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list[str]:
+    """Save what the server reports about itself, before and after the run, so
+    a cell can be explained afterwards from the engine's side as well as from
+    the client's: /metrics for both engines (the difference is the run's
+    scheduler counters), and the settings each resolved: vLLM's /server_info
+    (dev mode; the whole config, e.g. max_num_batched_tokens) and llama.cpp's
+    /props and /slots. Best effort: a failed read is returned, never raised, since the
+    cell's numbers do not depend on it."""
+    import requests
+    base = f"http://127.0.0.1:{PORT[engine]}"
+    paths = {"metrics": "/metrics"}
+    if tag == "before":
+        paths.update({"vllm": {"server_info": "/server_info?config_format=json"},
+                      "llama_cpp": {"props": "/props", "slots": "/slots"}}[engine])
+    failed = []
+    for name, path in paths.items():
+        suffix = "txt" if name == "metrics" else "json"
+        try:
+            response = requests.get(base + path, timeout=30)
+            response.raise_for_status()
+            (cell_dir / f"engine-{name}-{tag}.{suffix}").write_text(response.text)
+        except requests.RequestException as exc:
+            failed.append(f"{path} ({tag}): {exc}")
+    return failed
 
 
 def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
@@ -294,6 +323,8 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                     # ADR-0003's "unsupported": a result, recorded without running.
                     status.update(outcome="unsupported", reason="capacity pre-check (docs/adr/0005)")
                     return status
+        if server is not None:
+            status["engine_state_failed"] = snapshot_engine_state(cell["engine"], cell_dir, "before")
         cmd = run_cell_command(cell, engine_version(cell["engine"], versions), cell_dir, check_path)
         (cell_dir / "run_cell_command.txt").write_text(" ".join(cmd) + "\n")
         status["run_started_at"] = _now()
@@ -311,6 +342,9 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                       returncode=rc)
         return status
     finally:
+        if runner is not None and server is not None and server.poll() is None:
+            status.setdefault("engine_state_failed", []).extend(
+                snapshot_engine_state(cell["engine"], cell_dir, "after"))
         for proc in (runner, server):
             if proc is not None:
                 _stop(proc)

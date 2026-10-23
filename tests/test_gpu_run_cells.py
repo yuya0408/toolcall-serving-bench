@@ -51,7 +51,8 @@ def test_llama_server_is_sized_to_the_requirement():
     # rounded up to 256; one slot per request on one shared cache; --fit off.
     cmd = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-bf16", "concurrency": 16},
                                    max_prompt_tokens=2591)
-    assert "--jinja" in cmd and "--kv-unified" in cmd
+    assert "--jinja" in cmd and "--kv-unified" in cmd and "--metrics" in cmd
+    assert cmd[cmd.index("-lv") + 1] == "4"   # the resolved settings (flash attention, batch) reach the log
     assert cmd[cmd.index("--fit") + 1] == "off"
     assert cmd[cmd.index("--parallel") + 1] == "16"
     assert cmd[cmd.index("--ctx-size") + 1] == str(16 * 3104 + 0) or int(cmd[cmd.index("--ctx-size") + 1]) == 49664
@@ -176,9 +177,11 @@ class _FakeServer:
 
 def _served(monkeypatch, tmp_path, capacities):
     """run_one with the server and run_cell.py faked: each startup reports the
-    next capacity in `capacities`; returns the list of run_cell commands."""
+    next capacity in `capacities`; returns the startups, the run_cell commands
+    and the order of the engine-state snapshots around the run."""
     seq = iter(capacities)
     starts, runs = [], []
+    snapshots = []
 
     def start(cell, cmd, log, status):
         log.write_text("Maximum concurrency for 8,192 tokens per request: 12.15x\n")
@@ -187,6 +190,7 @@ def _served(monkeypatch, tmp_path, capacities):
 
     def fake_run_cell_command(cell, version, cell_dir, check):
         runs.append(check)
+        snapshots.append("run")
         return [sys.executable, "-c", "pass"]
 
     monkeypatch.setattr(run_cells, "_start_server", start)
@@ -194,7 +198,9 @@ def _served(monkeypatch, tmp_path, capacities):
     monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
     monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
     monkeypatch.setattr(run_cells, "run_cell_command", fake_run_cell_command)
-    return starts, runs
+    monkeypatch.setattr(run_cells, "snapshot_engine_state",
+                        lambda engine, cell_dir, tag: snapshots.append(tag) or [])
+    return starts, runs, snapshots
 
 
 def _vllm_cap(tokens):
@@ -208,7 +214,7 @@ def _loaded(engine="vllm", quantization="awq-4bit", concurrency=16):
 
 def test_a_short_vllm_startup_is_restarted_once_and_then_runs(tmp_path, monkeypatch):
     # The 2026-10-18 smoke: the first startup came out exactly 1 GiB short.
-    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(48000), _vllm_cap(48000), _vllm_cap(99552), _vllm_cap(99552)])
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [_vllm_cap(48000), _vllm_cap(48000), _vllm_cap(99552), _vllm_cap(99552)])
     status = run_cells.run_one(_loaded(), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and len(starts) == 2
     check = json.loads((tmp_path / "load" / "capacity_check.json").read_text())
@@ -219,7 +225,7 @@ def test_a_short_vllm_startup_is_restarted_once_and_then_runs(tmp_path, monkeypa
 
 
 def test_a_cell_that_still_does_not_fit_is_unsupported_without_running(tmp_path, monkeypatch):
-    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(99552)] * 4)
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [_vllm_cap(99552)] * 4)
     status = run_cells.run_one(_loaded(concurrency=32), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "unsupported" and len(starts) == 2 and runs == []
     check = json.loads((tmp_path / "load" / "capacity_check.json").read_text())
@@ -229,15 +235,53 @@ def test_a_cell_that_still_does_not_fit_is_unsupported_without_running(tmp_path,
 def test_llama_cpp_is_never_restarted_for_capacity(tmp_path, monkeypatch):
     llama = {"unit": "token", "unit_tokens": 1, "units": 49664, "tokens": 49664, "per_slot_tokens": 40960,
              "slots": 16}
-    starts, runs = _served(monkeypatch, tmp_path, [llama])
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [llama])
     status = run_cells.run_one(_loaded("llama_cpp", "gguf-bf16"), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and len(starts) == 1
     assert "kv_capacity_tokens" not in status
+    # The engine's state is saved on both sides of the run.
+    assert snapshots == ["before", "run", "after"] and status["engine_state_failed"] == []
+
+
+def test_a_cell_skipped_as_unsupported_saves_no_engine_state(tmp_path, monkeypatch):
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [_vllm_cap(99552)] * 4)
+    run_cells.run_one(_loaded(concurrency=32), _VERSIONS, tmp_path, _BUDGET)
+    assert snapshots == []
+
+
+def test_engine_state_snapshot_saves_the_reads_and_returns_the_failures(tmp_path, monkeypatch):
+    import requests
+
+    class Response:
+        def __init__(self, text):
+            self.text = text
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, timeout):
+        if url.endswith("/slots"):
+            raise requests.ConnectionError("refused")
+        return Response(url.rsplit("/", 1)[1])
+
+    monkeypatch.setattr(requests, "get", get)
+    failed = run_cells.snapshot_engine_state("llama_cpp", tmp_path, "before")
+    assert (tmp_path / "engine-metrics-before.txt").read_text() == "metrics"
+    assert (tmp_path / "engine-props-before.json").read_text() == "props"
+    assert len(failed) == 1 and "/slots" in failed[0]
+    assert run_cells.snapshot_engine_state("vllm", tmp_path, "after") == []
+    assert sorted(f.name for f in tmp_path.iterdir()) == [
+        "engine-metrics-after.txt", "engine-metrics-before.txt", "engine-props-before.json"]
+    # vLLM's resolved config (max_num_batched_tokens and the rest) comes from its dev-mode /server_info.
+    vllm_dir = tmp_path / "vllm"
+    vllm_dir.mkdir()
+    assert run_cells.snapshot_engine_state("vllm", vllm_dir, "before") == []
+    assert (vllm_dir / "engine-server_info-before.json").read_text() == "server_info?config_format=json"
 
 
 def test_llama_cpp_capacity_is_read_with_the_ctx_size_it_was_started_with(tmp_path, monkeypatch):
     seen = []
-    starts, runs = _served(monkeypatch, tmp_path, [])
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [])
     props = {"default_generation_settings": {"n_ctx": 40960}, "total_slots": 16}
 
     def read(engine, ctx_size=None):
@@ -270,7 +314,7 @@ def test_the_seed_check_starts_a_sized_llama_server(tmp_path, monkeypatch):
 
 
 def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):
-    starts, runs = _served(monkeypatch, tmp_path, [_vllm_cap(30240)])
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [_vllm_cap(30240)])
     status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and runs == [None]
     assert status["kv_capacity_tokens"] == [30240]
