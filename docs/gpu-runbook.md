@@ -27,6 +27,12 @@ IP=$(terraform -chdir=infra/gpu output -raw gpu_public_ip)
 
 `InsufficientInstanceCapacity`で失敗したら、`infra/gpu/instance.tf`のサブネットのindexを変えて、applyし直す（L4の在庫が無いAZ）。
 
+- 2026-10-22は、index 0（ap-northeast-1c）で在庫切れになった。terraformは約10分試し直し続けるので、Ctrl-Cで止めた（インスタンスは作られていない）。
+  index 1（ap-northeast-1a）に変えてapplyすると通った。
+- indexとAZの対応は、g6.xlargeを出せるAZのサブネットの並び（`infra/gpu/data.tf`）で決まり、順番は保証されない。変える前に
+  `terraform -chdir=infra/gpu console`で`data.aws_subnets.default.ids`を出し、WSLの`aws ec2 describe-subnets --subnet-ids ...`でAZを確かめる。
+- indexの変更はコミットしない。applyが通ったらすぐ元に戻してよい（インスタンスはstateに残るので、destroyはそのまま通る）。
+
 ## 2. 準備
 
 ```
@@ -35,6 +41,8 @@ scripts/gpu/local.sh setup $IP          # 数秒で戻る（戻らなければ�
 scripts/gpu/local.sh wait-setup $IP     # SETUP_DONE（成功）かSETUP_FAILED（失敗）が出るまで30秒ごとに見に行く
 scripts/gpu/local.sh collect $IP &      # 別のターミナルで回し続けてもよい。DONEが出るまで1分ごとにコピーする
 ```
+
+準備の実測は37分（2026-10-22、06:52→07:29Z）。準備は毎回やり直すので、applyごとにこの時間がかかる。
 
 終わったかどうかは、ジョブが書く目印のファイル（`SETUP_DONE`・`DONE`など）で判断する。SSHが閉じたかどうかでは判断しない
 （2026-10-18の疎通で、SSHが閉じたのをsetupの終わりと読んで、約17分待ち損ねた）。
@@ -80,6 +88,7 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
   `gpu.csv`と`vmstat.log`のどの時間帯がどのセルかは、この時刻で対応を付ける。
 - `status.jsonl`の`kv_capacity_tokens`：vLLMの起動ごとのKVキャッシュの容量。2026-10-18の疎通では、新しいインスタンスで最初の2回の起動だけが
   ちょうど1GiB少なかった（原因不明、ADR-0005）。同じことが起きるかを、この値で確かめる。
+  2026-10-22のapplyでも、最初の起動（capacity-smokeのvLLM AWQ）だけが92,240トークンで、その後の起動はすべて99,552だった。
 - `~/out/<セル名>/engine-*`：エンジンが自分について報告する状態。`run_cell.py`の前後に`/metrics`（`engine-metrics-before.txt`・`-after.txt`。差がそのセルのスケジューラの数字で、
   llama.cppでは`n_decode_total`・`n_busy_slots_per_decode`・プロンプトと生成の処理時間）。前には実際に決まった設定も保存する：vLLMは開発用モードの
   `/server_info`（`engine-server_info-before.json`。`max_num_batched_tokens`など設定の全体。既定のログには出ない）、llama.cppは`/props`と`/slots`。
@@ -162,9 +171,9 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目
 
 | セル | 決まること |
 | --- | --- |
-| `third-vllm-awq-c1`・`-c16`（greedy、200件×5試行） | 入れ替わったケースの数 → 案A（判定する）か案C（判定しない）か（ADR-0002の「パイロットの後の分岐」） |
-| `lat-*-c1`（3エンジン、100リクエスト） | 1件あたりの所要時間 → 本番の件数n（299件以上）を、6時間に収まる範囲で固定する（ADR-0003） |
-| `lat-vllm-awq-c16`・`lat-llama-gguf-c16`（300リクエスト） | 安定判定を通るか → 通らなければ窓を広げる（ADR-0003の追記B） |
+| `third-vllm-awq-c1`・`-c16`（greedy、200件×5試行） | 入れ替わったケースの数 → 案A（判定する）か案C（判定しない）か（ADR-0002の「パイロットの後の分岐」）。**結果：0件で案A**（ADR-0002の追記2026-10-22） |
+| `lat-*-c1`（3エンジン、100リクエスト） | 1件あたりの所要時間 → 本番の件数n（299件以上）を、6時間に収まる範囲で固定する（ADR-0003）。**結果：n=1,000、ウォームアップ1周**（ADR-0003の追記2026-10-23） |
+| `lat-vllm-awq-c16`・`lat-llama-gguf-c16`（300リクエスト） | 安定判定を通るか → 通らなければ窓を広げる（ADR-0003の追記B）。**結果：どちらも最初の窓から安定**。llama.cppは極端に遅く、KVキャッシュを分割に変えた（ADR-0005の追記2026-10-23） |
 | `third-llama-gguf-c1`・`-c16`（greedy、200件×5試行） | llama.cpp bf16の入れ替わったケースの数（第3パスは並行数16で対応できる構成すべて、ADR-0002の追記2026-10-19） |
 
 一覧から外したセル（ADR-0003の追記H）：vLLM bf16の並行数16・32とvLLM AWQの並行数32は事前の判定で「対応していない」、
@@ -174,6 +183,22 @@ llama.cppの並行数32は空きメモリに入らない見込み。本番では
 約4.9〜5.5時間（推定。2つの見積もりがあり、どちらが近いかは2回目のapplyの実測で分かる）。そのうちllama.cppの第3パスは約1.3時間
 （推定：並行数1は疎通の1件約3.6秒×1,000リクエストで約1時間、並行数16はそれより短い）なので、`pilot-1.json`は約3.6〜4.2時間、
 2回目のapplyは準備と確認を足して約4.4〜5時間になる。
+**2回目のapplyの実測（2026-10-22）**：applyから destroyまで約5.8時間（06:51→12:38Z、約$6.8の見込み）。準備37分、capacity-smoke 11分、pilot-1は約4.8時間。
+セルごとの所要時間（サーバーの起動を含む）：
+
+| セル | 所要時間 | サーバーの起動 | 結果 |
+| --- | --- | --- | --- |
+| `third-vllm-awq-c1` | 33分 | 120秒 | ok |
+| `third-vllm-awq-c16` | 15分 | 55秒 | ok |
+| `lat-vllm-bf16-c1` | 51分 | 220秒 | ok |
+| `lat-llama-gguf-c1` | 55分 | 165秒 | ok |
+| `lat-hf-bf16-c1` | 55分 | （サーバーなし） | ok |
+| `lat-vllm-awq-c16` | 15分 | 115秒 | ok |
+| `lat-llama-gguf-c16` | 64分 | 170秒 | `capacity_misestimate`（誤検知。ADR-0005の追記2026-10-23） |
+
+latencyのセルは、どれもウォームアップが最低の600件（3窓）で、所要時間の6割前後を占めた。本番ではウォームアップを1周（200件）にし、計測を1,000件にする
+（ADR-0003の追記2026-10-23）。上の見込み（約4.9〜5.5時間）より短く済んだのは、主にllama.cppの第3パスを`pilot-2.json`に分けたためである。
+
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 
