@@ -179,14 +179,16 @@ def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list
     """Save what the server reports about itself, before and after the run, so
     a cell can be explained afterwards from the engine's side as well as from
     the client's: /metrics for both engines (the difference is the run's
-    scheduler counters), and llama.cpp's /props and /slots (the settings it
-    resolved). Best effort: a failed read is returned, never raised, since the
+    scheduler counters), and the settings each resolved: vLLM's /server_info
+    (dev mode; the whole config, e.g. max_num_batched_tokens) and llama.cpp's
+    /props and /slots. Best effort: a failed read is returned, never raised, since the
     cell's numbers do not depend on it."""
     import requests
     base = f"http://127.0.0.1:{PORT[engine]}"
     paths = {"metrics": "/metrics"}
-    if engine == "llama_cpp" and tag == "before":
-        paths.update(props="/props", slots="/slots")
+    if tag == "before":
+        paths.update({"vllm": {"server_info": "/server_info?config_format=json"},
+                      "llama_cpp": {"props": "/props", "slots": "/slots"}}[engine])
     failed = []
     for name, path in paths.items():
         suffix = "txt" if name == "metrics" else "json"

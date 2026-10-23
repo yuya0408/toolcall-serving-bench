@@ -272,6 +272,11 @@ def test_engine_state_snapshot_saves_the_reads_and_returns_the_failures(tmp_path
     assert run_cells.snapshot_engine_state("vllm", tmp_path, "after") == []
     assert sorted(f.name for f in tmp_path.iterdir()) == [
         "engine-metrics-after.txt", "engine-metrics-before.txt", "engine-props-before.json"]
+    # vLLM's resolved config (max_num_batched_tokens and the rest) comes from its dev-mode /server_info.
+    vllm_dir = tmp_path / "vllm"
+    vllm_dir.mkdir()
+    assert run_cells.snapshot_engine_state("vllm", vllm_dir, "before") == []
+    assert (vllm_dir / "engine-server_info-before.json").read_text() == "server_info?config_format=json"
 
 
 def test_llama_cpp_capacity_is_read_with_the_ctx_size_it_was_started_with(tmp_path, monkeypatch):
