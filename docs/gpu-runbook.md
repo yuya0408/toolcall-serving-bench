@@ -4,7 +4,7 @@
 インスタンス上の作業（準備・サーバーの起動と再起動・セルの実行）は`scripts/gpu/`のスクリプトがやり、手で打つのは下の6つのコマンドだけにする。
 手で繰り返すと、llama.cppの再起動忘れや回収漏れのように、データを黙って壊す間違いが起きるためである。
 
-インスタンスは`terminate`と6時間の自動シャットダウン（`var.auto_shutdown_minutes`）で、EBSごと確実に消える。
+インスタンスは`terminate`と自動シャットダウン（`var.auto_shutdown_minutes`。既定は6時間、本番のapplyは下の「1. apply」の値を渡す）で、EBSごと確実に消える。
 **復元できない情報は、取れたときにすぐ手元へ回収する。** 回収は`local.sh collect`が1分ごとに行う。
 
 コマンドはすべてWSL側で、リポジトリの直下から打つ。
@@ -24,6 +24,15 @@
 cd infra/gpu && terraform apply && cd -
 IP=$(terraform -chdir=infra/gpu output -raw gpu_public_ip)
 ```
+
+本番のapplyは、自動シャットダウンを延ばして渡す（ADR-0007）。速さの測定（`main-latency.json`）は18時間、精度と第3パス（`main-accuracy.json`）は10時間。
+
+```
+terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=1080   # main-latency.json
+terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=600    # main-accuracy.json
+```
+
+始める時刻は、自動シャットダウンの前に手元のPCが起きていて、回収とdestroyができるように選ぶ（1回目は約14.4時間かかる見込み）。
 
 `InsufficientInstanceCapacity`で失敗したら、`infra/gpu/instance.tf`のサブネットのindexを変えて、applyし直す（L4の在庫が無いAZ）。
 
@@ -113,7 +122,14 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke.json            # 1回目
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/capacity-smoke.json   # 2回目のapply：まず容量の判定の動作確認（約10分）
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-1.json          # 2回目のapply：確認が通ったらパイロットの前半
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目のapply：パイロットの後半（llama.cppの第3パス）
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-latency.json     # 本番1回目：速さの測定の18セル（約13.8時間）
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-accuracy.json    # 本番2回目：普通の精度の4セルと第3パスの5セル（約7.1時間）
 ```
+
+**本番の一覧**（ADR-0007）：`scripts/gpu/make_main_cells.py`の出力で、手で書き換えない。順番は固定のseedでランダムにしてあり、引き直さない。
+速さの測定は全部1台に入れ、比べるセルが同じ物理GPUの上になるようにしてある。載らない見込みの構成（vLLM bf16の並行数16、vLLM AWQとllama.cppの並行数32）も
+一覧に残し、容量の事前の判定や起動の失敗が「対応していない」と記録する（それぞれ数分）。
+回し終えたら、セルごとの電力・温度・クロック・熱による低下の有無（`gpu.csv`の`clocks_event_reasons`の`0x20`・`0x40`）を集計して報告する（ADR-0007のDecision 5）。
 
 **2回目のapplyの順番**：容量の判定（ADR-0005）はGPUの上でまだ一度も動かしていないので、パイロットの前に`capacity-smoke.json`
 （`smoke.json`の並行数16の2セル、20件×2試行）だけを回す。`collect`で回収し、次の3点を確かめてからパイロットに進む。
@@ -250,8 +266,9 @@ ADR-0003の結果（「対応していない」）である。その場合は、
 terraform -chdir=infra/gpu apply -var "ssh_allowed_cidr=$(curl -4 -s https://checkip.amazonaws.com)/32"
 ```
 
-**6時間に間に合わないとき**：`local.sh status`の「--- shutdown」の下が自動シャットダウンの予定（`USEC=`の形なら、UNIX時刻のマイクロ秒）。間に合わないセルは、回り終わったものを`collect`で
-回収した後に、次のapplyで`--only`を付けて回す。シャットダウンの時刻は延ばさない（課金の歯止めのため）。
+**自動シャットダウンに間に合わないとき**：`local.sh status`の「--- shutdown」の下が自動シャットダウンの予定（`USEC=`の形なら、UNIX時刻のマイクロ秒）。間に合わないセルは、回り終わったものを`collect`で
+回収した後に、次のapplyで`--only`を付けて回す。動いているインスタンスのシャットダウンの時刻は延ばさない（課金の歯止めのため）。
+延ばすのは、本番のapplyのときに上の値を渡すときだけにする（ADR-0007）。
 
 ## 6. destroy（手で行う）
 

@@ -1,0 +1,11 @@
+[
+  {"name": "acc-vllm-bf16", "prefix": "", "pass_type": "accuracy", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "n": 5, "server": {"max_model_len": 8192}, "timeout_min": 120},
+  {"name": "third-vllm-awq-c16", "prefix": "", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}},
+  {"name": "acc-vllm-awq", "prefix": "", "pass_type": "accuracy", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "n": 5, "server": {"max_model_len": 8192}},
+  {"name": "third-vllm-bf16-c16", "prefix": "", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}},
+  {"name": "third-vllm-awq-c1", "prefix": "", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}},
+  {"name": "third-llama-gguf-c1", "prefix": "", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "timeout_min": 120},
+  {"name": "acc-hf-bf16", "prefix": "", "pass_type": "accuracy", "engine": "transformers_hf", "quantization": "bf16-none", "tool_stage": 10, "n": 5, "timeout_min": 120},
+  {"name": "third-llama-gguf-c16", "prefix": "", "pass_type": "accuracy_under_load", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n": 5, "temperature": 0},
+  {"name": "acc-llama-gguf", "prefix": "", "pass_type": "accuracy", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "n": 5, "timeout_min": 120}
+]
