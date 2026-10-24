@@ -69,7 +69,11 @@ if ! command -v uv >/dev/null; then
   curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
 export PATH="$HOME/.local/bin:$PATH"
-uv venv --allow-existing --python 3.12 ~/venv
+# --seed puts pip in the venv: vLLM's dev-mode /server_info lists packages with
+# `python -m pip list`, and without pip it falls back to `uv pip list`, which
+# fails from the server's environment and turns the endpoint into a 500
+# (capacity-smoke, 2026-10-24). pip is only read there, never used to install.
+uv venv --allow-existing --seed --python 3.12 ~/venv
 # vLLM brings torch and transformers; accelerate is for transformers_hf's device_map.
 uv pip install --python ~/venv/bin/python "vllm==$VLLM_VERSION" "transformers==$TRANSFORMERS_VERSION" \
   accelerate -r "$REPO/requirements.txt" --torch-backend=auto
