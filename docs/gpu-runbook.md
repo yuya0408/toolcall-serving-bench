@@ -151,6 +151,10 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目
   セル一覧には書かない（ADR-0005：各エンジンは要件ぶんだけメモリを載せる）。並行数2以上でこの大きさで起動できなければ、1回だけ全スロットで共有する
   KVキャッシュ（`--kv-unified`、全体を1回だけ切り上げる）で起動し直す（ADR-0005の追記2026-10-23）。それでも起動できなければ`server_not_ready`で、
   その並行数は「対応していない」。どちらで回ったかは`status.jsonl`と`capacity_check.json`の`llama_kv`に残る。
+- 1リクエストの時間の上限は、パスで意味が違う。latencyのパスでは測定の一部で（`--request-timeout`、既定120秒。超えた1件は基準を超えたと数えて続ける）、
+  精度のパス（`accuracy`・`accuracy_under_load`）では固まったサーバーを見つけるためだけの上限（600秒、`ACCURACY_REQUEST_TIMEOUT_S`）。
+  600秒は、出力の上限512トークン×llama.cppの並行数16の1トークン0.66秒（pilot-2の90パーセンタイル）＋プリフィル約2秒＝約340秒に余裕を持たせた値。
+  以前は精度のパスも120秒で、pilot-2の`third-llama-gguf-c16`が178トークンの答え1件で止まった（2026-10-24）。
 - transformers_hfはサーバーを使わず、`run_cell.py`の中でモデルを読む。
 - 結果は`~/out/<セル名>/`に、manifest・生出力・サーバーのログ・実行したコマンドとともに残る。`~/out/status.jsonl`にはセルごとの結果
   （`ok`／`unsupported`＝ADR-0003の「対応していない」／`capacity_misestimate`＝回したが容量の事後の確かめが通らなかった／`error`／`server_not_ready`）を書く。

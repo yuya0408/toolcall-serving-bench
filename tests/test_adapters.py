@@ -16,7 +16,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from eval_bench.adapters.openai_compatible import LlamaCppAdapter, VLLMAdapter
+from eval_bench.adapters.openai_compatible import (ACCURACY_REQUEST_TIMEOUT_S, LlamaCppAdapter,
+                                                   VLLMAdapter)
 from eval_bench.adapters.transformers_hf import TransformersHFAdapter
 from eval_bench.decoders.base import HermesTagDecoder, OpenAIToolCallDecoder
 
@@ -68,6 +69,19 @@ def test_llama_cpp_adapter_shares_the_same_request_shape():
     assert mock_post.call_args[0][0] == "http://localhost:8080/v1/chat/completions"
     assert OpenAIToolCallDecoder().decode(raw, {}) == \
         OpenAIToolCallDecoder().decode(json.dumps(message), {})
+
+
+def test_accuracy_requests_get_the_hung_server_limit_not_the_latency_one():
+    # A long answer at concurrency 16 runs past 120 s and is still a valid
+    # answer; generate()'s limit only catches a hung server (pilot-2, 2026-10-24).
+    adapter = LlamaCppAdapter(base_url="http://localhost:8080", model="qwen3-8b-bf16.gguf",
+                              sampling_params=_SAMPLING)
+    message = {"role": "assistant", "content": "ok", "tool_calls": None}
+
+    with patch("requests.post", return_value=_fake_response(message)) as mock_post:
+        adapter.generate("在庫を確認して", _TOOL_SET)
+
+    assert mock_post.call_args[1]["timeout"] == ACCURACY_REQUEST_TIMEOUT_S == 600.0
 
 
 class _FakeTensor(list):

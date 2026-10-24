@@ -20,12 +20,20 @@ from eval_bench.latency import TimedResult
 USAGE_KEY = "_usage"
 FINISH_REASON_KEY = "_finish_reason"
 
+# generate()'s limit (the accuracy passes). Unlike generate_timed()'s, it is not
+# part of the measurement -- a slow answer is still a valid answer -- so it only
+# catches a hung server. Derivation: max_tokens 512 x 0.66 s/token (llama.cpp bf16
+# at concurrency 16 on the L4, p90 per-slot decode in pilot-2, 2026-10-24) + ~2 s
+# prefill = ~340 s; 600 s leaves room. The former 120 s default stopped
+# pilot-2's third-llama-gguf-c16 on one 178-token answer.
+ACCURACY_REQUEST_TIMEOUT_S = 600.0
+
 
 class OpenAICompatibleChatAdapter(ModelAdapter):
     name = "openai-compatible-chat"
 
     def __init__(self, base_url: str, model: str, sampling_params: dict[str, Any],
-                 timeout: float = 120.0):
+                 timeout: float = ACCURACY_REQUEST_TIMEOUT_S):
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.sampling_params = sampling_params
