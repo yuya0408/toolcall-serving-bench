@@ -369,3 +369,17 @@ def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):
     status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and runs == [None]
     assert status["kv_capacity_tokens"] == [30240]
+
+
+def test_main_lists_are_the_generators_output_in_its_seeded_order():
+    # docs/adr/0007: the order is drawn once from SEED and is part of the record,
+    # so a hand-edited or re-drawn list must fail here.
+    spec = importlib.util.spec_from_file_location("make_main_cells",
+                                                  _ROOT / "scripts" / "gpu" / "make_main_cells.py")
+    make = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(make)
+    assert make.SEED == 20261024
+    for name, cells in make.lists().items():
+        committed = (_ROOT / "scripts" / "gpu" / "cells" / name).read_text(encoding="utf-8")
+        assert committed == make.render(cells), name
+        assert len({c["name"] for c in cells}) == len(cells)

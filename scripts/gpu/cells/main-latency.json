@@ -1,0 +1,20 @@
+[
+  {"name": "lat-llama-gguf-c1", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 1, "n_requests": 1000, "timeout_min": 150},
+  {"name": "lat-llama-gguf-c4", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 4, "n_requests": 1000},
+  {"name": "lat-llama-gguf-c8", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 8, "n_requests": 1000},
+  {"name": "lat-llama-gguf-c16", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 16, "n_requests": 1000},
+  {"name": "lat-vllm-awq-c1", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 1, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-awq-c2", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 2, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-bf16-c8", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 8, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-llama-gguf-c32", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 32, "n_requests": 1000},
+  {"name": "lat-vllm-bf16-c1", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 1, "n_requests": 1000, "server": {"max_model_len": 8192}, "timeout_min": 130},
+  {"name": "lat-vllm-awq-c32", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 32, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-llama-gguf-c2", "prefix": "", "pass_type": "latency", "engine": "llama_cpp", "quantization": "gguf-bf16", "tool_stage": 10, "concurrency": 2, "n_requests": 1000, "timeout_min": 110},
+  {"name": "lat-vllm-awq-c4", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-bf16-c4", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-hf-bf16-c1", "prefix": "", "pass_type": "latency", "engine": "transformers_hf", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 1, "n_requests": 1000, "timeout_min": 150},
+  {"name": "lat-vllm-awq-c16", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-awq-c8", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 8, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-bf16-c2", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 2, "n_requests": 1000, "server": {"max_model_len": 8192}, "timeout_min": 110},
+  {"name": "lat-vllm-bf16-c16", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n_requests": 1000, "server": {"max_model_len": 8192}}
+]
