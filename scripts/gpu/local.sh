@@ -5,7 +5,7 @@
 #     scripts/gpu/local.sh setup   <ip>             # start setup.sh on the instance, detached
 #     scripts/gpu/local.sh wait-setup <ip>          # wait until setup.sh finished (SETUP_DONE / SETUP_FAILED)
 #     scripts/gpu/local.sh cells   <ip> <list>      # start run_cells.py with a cell list, detached
-#     scripts/gpu/local.sh collect <ip> [dest]      # copy ~/out back every minute until DONE
+#     scripts/gpu/local.sh collect <ip> [dest]      # copy ~/out back every minute until DONE (default runs/gpu-<date>-<instance id>)
 #     scripts/gpu/local.sh status  <ip>             # setup / cell progress at a glance
 #
 # setup and cells run under setsid + nohup, so a dropped SSH connection does not
@@ -68,8 +68,26 @@ case "$cmd" in
     echo "cells started: $list"
     ;;
   collect)
-    dest=${3:-runs/gpu-$(date +%Y%m%d)}
+    # Which apply this is: the instance ID changes with every apply. cloud-init
+    # writes it; IMDSv2 is the fallback.
+    instance=$(ssh_ -o ConnectTimeout=20 'cat /var/lib/cloud/data/instance-id 2>/dev/null ||
+      curl -sf -H "X-aws-ec2-metadata-token: $(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 60" http://169.254.169.254/latest/api/token)" http://169.254.169.254/latest/meta-data/instance-id') ||
+      { echo "could not read the instance ID; nothing copied" >&2; exit 1; }
+    [ -n "$instance" ] || { echo "the instance ID came back empty; nothing copied" >&2; exit 1; }
+    dest=${3:-runs/gpu-$(date +%Y%m%d)-$instance}
+    # rsync -a overwrites same-named files, so another apply's folder would
+    # lose its gpu.csv, setup.log, checks/ ... (2026-10-24: pilot-2's were lost
+    # this way when two applies on one day shared runs/gpu-<date>).
+    if [ -f "$dest/.collect-instance" ] && [ "$(cat "$dest/.collect-instance")" != "$instance" ]; then
+      echo "$dest holds another apply ($(cat "$dest/.collect-instance")); pass a new folder" >&2
+      exit 1
+    fi
+    if [ ! -f "$dest/.collect-instance" ] && [ -n "$(ls -A "$dest" 2>/dev/null)" ]; then
+      echo "$dest is not empty and was not collected from $instance; pass a new folder" >&2
+      exit 1
+    fi
     mkdir -p "$dest"
+    echo "$instance" > "$dest/.collect-instance"
     misses=0
     while true; do
       # The markers are read on the instance: rsync -a never deletes, so a local

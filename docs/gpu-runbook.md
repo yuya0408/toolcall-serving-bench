@@ -245,9 +245,14 @@ vLLMの`/server_info`が500を返していた（環境にpipが無く、vLLMの`
   熱による低下（`0x20`・`0x40`）は全セルで0回、温度の最大は83〜85℃。SMクロックの中央値は並行数1で1,440〜1,680MHz、並行数8〜16で915〜1,065MHzで、
   負荷によって変わるが、後のセルほど下がる傾きは無かった（ADR-0007のDecision 5）。
 
-**回収先は毎回指定する。** `local.sh collect`は回収先を省くと`runs/gpu-<今日の日付>`を使う。同じ日に2回applyすると、前のapplyの回収先と重なり、
+**回収先はapplyごとに分ける。** 以前の`local.sh collect`は、回収先を省くと`runs/gpu-<今日の日付>`を使っていた。同じ日に2回applyすると前のapplyの回収先と重なり、
 `gpu.csv`・`vmstat.log`・`setup.log`・`versions.json`・`checks/`などの共通のファイルが上書きされる（2026-10-24に、pilot-2のこれらのファイルを本番1回目の回収で失った。
-セルのフォルダと`status.jsonl`は残った）。本番2回目は`scripts/gpu/local.sh collect $IP runs/<名前>`と、新しいフォルダを渡す。
+セルのフォルダと`status.jsonl`は残った）。今は、インスタンスID（applyごとに変わる）で見分ける。
+
+- 回収先を省くと`runs/gpu-<今日の日付>-<インスタンスID>`になる。
+- 回収先に`.collect-instance`（回収したインスタンスID）を書き、別のインスタンスのIDが書いてあれば、何もコピーせずに止まる。
+  `.collect-instance`の無い、空でないフォルダ（この変更より前の回収先）にも回収しない。
+- インスタンスIDは、cloud-initが書く`/var/lib/cloud/data/instance-id`から読み、読めなければIMDSv2から読む。どちらも読めなければ止まる。
 
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
