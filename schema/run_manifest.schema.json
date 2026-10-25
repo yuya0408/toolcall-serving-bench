@@ -158,7 +158,7 @@
                 "type": "object",
                 "required": ["window_requests", "windows", "stability_pct", "stable"],
                 "additionalProperties": false,
-                "description": "Whether the measured span was steady (ADR-0003, 2026-10-23): the measured requests in completion order, in whole windows of one case-set cycle; stable when every window's throughput and mean latency have max/min within stability_pct. null when fewer than 3 whole windows. An unsteady cell keeps its verdict and is flagged.",
+                "description": "Whether the measured span was steady (ADR-0003, 2026-10-23): the measured requests in the order sent, in whole windows of one case-set cycle (window_order; absent = completion order, the definition before 2026-10-25); stable when every window's throughput and mean latency have max/min within stability_pct. null when fewer than 3 whole windows. An unsteady cell keeps its verdict and is flagged.",
                 "properties": {
                   "window_requests": { "type": "integer", "minimum": 1 },
                   "windows": {
@@ -170,6 +170,8 @@
                       "properties": { "throughput_rps": { "type": "number" }, "mean_latency_s": { "type": "number" } }
                     }
                   },
+                  "window_order": { "enum": ["sent"] },
+                  "recomputed_from_raw": { "type": "boolean", "description": "true when scripts/recompute_stability.py rewrote this block from the raw log after the run" },
                   "stability_pct": { "type": "number" },
                   "stable": { "type": ["boolean", "null"] }
                 }

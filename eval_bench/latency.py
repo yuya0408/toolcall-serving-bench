@@ -13,8 +13,8 @@ One cell = one engine x quantization x tool_stage x concurrency. Within it:
      one ran under the full concurrency (the extra ones are logged as
      cooldown and not counted). Whether the measured span was steady is
      checked afterwards with NVIDIA Perf Analyzer's rule in its count_windows
-     form: a window is one cycle of the case set (so every window carries the
-     same query mix), and every measured window's throughput and mean latency
+     form: a window is one cycle of the case set in the order sent (so every
+     window carries the same query mix), and every measured window's throughput and mean latency
      must have max/min within 10%. An unsteady cell is flagged, not dropped:
      slowing down under sustained load is how the engine behaves.
   4. Each measured request either meets a latency class's TTFT and TPOT
@@ -270,12 +270,19 @@ def run_latency_cell(cases: list[dict[str, Any]], send: SendFn, concurrency: int
         exc.rows = log
         raise
     start_idx = state["measure_from"]
-    measured = [rows[i].result for i in range(start_idx, start_idx + n_requests)]
-    windows = measured_windows(completions, range(start_idx, start_idx + n_requests), window_size, t0)
+    measured_rows = [rows[i] for i in range(start_idx, start_idx + n_requests)]
+    measured = [r.result for r in measured_rows]
+    after = start_idx + n_requests
+    # The span ends when the request after it was sent; at concurrency 1 none
+    # is sent, and the last measured completion is that same moment.
+    end = rows[after].sent_at if after in rows else max(r.done_at for r in measured_rows) - t0
+    windows = measured_windows([r.sent_at for r in measured_rows],
+                               [r.result.total_s for r in measured_rows], end, window_size)
     results = summarize(measured, warmup={"window_requests": window_size, "warmup_requests": start_idx})
     results["measured_stability"] = {
         "window_requests": window_size,
         "windows": windows,
+        "window_order": "sent",
         "stability_pct": STABILITY_PCT,
         # None: too few whole windows to judge (fewer than Perf Analyzer's 3).
         "stable": is_stable(windows, last=len(windows)) if len(windows) >= STABLE_WINDOWS else None,
@@ -283,27 +290,27 @@ def run_latency_cell(cases: list[dict[str, Any]], send: SendFn, concurrency: int
     return log, results
 
 
-def measured_windows(completions: list[_Row], measured: range, window_size: int,
-                     t0: float) -> list[dict[str, float]]:
-    """The measured requests in the order they finished, cut into whole
-    windows of `window_size`; each window's throughput runs from the end of
-    the one before (the first: from the last completion before it)."""
+def measured_windows(sent_at: list[float], total_s: list[float], end: float,
+                     window_size: int) -> list[dict[str, float]]:
+    """The measured requests in the order they were sent, cut into whole
+    windows of `window_size` (one case-set cycle, so every window holds the
+    same cases); `end` is when the request after the measured span was sent.
+
+    A window's throughput runs from its first send to the next window's first
+    send (the last: to `end`). With a fixed number of requests in flight, a
+    request is sent the moment one finishes, so sends per second equal
+    completions per second. Completion order would put the slow requests of
+    each cycle late: the first window would hold fewer of them and the last
+    more (ADR-0003, 2026-10-25).
+    """
     windows = []
-    start = t0
-    chunk: list[_Row] = []
-    for row in completions:
-        if row.index not in measured:
-            if not windows and not chunk:
-                start = row.done_at
-            continue
-        chunk.append(row)
-        if len(chunk) == window_size:
-            windows.append({
-                "throughput_rps": window_size / (chunk[-1].done_at - start),
-                "mean_latency_s": sum(r.result.total_s for r in chunk) / window_size,
-            })
-            start = chunk[-1].done_at
-            chunk = []
+    for start in range(0, len(sent_at) - window_size + 1, window_size):
+        stop = start + window_size
+        until = sent_at[stop] if stop < len(sent_at) else end
+        windows.append({
+            "throughput_rps": window_size / (until - sent_at[start]),
+            "mean_latency_s": sum(total_s[start:stop]) / window_size,
+        })
     return windows
 
 

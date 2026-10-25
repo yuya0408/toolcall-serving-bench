@@ -19,7 +19,7 @@ from eval_bench.adapters.openai_compatible import LlamaCppAdapter, VLLMAdapter
 from eval_bench.adapters.transformers_hf import TransformersHFAdapter
 from eval_bench.latency import (
     SLO_CLASSES, CellAborted, TimedResult, clopper_pearson_one_sided, exceeds, is_stable,
-    new_run_tag, percentiles, run_latency_cell, tagged_query, verdict,
+    measured_windows, new_run_tag, percentiles, run_latency_cell, tagged_query, verdict,
 )
 
 _CASES = [{"id": f"case_{i:02d}", "query": f"q{i}"} for i in range(14)]
@@ -73,6 +73,26 @@ def test_stability_needs_three_windows_within_ten_percent():
     assert is_stable([w(5, 9), w(1.0, 1.0), w(1.05, 1.0), w(1.1, 1.08)])
     assert not is_stable([w(1.0, 1.0), w(1.0, 1.0), w(1.11, 1.0)])
     assert not is_stable([w(1.0, 1.0), w(1.0, 1.0), w(1.0, 1.2)])
+
+
+def test_windows_follow_send_order_so_each_cycle_keeps_its_slow_request():
+    # 2 cycles of 4 cases, one 10 s case per cycle, sent 1 s apart. In
+    # completion order the slow request of each cycle would drift late; in
+    # send order every window holds one, so the windows are equal.
+    sent = [float(i) for i in range(8)]
+    total = [1.0, 10.0, 1.0, 1.0] * 2
+    windows = measured_windows(sent, total, end=8.0, window_size=4)
+    assert windows == [{"throughput_rps": 1.0, "mean_latency_s": 3.25}] * 2
+
+
+def test_last_window_runs_to_the_send_after_the_measured_span():
+    windows = measured_windows([0.0, 1.0, 2.0, 3.0], [1.0] * 4, end=6.0, window_size=2)
+    assert windows[0]["throughput_rps"] == 1.0          # 2 sends in [0, 2)
+    assert windows[1]["throughput_rps"] == 2 / 4.0      # [2, 6)
+
+
+def test_partial_window_is_left_out():
+    assert len(measured_windows([0.0, 1.0, 2.0], [1.0] * 3, end=3.0, window_size=2)) == 1
 
 
 def test_tagged_queries_are_unique_and_keep_the_query_first():

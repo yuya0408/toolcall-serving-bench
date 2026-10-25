@@ -232,6 +232,23 @@ latencyのセルは、どれもウォームアップが最低の600件（3窓）
 vLLMの`/server_info`が500を返していた（環境にpipが無く、vLLMの`collect_env`が落ちる）ので、`setup.sh`で環境にpipを入れた。次のapplyの最初のvLLMのセルで、
 `engine_state_failed`が空で`engine-server_info-before.json`ができていることを確かめる。
 
+### 本番1回目：速さの測定（`cells/main-latency.json`、18セル・1,000件）
+
+**実測（2026-10-24〜25）**：apply 13:59Z → destroy 02:40Z（インスタンスは約12.7時間）。準備35分。セルは14:35Z→02:36Zの12.0時間で、見込み（約13.8時間）より短かった。
+自動シャットダウンは1080分で、約5.3時間の余りがあった。費用は未確認（Cost Explorerで確かめる）。
+
+- 15セルが`ok`。`lat-llama-gguf-c32`は`server_not_ready`（5分）、`lat-vllm-awq-c32`と`lat-vllm-bf16-c16`は事前の判定で`unsupported`（3〜6分）で、どれも見込みどおり。
+- vLLMの全セルで`engine_state_failed`が空で、`engine-server_info-before.json`ができた（`setup.sh`でpipを入れた修正が効いた）。
+- 速さの測定の上限（1件120秒）を超えたのは、llama.cppの並行数8で5件、並行数16で19件（基準を超えたと数えて続ける決まりどおり）。
+- 安定の確かめで3セルが`false`になったが、窓の切り方によるもので、送った順の窓に直して計算し直した（ADR-0003の追記2026-10-25）。
+- GPU（`gpu.csv`をセルの計測区間で切ったもの）：電力の中央値は全セルで70〜72W（L4の上限）、クロックが下がった理由の98〜100%が電力の上限（`0x4`）。
+  熱による低下（`0x20`・`0x40`）は全セルで0回、温度の最大は83〜85℃。SMクロックの中央値は並行数1で1,440〜1,680MHz、並行数8〜16で915〜1,065MHzで、
+  負荷によって変わるが、後のセルほど下がる傾きは無かった（ADR-0007のDecision 5）。
+
+**回収先は毎回指定する。** `local.sh collect`は回収先を省くと`runs/gpu-<今日の日付>`を使う。同じ日に2回applyすると、前のapplyの回収先と重なり、
+`gpu.csv`・`vmstat.log`・`setup.log`・`versions.json`・`checks/`などの共通のファイルが上書きされる（2026-10-24に、pilot-2のこれらのファイルを本番1回目の回収で失った。
+セルのフォルダと`status.jsonl`は残った）。本番2回目は`scripts/gpu/local.sh collect $IP runs/<名前>`と、新しいフォルダを渡す。
+
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 
