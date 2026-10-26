@@ -67,6 +67,15 @@ def test_arms_must_cover_the_same_pairs():
         ni.noninferiority(_arm(3, set()), _arm(2, set()), _cases(3))
 
 
-def test_rho_is_zero_when_discordance_is_spread_evenly():
+def test_rho_is_low_when_discordance_is_spread_and_one_when_packed():
     assert ni.intra_case_rho([1] * 50 + [0] * 150, _TRIALS) < 0
     assert ni.intra_case_rho([5] * 10 + [0] * 190, _TRIALS) == pytest.approx(1.0)
+
+
+@pytest.mark.parametrize("q,df,want", [
+    (0.995, 199, 2.60076),   # scipy.stats.t.ppf, the case ADR-0008 uses
+    (0.975, 199, 1.97196),
+    (0.995, 30, 2.74999),
+])
+def test_t_quantile_matches_the_t_distribution(q, df, want):
+    assert ni.t_quantile(q, df) == pytest.approx(want, abs=1e-3)

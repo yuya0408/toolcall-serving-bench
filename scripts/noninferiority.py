@@ -29,8 +29,6 @@ import statistics
 import sys
 from typing import Any
 
-from scipy import stats
-
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "scripts"))
@@ -43,6 +41,17 @@ MARGIN = 0.026         # docs/adr/0002, reused by docs/adr/0008
 CONFIDENCE = 0.995     # one-sided; calibrated so the actual error rate is <= 2.5% (ADR-0008)
 MIN_P_D = 0.045        # the range the calibration covered
 MAX_RHO = 0.3
+
+
+def t_quantile(q: float, df: int) -> float:
+    """Student t quantile from the normal one (Abramowitz & Stegun 26.7.5).
+    Stdlib only, like the rest of the harness; the series is accurate to well
+    under 1e-4 at the degrees of freedom used here (199), and refused below 30."""
+    if df < 30:
+        raise ValueError(f"the expansion is not used below 30 degrees of freedom (got {df})")
+    z = statistics.NormalDist().inv_cdf(q)
+    return (z + (z**3 + z) / (4 * df) + (5 * z**5 + 16 * z**3 + 3 * z) / (96 * df**2)
+            + (3 * z**7 + 19 * z**5 + 17 * z**3 - 15 * z) / (384 * df**3))
 
 
 def intra_case_rho(discordant_per_case: list[int], trials: int) -> float:
@@ -87,7 +96,7 @@ def noninferiority(base: dict[tuple[str, int], dict[str, Any]],
     n = len(per_case)
     mean = statistics.mean(per_case)
     se = statistics.stdev(per_case) / math.sqrt(n)
-    lower = mean - stats.t.ppf(CONFIDENCE, n - 1) * se
+    lower = mean - t_quantile(CONFIDENCE, n - 1) * se
     flips = list(discordant.values())
     p_d = sum(flips) / (n * trials)
     rho = intra_case_rho(flips, trials) if p_d else float("nan")
