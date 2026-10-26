@@ -85,7 +85,7 @@ fi
 git -C ~/llama.cpp checkout -q --detach "$LLAMA_CPP_COMMIT"
 git -C ~/llama.cpp rev-parse HEAD > "$OUT/llama_cpp_commit.txt"   # never recoverable after destroy
 cmake -S ~/llama.cpp -B ~/llama.cpp/build -DGGML_CUDA=ON -DLLAMA_CURL=OFF -DCMAKE_CUDA_ARCHITECTURES=89
-cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" --target llama-server
+cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" --target llama-server llama-quantize
 
 step "model weights (Hugging Face cache)"
 ~/venv/bin/python - <<'EOF' > "$OUT/checks/model_paths.txt"
@@ -105,6 +105,15 @@ if [ ! -f "$MODELS/Qwen3-8B-bf16.gguf" ]; then
   ~/venv-convert/bin/python ~/llama.cpp/convert_hf_to_gguf.py "$SNAPSHOT" \
     --outtype bf16 --outfile "$MODELS/Qwen3-8B-bf16.gguf"
 fi
+
+step "Q4_K_M GGUF from the BF16 GGUF (docs/adr/0008)"
+# Quantized here with the pinned llama.cpp rather than downloaded, so the chat
+# template and every other GGUF field match the BF16 file; only the weights differ.
+if [ ! -f "$MODELS/Qwen3-8B-Q4_K_M.gguf" ]; then
+  ~/llama.cpp/build/bin/llama-quantize "$MODELS/Qwen3-8B-bf16.gguf" "$MODELS/Qwen3-8B-Q4_K_M.gguf" Q4_K_M
+fi
+sha256sum "$MODELS"/Qwen3-8B-bf16.gguf "$MODELS"/Qwen3-8B-Q4_K_M.gguf > "$OUT/checks/gguf_sha256.txt"
+cat "$OUT/checks/gguf_sha256.txt"
 
 step "version checks (runbook step 4)"
 ~/venv/bin/vllm serve --help=all 2>/dev/null | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || \

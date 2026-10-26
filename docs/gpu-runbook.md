@@ -30,6 +30,7 @@ IP=$(terraform -chdir=infra/gpu output -raw gpu_public_ip)
 ```
 terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=1080   # main-latency.json
 terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=600    # main-accuracy.json
+terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=720    # main-quant.json（ADR-0008、見込み約10.3時間）
 ```
 
 始める時刻は、自動シャットダウンの前に手元のPCが起きていて、回収とdestroyができるように選ぶ（1回目は約14.4時間かかる見込み）。
@@ -124,6 +125,7 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-1.json          # 2回目
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/pilot-2.json          # 3回目のapply：パイロットの後半（llama.cppの第3パス）
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-latency.json     # 本番1回目：速さの測定の18セル（約13.8時間）
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-accuracy.json    # 本番2回目：普通の精度の4セルと第3パスの5セル（約7.1時間）
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-quant.json       # 本番3回目：量子化の非劣化の4セル、llama.cpp Q4_K_Mの速さ6セル、vLLM AWQ c4（約9.6時間）
 ```
 
 **本番の一覧**（ADR-0007）：`scripts/gpu/make_main_cells.py`の出力で、手で書き換えない。順番は固定のseedでランダムにしてあり、引き直さない。

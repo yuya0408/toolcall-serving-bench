@@ -65,6 +65,13 @@ def test_llama_server_is_sized_to_the_requirement():
     assert one[one.index("--parallel") + 1] == "1" and one[one.index("--ctx-size") + 1] == "3328"
 
 
+def test_llama_server_serves_the_gguf_of_the_cell_quantization():
+    # docs/adr/0008: Q4_K_M is a second GGUF of the same model
+    q4 = run_cells.server_command({"engine": "llama_cpp", "quantization": "gguf-q4_k_m"}, max_prompt_tokens=2591)
+    assert q4[q4.index("-m") + 1].endswith("Qwen3-8B-Q4_K_M.gguf")
+    assert run_cells.MODELS["gguf-q4_k_m"] == "Qwen/Qwen3-8B"
+
+
 def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_check(tmp_path):
     assert run_cells.server_command({"engine": "transformers_hf", "quantization": "bf16-none"}) is None
     cell = {"name": "x", "prefix": "pilot-", "pass_type": "accuracy_under_load", "engine": "vllm",
@@ -78,6 +85,7 @@ def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_che
 @pytest.mark.parametrize("bad", [
     {"engine": "llama_cpp", "quantization": "bf16-none"},     # llama_cpp runs the GGUF only
     {"engine": "vllm", "quantization": "gguf-bf16"},          # and only llama_cpp runs it
+    {"engine": "vllm", "quantization": "gguf-q4_k_m"},        # either GGUF
     {"prefix": "dry-"},
     {"servr": {}},                                            # a typo must not be ignored
     {"n": 1},                                                 # consistency needs two trials

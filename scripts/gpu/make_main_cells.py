@@ -1,4 +1,4 @@
-"""Write the main run's two cell lists (docs/adr/0007).
+"""Write the main run's cell lists (docs/adr/0007, docs/adr/0008).
 
     python scripts/gpu/make_main_cells.py
 
@@ -6,9 +6,14 @@
   speed comparison shares one physical GPU.
 - cells/main-accuracy.json: the plain accuracy cells and the third pass
   (the concurrency 1 / 16 pairs), on a second instance.
+- cells/main-quant.json (docs/adr/0008): the quantization non-inferiority
+  cells (bf16 and 4bit of each engine, greedy, concurrency 1), llama.cpp
+  Q4_K_M's latency levels, and vLLM AWQ concurrency 4 again to see how far
+  this instance's speed is from main-latency's.
 
-Each list runs in a random order drawn once from SEED, fixed before any main
-result exists: a time trend on the instance (interference, heat) then lands
+Each list runs in a random order drawn once from SEED (main-quant.json from
+QUANT_SEED, so adding it left the first two lists as they were run), fixed
+before that list's results exist: a time trend on the instance (interference, heat) then lands
 on cells at random instead of lining up with one engine (Abedi & Brecht,
 ICPE 2017). Do not change SEED to get a different order; the order is part of
 the record. tests/test_gpu_run_cells.py checks the committed lists are this
@@ -26,6 +31,7 @@ import pathlib
 import random
 
 SEED = 20261024
+QUANT_SEED = 20261026
 CELLS_DIR = pathlib.Path(__file__).resolve().parent / "cells"
 DEFAULT_TIMEOUT_MIN = 90   # run_cells.py's
 
@@ -34,8 +40,10 @@ CONFIGS = {   # name -> (engine, quantization)
     "vllm-awq": ("vllm", "awq-4bit"),
     "llama-gguf": ("llama_cpp", "gguf-bf16"),
     "hf-bf16": ("transformers_hf", "bf16-none"),
+    "llama-q4km": ("llama_cpp", "gguf-q4_k_m"),
 }
-PASS_TYPES = {"acc": "accuracy", "third": "accuracy_under_load", "lat": "latency"}
+PASS_TYPES = {"acc": "accuracy", "third": "accuracy_under_load", "ni": "accuracy_under_load",
+              "lat": "latency"}
 
 # (kind, config, concurrency, estimated minutes including the server start).
 # Latency: 1/2/4/8 for every server engine, doubling past 8 up to 32 until a
@@ -62,6 +70,17 @@ ACCURACY = [
     ("third", "llama-gguf", 1, 76), ("third", "llama-gguf", 16, 30),
     ("third", "vllm-bf16", 16, 5),
 ]
+# docs/adr/0008. Non-inferiority ("ni"): each engine's bf16 and 4bit, the third
+# pass's settings at concurrency 1 (greedy, same tool orders), all re-measured
+# on this instance. llama.cpp Q4_K_M has no measurement yet: its estimates are
+# guesses, the accuracy cell set to bf16's so its timeout is not too short.
+QUANT = [
+    ("ni", "vllm-bf16", 1, 74), ("ni", "vllm-awq", 1, 35),
+    ("ni", "llama-gguf", 1, 78), ("ni", "llama-q4km", 1, 78),
+    ("lat", "llama-q4km", 1, 70), ("lat", "llama-q4km", 2, 55), ("lat", "llama-q4km", 4, 45),
+    ("lat", "llama-q4km", 8, 40), ("lat", "llama-q4km", 16, 35), ("lat", "llama-q4km", 32, 35),
+    ("lat", "vllm-awq", 4, 28),
+]
 
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
@@ -75,8 +94,8 @@ def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
         c["n_requests"] = 1000   # eval_bench/latency.py MAIN_N_REQUESTS
     else:
         c["n"] = 5
-    if kind == "third":
-        c["temperature"] = 0     # greedy (docs/adr/0002)
+    if kind in ("third", "ni"):
+        c["temperature"] = 0     # greedy (docs/adr/0002, docs/adr/0008)
     if engine == "vllm":
         c["server"] = {"max_model_len": 8192}
     timeout = max(DEFAULT_TIMEOUT_MIN, math.ceil(est_min * 1.5 / 10) * 10)
@@ -97,12 +116,14 @@ def render(cells: list[dict]) -> str:
 
 def lists() -> dict[str, list[dict]]:
     rng = random.Random(SEED)   # one generator, drawn in this order: latency, then accuracy
-    return {"main-latency.json": ordered(LATENCY, rng), "main-accuracy.json": ordered(ACCURACY, rng)}
+    return {"main-latency.json": ordered(LATENCY, rng), "main-accuracy.json": ordered(ACCURACY, rng),
+            "main-quant.json": ordered(QUANT, random.Random(QUANT_SEED))}
 
 
 def estimated_minutes() -> dict[str, int]:
     return {"main-latency.json": sum(e[3] for e in LATENCY),
-            "main-accuracy.json": sum(e[3] for e in ACCURACY)}
+            "main-accuracy.json": sum(e[3] for e in ACCURACY),
+            "main-quant.json": sum(e[3] for e in QUANT)}
 
 
 if __name__ == "__main__":

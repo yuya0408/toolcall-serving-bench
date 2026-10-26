@@ -60,13 +60,17 @@ from eval_bench import capacity  # noqa: E402
 HOME = pathlib.Path.home()
 VENV_BIN = HOME / "venv" / "bin"
 LLAMA_SERVER = HOME / "llama.cpp" / "build" / "bin" / "llama-server"
-GGUF = HOME / "models" / "Qwen3-8B-bf16.gguf"
+GGUFS = {   # quantization -> the GGUF llama.cpp serves (setup.sh builds both from Qwen/Qwen3-8B)
+    "gguf-bf16": HOME / "models" / "Qwen3-8B-bf16.gguf",
+    "gguf-q4_k_m": HOME / "models" / "Qwen3-8B-Q4_K_M.gguf",   # docs/adr/0008
+}
 PORT = {"vllm": 8000, "llama_cpp": 8080}
 READY_TIMEOUT_S = {"vllm": 900, "llama_cpp": 300}
 MODELS = {   # quantization -> the model id the manifest records and vLLM serves (from the HF cache)
     "bf16-none": "Qwen/Qwen3-8B",
     "awq-4bit": "Qwen/Qwen3-8B-AWQ",
     "gguf-bf16": "Qwen/Qwen3-8B",
+    "gguf-q4_k_m": "Qwen/Qwen3-8B",
 }
 # Arguments a cell may pass through to run_cell.py, as written in the cell list.
 RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurrency", "n",
@@ -102,7 +106,7 @@ def validate(cells: list[dict[str, Any]]) -> None:
             raise SystemExit(f"{c['name']}: prefix must be smoke-, pilot- or empty")
         if c["quantization"] not in MODELS:
             raise SystemExit(f"{c['name']}: unknown quantization {c['quantization']}")
-        if (c["engine"] == "llama_cpp") != (c["quantization"] == "gguf-bf16"):
+        if (c["engine"] == "llama_cpp") != (c["quantization"] in GGUFS):
             raise SystemExit(f"{c['name']}: llama_cpp runs the GGUF, and only llama_cpp does")
         # run_cell.py's default is 5; consistency needs at least two trials per case
         if c["pass_type"] != "latency" and c.get("n", 5) < 2:
@@ -142,7 +146,7 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
         # --fit off: the default (on) may quietly shrink unset arguments to fit memory.
         # -lv 4 logs the settings llama.cpp resolved (flash attention, n_batch,
         # n_ubatch, the KV layout), which -lv 3 leaves out; --metrics opens /metrics.
-        return [str(LLAMA_SERVER), "-m", str(GGUF), "--jinja", "-ngl", "999",
+        return [str(LLAMA_SERVER), "-m", str(GGUFS[cell["quantization"]]), "--jinja", "-ngl", "999",
                 "--host", "127.0.0.1", "--port", str(PORT["llama_cpp"]),
                 "--ctx-size", str(settings["ctx_size"]), "--parallel", str(settings["parallel"]),
                 "--kv-unified" if kv == "unified" else "--no-kv-unified",
