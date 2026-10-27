@@ -18,7 +18,8 @@ run_cell = importlib.util.module_from_spec(_spec_rc)
 _spec_rc.loader.exec_module(run_cell)
 
 _REAL_SWAP_DEVICES = run_cells.swap_devices   # kept before the autouse fixture replaces it
-_VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef"}
+_VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef",
+             "sglang": "0.5.21", "tensorrt_llm": "1.2.1"}
 
 
 def _lists():
@@ -110,6 +111,7 @@ def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_che
     {"engine": "vllm", "quantization": "gguf-bf16"},          # and only llama_cpp runs it
     {"engine": "vllm", "quantization": "gguf-q4_k_m"},        # either GGUF
     {"engine": "tensorrt_llm", "quantization": "awq-4bit"},   # TensorRT-LLM 1.2.1 reads no HF AWQ
+    {"engine": "tensorrt_llm", "quantization": "fp8-block"},  # nor FP8 block scaling on Ada
     {"engine": "vllm", "quantization": "modelopt-int4-awq"},  # ModelOpt's checkpoint is for TensorRT-LLM
     {"engine": "transformers_hf", "quantization": "fp8-block"},
     {"prefix": "dry-"},

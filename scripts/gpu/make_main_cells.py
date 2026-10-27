@@ -10,6 +10,14 @@
   cells (bf16 and 4bit of each engine, greedy, concurrency 1), llama.cpp
   Q4_K_M's latency levels, and vLLM AWQ concurrency 4 again to see how far
   this instance's speed is from main-latency's.
+- cells/main-batching.json (docs/adr/0009): vLLM, SGLang and TensorRT-LLM,
+  each in bf16, 4-bit and FP8, at concurrency 1-16, on one instance; then
+  the accuracy cells (the new engines' plain accuracy, and the greedy cells
+  for the bf16 gate and the quantization non-inferiority). The latency cells
+  come first so an interruption costs as little of them as possible
+  (docs/adr/0009 7); each block is shuffled from BATCHING_SEED.
+- cells/smoke-batching.json: the same configurations, short, to check each
+  engine against docs/adr/0009 2 before the main list.
 
 Each list runs in a random order drawn once from SEED (main-quant.json from
 QUANT_SEED, so adding it left the first two lists as they were run), fixed
@@ -32,6 +40,7 @@ import random
 
 SEED = 20261024
 QUANT_SEED = 20261026
+BATCHING_SEED = 20261027
 CELLS_DIR = pathlib.Path(__file__).resolve().parent / "cells"
 DEFAULT_TIMEOUT_MIN = 90   # run_cells.py's
 
@@ -41,6 +50,13 @@ CONFIGS = {   # name -> (engine, quantization)
     "llama-gguf": ("llama_cpp", "gguf-bf16"),
     "hf-bf16": ("transformers_hf", "bf16-none"),
     "llama-q4km": ("llama_cpp", "gguf-q4_k_m"),
+    "vllm-fp8": ("vllm", "fp8-block"),                    # docs/adr/0009
+    "sglang-bf16": ("sglang", "bf16-none"),
+    "sglang-awq": ("sglang", "awq-4bit"),
+    "sglang-fp8": ("sglang", "fp8-block"),
+    "trt-bf16": ("tensorrt_llm", "bf16-none"),
+    "trt-awq": ("tensorrt_llm", "modelopt-int4-awq"),
+    "trt-fp8": ("tensorrt_llm", "modelopt-fp8"),
 }
 PASS_TYPES = {"acc": "accuracy", "third": "accuracy_under_load", "ni": "accuracy_under_load",
               "lat": "latency"}
@@ -82,6 +98,33 @@ QUANT = [
     ("lat", "vllm-awq", 4, 28),
 ]
 
+# docs/adr/0009. Estimated minutes per latency level, from main-latency's
+# measured throughput (1,200 requests / requests per second, plus ~4 min for the
+# server start): bf16 from vLLM bf16 (0.244-0.896 req/s), 4-bit from vLLM AWQ
+# (0.557-1.264); FP8 is a guess between the two (the geometric mean). SGLang
+# and TensorRT-LLM are assumed as fast as vLLM. bf16 at 16 was unsupported for
+# vLLM, but may fit another engine, so it is given a full cell's time.
+_LEVEL_MIN = {"bf16": {1: 86, 2: 54, 4: 35, 8: 26, 16: 20},
+              "awq": {1: 40, 2: 30, 4: 24, 8: 21, 16: 20},
+              "fp8": {1: 58, 2: 40, 4: 29, 8: 23, 16: 22}}
+_ENGINES = ("vllm", "sglang", "trt")
+BATCHING_LATENCY = [("lat", f"{e}-{q}", c, m) for e in _ENGINES for q, levels in _LEVEL_MIN.items()
+                    for c, m in levels.items()]
+# Plain accuracy for the new engines' bf16 (vLLM's is main-accuracy's); greedy
+# concurrency 1 for the bf16 gate and the non-inferiority of every quantized
+# config not yet measured (vLLM bf16 and AWQ are main-quant's). Minutes from
+# main-accuracy / main-quant (acc-vllm-bf16 74, ni-vllm-awq 32); FP8 between.
+BATCHING_ACCURACY = [
+    ("acc", "sglang-bf16", 1, 74), ("acc", "trt-bf16", 1, 74),
+    ("ni", "sglang-bf16", 1, 75), ("ni", "sglang-awq", 1, 35), ("ni", "sglang-fp8", 1, 55),
+    ("ni", "trt-bf16", 1, 75), ("ni", "trt-awq", 1, 35), ("ni", "trt-fp8", 1, 55),
+    ("ni", "vllm-fp8", 1, 55),
+]
+# Smoke (docs/adr/0009 2): per configuration, a short accuracy cell (the
+# non-streamed tool-call shape, sampling knobs) and a short concurrency 16
+# latency cell (capacity pre-check, the post-check counters, streamed usage).
+SMOKE_BATCHING = [(k, f"{e}-{q}") for e in _ENGINES for q in _LEVEL_MIN for k in ("acc", "lat")]
+
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
     engine, quantization = CONFIGS[config]
@@ -96,8 +139,8 @@ def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
         c["n"] = 5
     if kind in ("third", "ni"):
         c["temperature"] = 0     # greedy (docs/adr/0002, docs/adr/0008)
-    if engine == "vllm":
-        c["server"] = {"max_model_len": 8192}
+    if engine in ("vllm", "sglang", "tensorrt_llm"):
+        c["server"] = {"max_model_len": 8192}   # the same context for every batching engine (docs/adr/0009 5)
     timeout = max(DEFAULT_TIMEOUT_MIN, math.ceil(est_min * 1.5 / 10) * 10)
     if timeout > DEFAULT_TIMEOUT_MIN:
         c["timeout_min"] = timeout
@@ -110,20 +153,35 @@ def ordered(entries: list[tuple], rng: random.Random) -> list[dict]:
     return cells
 
 
+def smoke(kind: str, config: str) -> dict:
+    c = cell(kind, config, 16 if kind == "lat" else 1, 0)
+    c.update(prefix="smoke-", max_cases=20)
+    if kind == "lat":
+        c["n_requests"] = 60
+    else:
+        c["n"] = 2
+    return c
+
+
 def render(cells: list[dict]) -> str:
     return "[\n" + ",\n".join("  " + json.dumps(c, ensure_ascii=False) for c in cells) + "\n]\n"
 
 
 def lists() -> dict[str, list[dict]]:
     rng = random.Random(SEED)   # one generator, drawn in this order: latency, then accuracy
+    batching = random.Random(BATCHING_SEED)   # latency block first, then accuracy
     return {"main-latency.json": ordered(LATENCY, rng), "main-accuracy.json": ordered(ACCURACY, rng),
-            "main-quant.json": ordered(QUANT, random.Random(QUANT_SEED))}
+            "main-quant.json": ordered(QUANT, random.Random(QUANT_SEED)),
+            "main-batching.json": ordered(BATCHING_LATENCY, batching) + ordered(BATCHING_ACCURACY, batching),
+            "smoke-batching.json": [smoke(*e) for e in SMOKE_BATCHING]}
 
 
 def estimated_minutes() -> dict[str, int]:
     return {"main-latency.json": sum(e[3] for e in LATENCY),
             "main-accuracy.json": sum(e[3] for e in ACCURACY),
-            "main-quant.json": sum(e[3] for e in QUANT)}
+            "main-quant.json": sum(e[3] for e in QUANT),
+            "main-batching.json": sum(e[3] for e in BATCHING_LATENCY + BATCHING_ACCURACY),
+            "smoke-batching.json": 4 * len(SMOKE_BATCHING)}   # ~4 min each, mostly the server start
 
 
 if __name__ == "__main__":

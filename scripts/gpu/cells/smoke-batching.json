@@ -1,0 +1,20 @@
+[
+  {"name": "acc-vllm-bf16", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-vllm-bf16-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "vllm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-vllm-awq", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-vllm-awq-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "vllm", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-vllm-fp8", "prefix": "smoke-", "pass_type": "accuracy", "engine": "vllm", "quantization": "fp8-block", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-vllm-fp8-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "vllm", "quantization": "fp8-block", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-sglang-bf16", "prefix": "smoke-", "pass_type": "accuracy", "engine": "sglang", "quantization": "bf16-none", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-sglang-bf16-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "sglang", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-sglang-awq", "prefix": "smoke-", "pass_type": "accuracy", "engine": "sglang", "quantization": "awq-4bit", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-sglang-awq-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "sglang", "quantization": "awq-4bit", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-sglang-fp8", "prefix": "smoke-", "pass_type": "accuracy", "engine": "sglang", "quantization": "fp8-block", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-sglang-fp8-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "sglang", "quantization": "fp8-block", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-trt-bf16", "prefix": "smoke-", "pass_type": "accuracy", "engine": "tensorrt_llm", "quantization": "bf16-none", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-trt-bf16-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "tensorrt_llm", "quantization": "bf16-none", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-trt-awq", "prefix": "smoke-", "pass_type": "accuracy", "engine": "tensorrt_llm", "quantization": "modelopt-int4-awq", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-trt-awq-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "tensorrt_llm", "quantization": "modelopt-int4-awq", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "acc-trt-fp8", "prefix": "smoke-", "pass_type": "accuracy", "engine": "tensorrt_llm", "quantization": "modelopt-fp8", "tool_stage": 10, "n": 2, "server": {"max_model_len": 8192}, "max_cases": 20},
+  {"name": "lat-trt-fp8-c16", "prefix": "smoke-", "pass_type": "latency", "engine": "tensorrt_llm", "quantization": "modelopt-fp8", "tool_stage": 10, "concurrency": 16, "n_requests": 60, "server": {"max_model_len": 8192}, "max_cases": 20}
+]

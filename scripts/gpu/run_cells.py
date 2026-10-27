@@ -79,18 +79,21 @@ MODELS = {   # quantization -> the model id the manifest records and the server 
     "awq-4bit": "Qwen/Qwen3-8B-AWQ",
     "fp8-block": "Qwen/Qwen3-8B-FP8",              # docs/adr/0009 4
     "modelopt-int4-awq": "Qwen/Qwen3-8B",          # made on the instance from Qwen/Qwen3-8B (setup.sh)
+    "modelopt-fp8": "Qwen/Qwen3-8B",               # likewise
     "gguf-bf16": "Qwen/Qwen3-8B",
     "gguf-q4_k_m": "Qwen/Qwen3-8B",
 }
 # Checkpoints a server loads from a local directory instead of the HF cache.
-LOCAL_CHECKPOINTS = {"modelopt-int4-awq": HOME / "models" / "Qwen3-8B-int4-awq-modelopt"}
+LOCAL_CHECKPOINTS = {"modelopt-int4-awq": HOME / "models" / "Qwen3-8B-int4-awq-modelopt",
+                     "modelopt-fp8": HOME / "models" / "Qwen3-8B-fp8-modelopt"}
 # Which quantizations each engine serves. TensorRT-LLM 1.2.1 reads no HF AWQ
-# checkpoint (_torch/model_config.py load_hf_quant_config has no awq branch), so
-# its 4-bit is ModelOpt's INT4 AWQ of the same base (docs/adr/0009 4).
+# checkpoint (_torch/model_config.py load_hf_quant_config has no awq branch) and
+# lists no FP8 block scaling for Qwen3 or Ada (docs/source/features/quantization.md),
+# so its 4-bit and FP8 are ModelOpt's, made from the same base (docs/adr/0009 4).
 ENGINE_QUANTIZATIONS = {
     "vllm": {"bf16-none", "awq-4bit", "fp8-block"},
     "sglang": {"bf16-none", "awq-4bit", "fp8-block"},
-    "tensorrt_llm": {"bf16-none", "modelopt-int4-awq", "fp8-block"},
+    "tensorrt_llm": {"bf16-none", "modelopt-int4-awq", "modelopt-fp8"},
     "llama_cpp": set(GGUFS),
     "transformers_hf": {"bf16-none"},
 }
