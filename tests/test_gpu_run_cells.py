@@ -407,6 +407,19 @@ def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):
     assert status["kv_capacity_tokens"] == [30240]
 
 
+def test_a_failed_capacity_read_is_the_cells_error_not_the_lists(tmp_path, monkeypatch):
+    # 2026-10-27 review: an exception here used to stop the whole list as FAILED.
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [])
+
+    def broken(engine, ctx_size=None, kv="split"):
+        raise KeyError("sglang:max_total_num_tokens")
+
+    monkeypatch.setattr(run_cells, "read_capacity", broken)
+    status = run_cells.run_one(_loaded(), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "error" and "capacity read: KeyError" in status["reason"]
+    assert runs == [] and status["gpu_freed"]
+
+
 def test_main_lists_are_the_generators_output_in_its_seeded_order():
     # docs/adr/0007: the order is drawn once from SEED and is part of the record,
     # so a hand-edited or re-drawn list must fail here.

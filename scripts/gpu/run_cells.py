@@ -396,15 +396,20 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                 if not ready:
                     status.update(outcome="server_not_ready", returncode=server.poll())
                     return status
-                if cell["engine"] in ENGINE_BIN:
-                    # Every startup's capacity, to see whether short ones recur (ADR-0005).
-                    status.setdefault("kv_capacity_tokens", []).append(_served_capacity(cell)["tokens"])
-                if not needs_capacity_check(cell):
-                    break
-                if kv is not None:
-                    held = read_capacity("llama_cpp", llama_server_settings(cell, max_prompt, kv)["ctx_size"], kv)
-                else:
-                    held = _served_capacity(cell)
+                try:
+                    if cell["engine"] in ENGINE_BIN:
+                        # Every startup's capacity, to see whether short ones recur (ADR-0005).
+                        status.setdefault("kv_capacity_tokens", []).append(_served_capacity(cell)["tokens"])
+                    if not needs_capacity_check(cell):
+                        break
+                    if kv is not None:
+                        held = read_capacity("llama_cpp", llama_server_settings(cell, max_prompt, kv)["ctx_size"], kv)
+                    else:
+                        held = _served_capacity(cell)
+                except Exception as exc:
+                    # This cell's error, not the list's: the next cell starts its own server.
+                    status.update(outcome="error", reason=f"capacity read: {type(exc).__name__}: {exc}")
+                    return status
                 pre = capacity.pre_check(cell["engine"], held, max_prompt, MAX_TOKENS, cell["concurrency"])
                 if pre["fits"] or cell["engine"] != "vllm" or restarts == 1:
                     break
