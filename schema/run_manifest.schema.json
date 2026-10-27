@@ -21,8 +21,8 @@
       "properties": {
         "engine": {
           "type": "string",
-          "enum": ["transformers_hf", "llama_cpp", "vllm", "ollama"],
-          "description": "transformers_hf is the naive baseline (no serving-level batching). ollama is optional/deprioritized: it wraps llama_cpp's inference core, so engine deltas against llama_cpp may be near-null and must be reported as such, not hidden."
+          "enum": ["transformers_hf", "llama_cpp", "vllm", "sglang", "tensorrt_llm", "ollama"],
+          "description": "transformers_hf is the naive baseline (no serving-level batching). sglang and tensorrt_llm are the continuous-batching engines added in docs/adr/0009. ollama is optional/deprioritized: it wraps llama_cpp's inference core, so engine deltas against llama_cpp may be near-null and must be reported as such, not hidden."
         },
         "engine_version": { "type": "string" },
         "tool_catalog_version": {
@@ -212,7 +212,7 @@
           "cell": {
             "required": ["tool_stage", "concurrency"],
             "properties": {
-              "engine": { "enum": ["vllm", "llama_cpp"] }
+              "engine": { "enum": ["vllm", "sglang", "tensorrt_llm", "llama_cpp"] }
             }
           },
           "results": {
@@ -271,14 +271,14 @@
       "required": ["engine", "capacity", "required", "max_prompt_tokens_planned", "fits", "restarts", "post_check"],
       "additionalProperties": false,
       "properties": {
-        "engine": { "enum": ["vllm", "llama_cpp"] },
+        "engine": { "enum": ["vllm", "sglang", "tensorrt_llm", "llama_cpp"] },
         "capacity": {
           "type": "object",
           "required": ["unit", "unit_tokens", "units", "tokens"],
           "additionalProperties": false,
-          "description": "vLLM: /metrics vllm:cache_config_info (num_gpu_blocks x block_size). llama.cpp split KV (llama_kv split): /props n_ctx x total_slots. llama.cpp unified KV: the --ctx-size the server was started with (one cache shared by every slot; llama-server reports no total). Both with /props n_ctx as per_slot_tokens.",
+          "description": "vLLM: /metrics vllm:cache_config_info (num_gpu_blocks x block_size). SGLang: /metrics sglang:max_total_num_tokens (in pages of sglang:page_size). TensorRT-LLM: /metrics kvCacheStats maxNumBlocks x tokensPerBlock (docs/adr/0009). llama.cpp split KV (llama_kv split): /props n_ctx x total_slots. llama.cpp unified KV: the --ctx-size the server was started with (one cache shared by every slot; llama-server reports no total). Both with /props n_ctx as per_slot_tokens.",
           "properties": {
-            "unit": { "enum": ["block", "token"] },
+            "unit": { "enum": ["block", "page", "token"] },
             "unit_tokens": { "type": "integer", "minimum": 1 },
             "units": { "type": "integer", "minimum": 0 },
             "tokens": { "type": "integer", "minimum": 0 },
@@ -310,10 +310,10 @@
             "ok": { "type": "boolean" },
             "problems": { "type": "array", "items": { "type": "string" } },
             "max_prompt_tokens_observed": { "type": ["integer", "null"] },
-            "preemptions": { "type": "integer", "minimum": 0, "description": "vLLM: vllm:num_preemptions delta over the cell." },
+            "preemptions": { "type": "integer", "minimum": 0, "description": "vLLM: vllm:num_preemptions delta over the cell. SGLang: sglang:num_retracted_requests_total delta (a retraction is its preemption)." },
             "queue_time": {
               "type": "object",
-              "description": "vLLM: vllm:request_queue_time_seconds deltas, recorded only (not a discard condition, docs/adr/0005 3).",
+              "description": "vLLM: vllm:request_queue_time_seconds deltas; SGLang: sglang:queue_time_seconds deltas. Recorded only (not a discard condition, docs/adr/0005 3).",
               "required": ["sum_s", "count", "buckets"],
               "additionalProperties": false,
               "properties": {

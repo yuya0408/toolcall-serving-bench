@@ -18,7 +18,8 @@ run_cell = importlib.util.module_from_spec(_spec_rc)
 _spec_rc.loader.exec_module(run_cell)
 
 _REAL_SWAP_DEVICES = run_cells.swap_devices   # kept before the autouse fixture replaces it
-_VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef"}
+_VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef",
+             "sglang": "0.5.21", "tensorrt_llm": "1.2.1"}
 
 
 def _lists():
@@ -44,6 +45,29 @@ def test_vllm_server_has_the_flags_the_adrs_require():
         assert flag in cmd
     assert cmd[cmd.index("--tool-call-parser") + 1] == "hermes"
     assert cmd[cmd.index("--max-model-len") + 1] == "8192"
+
+
+def test_sglang_server_reports_metrics_and_cached_tokens_and_matches_the_context():
+    cmd = run_cells.server_command({"engine": "sglang", "quantization": "fp8-block",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[1:3] == ["-m", "sglang.launch_server"]
+    assert cmd[cmd.index("--model-path") + 1] == "Qwen/Qwen3-8B-FP8"
+    assert cmd[cmd.index("--tool-call-parser") + 1] == "qwen"
+    for flag in ("--enable-metrics", "--enable-cache-report"):
+        assert flag in cmd
+    assert cmd[cmd.index("--context-length") + 1] == "8192"
+
+
+def test_tensorrt_llm_serves_the_local_modelopt_checkpoint_with_the_qwen3_parser():
+    cmd = run_cells.server_command({"engine": "tensorrt_llm", "quantization": "modelopt-int4-awq",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[0].endswith("trtllm-serve")
+    assert cmd[1] == str(run_cells.LOCAL_CHECKPOINTS["modelopt-int4-awq"])
+    assert cmd[cmd.index("--tool_parser") + 1] == "qwen3"
+    assert cmd[cmd.index("--backend") + 1] == "pytorch"
+    assert cmd[cmd.index("--max_seq_len") + 1] == "8192"
+    bf16 = run_cells.server_command({"engine": "tensorrt_llm", "quantization": "bf16-none"})
+    assert bf16[1] == "Qwen/Qwen3-8B"
 
 
 def test_llama_server_is_sized_to_the_requirement():
@@ -86,6 +110,10 @@ def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_che
     {"engine": "llama_cpp", "quantization": "bf16-none"},     # llama_cpp runs the GGUF only
     {"engine": "vllm", "quantization": "gguf-bf16"},          # and only llama_cpp runs it
     {"engine": "vllm", "quantization": "gguf-q4_k_m"},        # either GGUF
+    {"engine": "tensorrt_llm", "quantization": "awq-4bit"},   # TensorRT-LLM 1.2.1 reads no HF AWQ
+    {"engine": "tensorrt_llm", "quantization": "fp8-block"},  # nor FP8 block scaling on Ada
+    {"engine": "vllm", "quantization": "modelopt-int4-awq"},  # ModelOpt's checkpoint is for TensorRT-LLM
+    {"engine": "transformers_hf", "quantization": "fp8-block"},
     {"prefix": "dry-"},
     {"servr": {}},                                            # a typo must not be ignored
     {"n": 1},                                                 # consistency needs two trials
@@ -377,6 +405,19 @@ def test_a_concurrency_1_cell_skips_the_pre_check(tmp_path, monkeypatch):
     status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "ok" and runs == [None]
     assert status["kv_capacity_tokens"] == [30240]
+
+
+def test_a_failed_capacity_read_is_the_cells_error_not_the_lists(tmp_path, monkeypatch):
+    # 2026-10-27 review: an exception here used to stop the whole list as FAILED.
+    starts, runs, snapshots = _served(monkeypatch, tmp_path, [])
+
+    def broken(engine, ctx_size=None, kv="split"):
+        raise KeyError("sglang:max_total_num_tokens")
+
+    monkeypatch.setattr(run_cells, "read_capacity", broken)
+    status = run_cells.run_one(_loaded(), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "error" and "capacity read: KeyError" in status["reason"]
+    assert runs == [] and status["gpu_freed"]
 
 
 def test_main_lists_are_the_generators_output_in_its_seeded_order():

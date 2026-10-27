@@ -60,6 +60,9 @@ _CATALOGS = {
     100: _ROOT / "schema" / "tools_extended.json",
 }
 
+# Engines run as a server, reached over the OpenAI-compatible API.
+SERVED_ENGINES = ("vllm", "sglang", "tensorrt_llm", "llama_cpp")
+
 # docs/engine-performance-plan.md: Qwen3 non-thinking recommended sampling.
 _QWEN3_NON_THINKING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0}
 
@@ -67,8 +70,8 @@ _QWEN3_NON_THINKING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("--pass-type", required=True, choices=["accuracy", "accuracy_under_load", "latency"])
-    p.add_argument("--engine", required=True, choices=["vllm", "llama_cpp", "transformers_hf"])
-    p.add_argument("--base-url", help="vllm / llama_cpp server URL")
+    p.add_argument("--engine", required=True, choices=["vllm", "sglang", "tensorrt_llm", "llama_cpp", "transformers_hf"])
+    p.add_argument("--base-url", help="the served engine's URL (every engine but transformers_hf)")
     p.add_argument("--model", required=True)
     p.add_argument("--quantization", required=True, help="e.g. bf16-none, gguf-bf16, awq-4bit")
     p.add_argument("--engine-version", required=True,
@@ -101,11 +104,11 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--region", default="ap-northeast-1")
     args = p.parse_args(argv)
 
-    if args.engine in ("vllm", "llama_cpp") and not args.base_url:
+    if args.engine in SERVED_ENGINES and not args.base_url:
         p.error(f"--base-url is required for --engine {args.engine}")
     if args.pass_type == "accuracy" and args.concurrency != 1:
         p.error("plain accuracy is concurrency=1 by definition; use --pass-type accuracy_under_load")
-    if args.engine in ("vllm", "llama_cpp") and args.concurrency > 1 and args.capacity_check is None:
+    if args.engine in SERVED_ENGINES and args.concurrency > 1 and args.capacity_check is None:
         p.error("--capacity-check is required for a served engine at concurrency > 1 (docs/adr/0005)")
     trial_run = args.run_id_prefix.startswith(("smoke-", "pilot-"))
     if args.max_cases is not None and not trial_run:
@@ -126,9 +129,10 @@ def _build_backend(args: argparse.Namespace, sampling: dict[str, Any]):
         from eval_bench.decoders.base import HermesTagDecoder
         return TransformersHFAdapter.from_pretrained(args.model, sampling), HermesTagDecoder()
 
-    from eval_bench.adapters.openai_compatible import LlamaCppAdapter, VLLMAdapter
+    from eval_bench.adapters import openai_compatible as oc
     from eval_bench.decoders.base import OpenAIToolCallDecoder
-    cls = VLLMAdapter if args.engine == "vllm" else LlamaCppAdapter
+    cls = {"vllm": oc.VLLMAdapter, "sglang": oc.SGLangAdapter, "tensorrt_llm": oc.TensorRTLLMAdapter,
+           "llama_cpp": oc.LlamaCppAdapter}[args.engine]
     return cls(base_url=args.base_url, model=args.model, sampling_params=sampling), OpenAIToolCallDecoder()
 
 
@@ -201,6 +205,14 @@ def _reset_vllm_prefix_cache(base_url: str, attempts: int = 3) -> None:
     raise RuntimeError(f"vLLM's prefix cache reset did not succeed in {attempts} attempts")
 
 
+def _flush_sglang_cache(base_url: str) -> None:
+    """Empty SGLang's radix cache at the cell boundary, as for vLLM (the
+    server is also fresh). /flush_cache refuses while requests are running."""
+    import requests
+    response = requests.post(f"{base_url.rstrip('/')}/flush_cache", timeout=30)
+    response.raise_for_status()
+
+
 def _make_sender(adapter, cases, tools, stage: int, timeout: float, run_tag: str):
     """Each case keeps one tool set in one order for the whole cell (its
     stage subset in build_tool_set's seed-0 order): fixed tool definitions,
@@ -227,13 +239,20 @@ def _write_jsonl(path: pathlib.Path, rows: list[dict[str, Any]]) -> None:
 
 class _CapacityWatch:
     """The post-check's bookkeeping around one cell (docs/adr/0005 3): vLLM's
-    cumulative /metrics counters read before and after; nothing to read for
-    llama.cpp, whose check comes from the raw output alone."""
+    and SGLang's cumulative /metrics counters read before and after; for
+    TensorRT-LLM, its iteration statistics polled during the cell (each read of
+    /metrics drains them, so they cannot be read once at the end; docs/adr/0009 2);
+    nothing to read for llama.cpp, whose check comes from the raw output alone."""
+
+    POLL_S = 2.0
 
     def __init__(self, args):
         self.args = args
         self.pre = None
         self.before = None
+        self._stats: list[dict[str, Any]] = []
+        self._stop = None
+        self._thread = None
         if args.capacity_check is not None:
             self.pre = json.loads(args.capacity_check.read_text(encoding="utf-8"))
             expected = capacity.per_request_max(self.pre["max_prompt_tokens_planned"], args.max_tokens)
@@ -242,20 +261,41 @@ class _CapacityWatch:
                 raise SystemExit("--capacity-check was computed for another max_tokens or concurrency")
 
     def start(self) -> None:
-        if self.pre is not None and self.args.engine == "vllm":
-            self.before = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
+        if self.pre is not None and self.args.engine in capacity.PREEMPTION_COUNTERS:
+            counters, _ = capacity.PREEMPTION_COUNTERS[self.args.engine]
+            self.before = counters(capacity.fetch_metrics(self.args.base_url))
+        if self.pre is not None and self.args.engine == "tensorrt_llm":
+            import threading
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._poll, daemon=True)
+            self._thread.start()
+
+    def _poll(self) -> None:
+        while True:
+            try:
+                self._stats.extend(capacity.fetch_json(self.args.base_url, "/metrics"))
+            except Exception:   # a missed poll only shortens the record; the check reports it
+                pass
+            if self._stop.wait(self.POLL_S):
+                return
 
     def result(self, prompt_tokens, length_finished: int,
                output_limit_finished: int) -> dict[str, Any] | None:
         if self.pre is None:
             return None
         delta = None
-        if self.args.engine == "vllm":
-            after = capacity.vllm_counters(capacity.fetch_metrics(self.args.base_url))
-            delta = capacity.vllm_counter_delta(self.before, after)
+        if self.args.engine in capacity.PREEMPTION_COUNTERS:
+            counters, difference = capacity.PREEMPTION_COUNTERS[self.args.engine]
+            delta = difference(self.before, counters(capacity.fetch_metrics(self.args.base_url)))
+        active = None
+        if self._thread is not None:
+            self._stop.set()
+            self._thread.join()
+            active = capacity.trtllm_active(self._stats)
         post = capacity.post_check(self.args.engine, self.pre["max_prompt_tokens_planned"],
                                    prompt_tokens, vllm_delta=delta, length_finished=length_finished,
-                                   output_limit_finished=output_limit_finished)
+                                   output_limit_finished=output_limit_finished, trt_active=active,
+                                   concurrency=self.args.concurrency)
         return {**self.pre, "post_check": post}
 
 
@@ -295,6 +335,8 @@ def _reference_accuracy(rows, cases, decoder, engine: str) -> dict[str, Any]:
 def _run_latency(args, run_id: str, cell: dict[str, Any], cases, tools, adapter, decoder) -> int:
     if args.engine == "vllm":
         _reset_vllm_prefix_cache(args.base_url)
+    elif args.engine == "sglang":
+        _flush_sglang_cache(args.base_url)
     watch = _CapacityWatch(args)
     watch.start()
     send = _make_sender(adapter, cases, tools, args.tool_stage, args.request_timeout,
