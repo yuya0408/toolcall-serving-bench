@@ -99,8 +99,14 @@ uv venv --allow-existing --seed --python 3.12 ~/venv-trtllm
 uv pip install --python ~/venv-trtllm/bin/python "torch==$TRTLLM_TORCH_VERSION" torchvision \
   --index-url https://download.pytorch.org/whl/cu130
 echo "torch==$(~/venv-trtllm/bin/python -c 'import torch; print(torch.__version__)')" > ~/trtllm-torch-constraint.txt
+# tensorrt_llm 1.2.1 needs numpy<2 and datasets==3.1.0; the resolver then takes
+# pyarrow 26, which needs NumPy 2 at import but does not declare it, so datasets
+# (and ModelOpt's hf_ptq.py) fail to import. 21.0.0 imports with numpy 1.26.4
+# (the smoke apply, 2026-10-28).
+echo "pyarrow<22" >> ~/trtllm-torch-constraint.txt
 uv pip install --python ~/venv-trtllm/bin/python "tensorrt_llm==$TRTLLM_VERSION" \
   --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match -c ~/trtllm-torch-constraint.txt
+~/venv-trtllm/bin/python -c "import tensorrt_llm, datasets"   # fail here, not at the quantization step
 # trtllm-serve --config: iteration statistics, so /metrics reports the KV
 # capacity (scripts/gpu/run_cells.py TRTLLM_CONFIG). Observability only.
 echo "enable_iter_perf_stats: true" > ~/trtllm-serve.yaml
