@@ -3,6 +3,7 @@
 #
 #     scripts/gpu/local.sh push    <ip>             # copy the committed repo (it is private: no git clone)
 #     scripts/gpu/local.sh setup   <ip>             # start setup.sh on the instance, detached
+#     SETUP_LLAMA=0 scripts/gpu/local.sh setup <ip> # the same, without llama.cpp and the GGUFs (docs/adr/0009)
 #     scripts/gpu/local.sh wait-setup <ip>          # wait until setup.sh finished (SETUP_DONE / SETUP_FAILED)
 #     scripts/gpu/local.sh cells   <ip> <list>      # start run_cells.py with a cell list, detached
 #     scripts/gpu/local.sh collect <ip> [dest]      # copy ~/out back every minute until DONE (default runs/gpu-<date>-<instance id>)
@@ -38,7 +39,10 @@ case "$cmd" in
     echo "pushed $(git rev-parse --short HEAD)"
     ;;
   setup)
-    detach_ "mkdir -p ~/out; setsid nohup bash ~/toolcall-serving-bench/scripts/gpu/setup.sh > ~/out/setup.log 2>&1 < /dev/null &"
+    # SETUP_LLAMA is passed on (setup.sh's own default is 1); only 0 or 1, as it reaches a remote shell.
+    llama=${SETUP_LLAMA:-1}
+    case "$llama" in 0|1) ;; *) echo "SETUP_LLAMA must be 0 or 1" >&2; exit 1 ;; esac
+    detach_ "mkdir -p ~/out; SETUP_LLAMA=$llama setsid nohup bash ~/toolcall-serving-bench/scripts/gpu/setup.sh > ~/out/setup.log 2>&1 < /dev/null &"
     echo "setup started; wait for it with: scripts/gpu/local.sh wait-setup $ip"
     ;;
   wait-setup)

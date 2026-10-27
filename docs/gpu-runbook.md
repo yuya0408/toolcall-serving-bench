@@ -290,6 +290,35 @@ vLLMの`/server_info`が500を返していた（環境にpipが無く、vLLMの`
 - 速さの上限（120秒）を超えたのは、Q4_K_Mの並行数16で4件、32で43件。
 - 基準セル（vLLM AWQの並行数4）の判定が本番1回目から変わった（SMクロックの中央値1,080→945MHz）。扱いはADR-0008の追記2026-10-26。
 
+### 第2段階の疎通：連続バッチングの3エンジン（`cells/smoke-batching.json`、39セル）
+
+ADR-0009の2。llama.cppは測らないので、準備でビルドとGGUFの作成を飛ばす。準備にはTensorRT-LLMの量子化（ModelOptで2つ）が入り、時間はまだ測っていない。
+見込みはセル約2.6時間＋準備約2時間で、自動シャットダウンは余りを見て600分にする。
+
+```
+terraform -chdir=infra/gpu apply -var auto_shutdown_minutes=600    # smoke-batching.json
+SETUP_LLAMA=0 scripts/gpu/local.sh setup $IP
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke-batching.json
+```
+
+回した後に確かめること（結果は`docs/`に記録し、ADR-0009の2に追記する。数値は判定に使わない）：
+
+| 確かめること | どこを見るか |
+| --- | --- |
+| 9構成が起動して答えを返したか | `status.jsonl`の`outcome`。`server_not_ready`・`error`なら`server.log` |
+| ツールパーサーが入っているか | `setup.log`の「sglang qwen parser: listed」「trtllm qwen3 parser: listed」 |
+| TensorRT-LLMの量子化 | `checks/modelopt-*.log`、`*-hf_quant_config.json`（KVキャッシュが量子化されていないこと）、`*-sha256.txt` |
+| FP8がFP8のカーネルで動いたか | FP8の3構成の`server.log` |
+| ツール呼び出しの形 | `ni-*`の生出力で、名前と引数がvLLMと同じ形か |
+| greedyの一致 | `ni-<構成>-c1`と`ni-<構成>-c1-r2`の生出力（`scripts/count_flips.py`） |
+| 同じ入力か | 同じケースの`prompt_tokens`が、vLLMとSGLang・TensorRT-LLMで同じか |
+| サンプリングの設定 | `acc-*-bf16`が`top_k`・`seed`・`chat_template_kwargs`を受け付けたか（エラーが無いか） |
+| 容量の判定 | `lat-*-c16`の`capacity_check.json`の`capacity.tokens` |
+| 回した後の確かめ | manifestの`post_check`。SGLangは`preemptions`、TensorRT-LLMは`active_requests`（`iterations`が0でなく、`max_active`が16） |
+| 実際に使われた設定 | TensorRT-LLMの`server.log`（スケジューラの方針、`max_batch_size`、`max_num_tokens`） |
+| ストリームの使用量 | `lat-*`の生出力の`prompt_tokens_details` |
+| 準備の時間 | `setup.log`の各段階の時刻（本番の見積もりに使う） |
+
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 
