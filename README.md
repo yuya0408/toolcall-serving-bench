@@ -41,11 +41,13 @@
 並行数1から倍々に上げ、各1,000件で会話用の基準を判定した（Clopper-Pearsonの片側95%限界で3値。[ADR-0003](docs/adr/0003-latency-pass-verdict.md)）。
 並行数1から「満たす」が続く範囲の最大を、その構成の最大の並行数とした。
 
-![latency–throughput curve：並行数ごとのp99と1台のスループット](docs/figures/latency.png)
+![P99 TTFTと並行数](docs/figures/ttft.png)
 
-図はNVIDIAのNIMベンチマークの手引きにあるlatency–throughput curveと同じ形で、点1つが並行数1つ。
-左右どちらの図でも基準線より左にある点が「満たす」（判定は超過件数で行うが、この結果ではp99が基準線より左にある点と一致する）。
-図に無い並行数は、対応していなかった構成（「[詳しい値](#詳しい値)」）。
+![P99 TPOTと並行数](docs/figures/tpot.png)
+
+図は1枚に1指標で、横軸を並行数にそろえた（Red Hatの「Ollama vs. vLLM」のベンチマーク記事と同じ形）。
+TTFTとTPOTの両方で破線より下にある並行数が「満たす」（判定は超過件数で行うが、この結果ではp99が破線より下にある点と一致する）。
+線が途中で切れているのは、その先の並行数に対応していなかった構成（「[詳しい値](#詳しい値)」）。
 
 | 構成 | 最大の並行数 | 次の並行数での超過 |
 | --- | --- | --- |
@@ -56,6 +58,10 @@
 | llama.cpp Q4_K_M | 1 | 並行数2で27/1,000 |
 
 より厳しいinteractiveの基準（TTFT 500ms・TPOT 30ms）は、どの構成も並行数1で満たさなかった。
+
+参考として、1台のスループットを示す（判定には使わない）。vLLM AWQは、どの並行数でもほかの構成より多く処理している。
+
+![スループットと並行数](docs/figures/throughput.png)
 
 ---
 
@@ -356,7 +362,7 @@ GPUインスタンスでの実行（apply → 準備 → セルの一覧を回�
 | `eval_bench/` 直下 | 試行の繰り返しとCI（`repetition.py`）、レイテンシ（`latency.py`）、容量の判定（`capacity.py`）、セルの実行（`runner.py`） |
 | `scripts/` | セルの実行（`run_cell.py`）、非劣化の判定（`noninferiority.py`）、評価セットの生成と検査、プロンプトの長さの計測 |
 | `scripts/gpu/` | GPUインスタンスでの準備とセルの一覧の実行 |
-| `docs/figures/` | READMEの図（`scripts/plot_results.py`が結果の値から作る） |
+| `docs/figures/` | READMEの図（`scripts/plot_results.py`が結果の値から作る。手本にした外部の図はスクリプトの冒頭に書いてある） |
 | `infra/` | Terraform（`infra/gpu/`がGPUインスタンス） |
 | `data_build/` | 評価セットを作ったときの中間データと検査の記録 |
 

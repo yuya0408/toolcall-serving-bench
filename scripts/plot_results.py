@@ -9,8 +9,9 @@ repository. Edit them here if a value changes.
 
 Figures and the outside figure each one follows:
   selection.png       the conclusion, as a single bar per config
-  latency.png         latency-throughput curve, as in NVIDIA's NIM/GenAI-Perf
-                      benchmarking guide (one point per concurrency)
+  throughput.png, ttft.png, tpot.png
+                      one metric against concurrency per figure, as in Red Hat's
+                      'Ollama vs. vLLM: A deep dive into performance benchmarking'
   noninferiority.png  confidence interval against the margin, as recommended by
                       the CONSORT extension for non-inferiority trials
 """
@@ -130,43 +131,45 @@ def selection():
     plt.close(fig)
 
 
-def latency():
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4.4), sharey=True)
-    panels = [(axes[0], 1, "ttft", "TTFT p99（ms）", [500, 1000, 2000, 5000, 10000, 20000]),
-              (axes[1], 2, "tpot", "TPOT p99（ms）", [20, 50, 100, 200, 500, 1000])]
-    for ax, col, key, label, ticks in panels:
-        ax.axvspan(ticks[0] * 0.8, LIMIT[key], color="#2a78d6", alpha=0.05, zorder=0, linewidth=0)
-        ax.axvline(LIMIT[key], color=INK, linewidth=1.2, linestyle=(0, (4, 3)), zorder=1)
-        ax.text(LIMIT[key] * 0.94, 1.36, f"会話用の基準\n{LIMIT[key]:,}ms", ha="right", va="top",
-                fontsize=8.5, color=INK)
-        for name, rows in LATENCY.items():
-            c = COLOR[name]
-            xs = [r[col] for r in rows]
-            ys = [r[3] for r in rows]
-            ax.plot(xs, ys, color=c, linewidth=2, zorder=2)
-            for (conc, _ttft, _tpot, _rps, ok), x, y in zip(rows, xs, ys):
-                ax.scatter(x, y, s=46, marker=MARKER[name], zorder=3, linewidths=1.6,
-                           facecolors=c if ok else SURFACE, edgecolors=c)
-                ax.annotate(str(conc), (x, y), xytext=(4, 5), textcoords="offset points",
-                            fontsize=7.5, color=INK_2)
-        ax.set_xscale("log")
-        ax.set_xticks(ticks, [f"{t:,}" for t in ticks])
-        ax.minorticks_off()
-        ax.set_xlim(ticks[0] * 0.8, ticks[-1] * 1.3)
-        ax.set_xlabel(label)
-    axes[0].set_ylabel("1台のスループット（件/秒）")
-    axes[0].set_ylim(0, 1.4)
-    handles = [plt.Line2D([], [], color=COLOR[n], marker=MARKER[n], linewidth=2, markersize=7, label=n)
-               for n in CONFIGS]
-    handles.append(plt.Line2D([], [], color=INK_2, marker="o", linestyle="", markersize=7,
-                              markerfacecolor=SURFACE, label="白抜き＝基準を満たさない"))
-    fig.legend(handles=handles, loc="upper center", ncol=6, fontsize=9, bbox_to_anchor=(0.5, 1.0),
-               handletextpad=0.4, columnspacing=1.2)
-    fig.text(0.01, 0.01, "点の数字は並行数。左右どちらの図でも基準線より左（青い範囲）にある点が「満たす」。上にあるほど1台で多く処理できる。",
-             fontsize=8.5, color=INK_2)
-    fig.tight_layout(rect=(0, 0.04, 1, 0.92))
-    fig.savefig(OUT / "latency.png", dpi=150)
+def per_concurrency(key, col, title, ylabel, better, filename, limit=None, ticks=None):
+    """One metric against concurrency, one line per config (as in Red Hat's
+    'Ollama vs. vLLM' benchmarking article: one figure per metric)."""
+    fig, ax = plt.subplots(figsize=(8, 4.6))
+    for name, rows in LATENCY.items():
+        xs = [r[0] for r in rows]
+        ys = [r[col] for r in rows]
+        ax.plot(xs, ys, color=COLOR[name], marker=MARKER[name], markersize=7, linewidth=2,
+                markeredgecolor=SURFACE, markeredgewidth=1, label=name, zorder=2)
+    if limit is not None:
+        ax.axhline(limit, color=INK, linewidth=1.2, linestyle=(0, (4, 3)), zorder=1)
+        ax.text(32, limit * 1.06, f"会話用の基準 {limit:,}ms", ha="right", va="bottom", fontsize=9, color=INK)
+    ax.set_xscale("log", base=2)
+    ax.set_xticks([1, 2, 4, 8, 16, 32], ["1", "2", "4", "8", "16", "32"])
+    ax.set_xlim(0.8, 40)
+    if ticks:
+        ax.set_yscale("log")
+        ax.set_yticks(ticks, [f"{t:,}" for t in ticks])
+    ax.minorticks_off()
+    ax.set_xlabel("並行数（同時に送るリクエストの数）")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title, loc="left", fontsize=12, fontweight="bold")
+    ax.text(0.5, 0.97, better, transform=ax.transAxes, ha="center", va="top", fontsize=9.5,
+            fontweight="bold", color=INK)
+    ax.legend(loc="upper left", fontsize=9, title="構成", title_fontsize=9)
+    fig.text(0.5, 0.01, "Qwen3-8B | NVIDIA L4 1台（g6.xlarge）| 日本語のツール呼び出し200件（入力 約2,300トークン）",
+             ha="center", fontsize=8.5, color=INK_2, style="italic")
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.savefig(OUT / filename, dpi=150)
     plt.close(fig)
+
+
+def latency():
+    per_concurrency("rps", 3, "スループット と 並行数", "1台のスループット（件/秒）", "上ほど良い",
+                    "throughput.png")
+    per_concurrency("ttft", 1, "P99 TTFT と 並行数", "P99 TTFT（ms、対数）", "下ほど良い",
+                    "ttft.png", limit=LIMIT["ttft"], ticks=[500, 1000, 2000, 5000, 10000, 20000])
+    per_concurrency("tpot", 2, "P99 TPOT と 並行数", "P99 TPOT（ms、対数）", "下ほど良い",
+                    "tpot.png", limit=LIMIT["tpot"], ticks=[20, 50, 100, 200, 500, 1000])
 
 
 def noninferiority():
