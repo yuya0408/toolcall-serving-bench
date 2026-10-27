@@ -226,6 +226,17 @@ def trtllm_capacity(iteration_stats: list[dict[str, Any]]) -> dict[str, Any]:
                      "(enable_iter_perf_stats, and at least one request served)")
 
 
+def trtllm_active(iteration_stats: list[dict[str, Any]]) -> dict[str, Any]:
+    """How many requests ran at once, from iteration statistics polled during a
+    cell (numActiveRequests, numQueuedRequests; same file as kvCacheStats). Under
+    GUARANTEED_NO_EVICT a request that does not fit waits in the queue silently,
+    so this is the post-check's evidence that the concurrency was real."""
+    active = [int(s.get("numActiveRequests") or 0) for s in iteration_stats]
+    queued = [int(s.get("numQueuedRequests") or 0) for s in iteration_stats]
+    return {"iterations": len(iteration_stats), "max_active": max(active, default=0),
+            "max_queued": max(queued, default=0)}
+
+
 # ---------------------------------------------------------------- llama.cpp /props
 
 def llama_capacity(props: dict[str, Any], ctx_size: int, kv: str = "split") -> dict[str, Any]:
@@ -304,7 +315,8 @@ PREEMPTION_COUNTERS = {"vllm": (vllm_counters, vllm_counter_delta),
 
 def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Iterable[Optional[int]],
                vllm_delta: Optional[dict[str, Any]] = None, length_finished: int = 0,
-               output_limit_finished: int = 0) -> dict[str, Any]:
+               output_limit_finished: int = 0, trt_active: Optional[dict[str, Any]] = None,
+               concurrency: Optional[int] = None) -> dict[str, Any]:
     """Whether the run stayed within what the pre-check assumed. Anything off
     means the estimate was wrong: the cell's numbers are not used for a
     verdict (ADR-0005 3). For llama.cpp, a response that stopped at the length
@@ -329,6 +341,13 @@ def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Ite
         context_limited = length_finished - output_limit_finished
         if context_limited > 0:
             problems.append(f"{context_limited} responses stopped at the length limit before max_tokens")
+    if engine == "tensorrt_llm" and trt_active is not None:
+        # docs/adr/0009 2: the concurrency reached the engine, not only its queue
+        result["active_requests"] = trt_active
+        if not trt_active["iterations"]:
+            problems.append("no iteration statistics polled during the cell")
+        elif concurrency is not None and trt_active["max_active"] < concurrency:
+            problems.append(f"at most {trt_active['max_active']} requests ran at once (concurrency {concurrency})")
     result["ok"] = not problems
     result["problems"] = problems
     return result

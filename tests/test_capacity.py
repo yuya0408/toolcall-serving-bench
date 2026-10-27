@@ -192,3 +192,14 @@ def test_accuracy_pass_raw_output_keeps_usage_and_finish_reason():
     with patch("requests.post", return_value=response):
         raw = json.loads(VLLMAdapter("http://x", "m", sampling).generate("q", []))
     assert raw[USAGE_KEY]["prompt_tokens"] == 2200 and raw[FINISH_REASON_KEY] == "length"
+
+
+def test_tensorrt_llm_active_requests_show_whether_the_concurrency_reached_the_engine():
+    stats = [{"numActiveRequests": 3, "numQueuedRequests": 0}, {"numActiveRequests": 4, "numQueuedRequests": 1}]
+    active = capacity.trtllm_active(stats)
+    assert active == {"iterations": 2, "max_active": 4, "max_queued": 1}
+    assert capacity.post_check("tensorrt_llm", 2600, [2500], trt_active=active, concurrency=4)["ok"]
+    short = capacity.post_check("tensorrt_llm", 2600, [2500], trt_active=active, concurrency=8)
+    assert not short["ok"] and "at most 4" in short["problems"][0]
+    empty = capacity.post_check("tensorrt_llm", 2600, [2500], trt_active=capacity.trtllm_active([]), concurrency=1)
+    assert not empty["ok"]

@@ -120,10 +120,14 @@ BATCHING_ACCURACY = [
     ("ni", "sglang-bf16", 1, 75), ("ni", "sglang-awq", 1, 35), ("ni", "sglang-fp8", 1, 55),
     ("ni", "trt-bf16", 1, 75), ("ni", "trt-awq", 1, 35), ("ni", "trt-fp8", 1, 55),
 ]
-# Smoke (docs/adr/0009 2): per configuration, a short accuracy cell (the
-# non-streamed tool-call shape, sampling knobs) and a short concurrency 16
-# latency cell (capacity pre-check, the post-check counters, streamed usage).
-SMOKE_BATCHING = [(k, f"{e}-{q}") for e in _ENGINES for q in _LEVEL_MIN for k in ("acc", "lat")]
+# Smoke (docs/adr/0009 2): per configuration, two identical short greedy cells
+# (does greedy repeat itself; the tool-call shape; prompt_tokens against vLLM's)
+# and short latency cells at concurrency 1 and 16 (capacity pre-check, the
+# post-check counters, streamed usage); per engine, one short sampled accuracy
+# cell on bf16 (the sampling knobs are the engine's, not the checkpoint's).
+SMOKE_BATCHING = ([("acc", f"{e}-bf16", 1, "") for e in _ENGINES]
+                  + [(k, f"{e}-{q}", c, r) for e in _ENGINES for q in _LEVEL_MIN
+                     for k, c, r in (("ni", 1, ""), ("ni", 1, "-r2"), ("lat", 1, ""), ("lat", 16, ""))])
 
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
@@ -153,9 +157,9 @@ def ordered(entries: list[tuple], rng: random.Random) -> list[dict]:
     return cells
 
 
-def smoke(kind: str, config: str) -> dict:
-    c = cell(kind, config, 16 if kind == "lat" else 1, 0)
-    c.update(prefix="smoke-", max_cases=20)
+def smoke(kind: str, config: str, concurrency: int, repeat: str) -> dict:
+    c = cell(kind, config, concurrency, 0)
+    c.update(name=c["name"] + repeat, prefix="smoke-", max_cases=20)
     if kind == "lat":
         c["n_requests"] = 60
     else:

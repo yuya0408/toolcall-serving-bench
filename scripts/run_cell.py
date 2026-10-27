@@ -239,13 +239,20 @@ def _write_jsonl(path: pathlib.Path, rows: list[dict[str, Any]]) -> None:
 
 class _CapacityWatch:
     """The post-check's bookkeeping around one cell (docs/adr/0005 3): vLLM's
-    and SGLang's cumulative /metrics counters read before and after; nothing to
-    read for llama.cpp and TensorRT-LLM, whose check comes from the raw output alone."""
+    and SGLang's cumulative /metrics counters read before and after; for
+    TensorRT-LLM, its iteration statistics polled during the cell (each read of
+    /metrics drains them, so they cannot be read once at the end; docs/adr/0009 2);
+    nothing to read for llama.cpp, whose check comes from the raw output alone."""
+
+    POLL_S = 2.0
 
     def __init__(self, args):
         self.args = args
         self.pre = None
         self.before = None
+        self._stats: list[dict[str, Any]] = []
+        self._stop = None
+        self._thread = None
         if args.capacity_check is not None:
             self.pre = json.loads(args.capacity_check.read_text(encoding="utf-8"))
             expected = capacity.per_request_max(self.pre["max_prompt_tokens_planned"], args.max_tokens)
@@ -257,6 +264,20 @@ class _CapacityWatch:
         if self.pre is not None and self.args.engine in capacity.PREEMPTION_COUNTERS:
             counters, _ = capacity.PREEMPTION_COUNTERS[self.args.engine]
             self.before = counters(capacity.fetch_metrics(self.args.base_url))
+        if self.pre is not None and self.args.engine == "tensorrt_llm":
+            import threading
+            self._stop = threading.Event()
+            self._thread = threading.Thread(target=self._poll, daemon=True)
+            self._thread.start()
+
+    def _poll(self) -> None:
+        while True:
+            try:
+                self._stats.extend(capacity.fetch_json(self.args.base_url, "/metrics"))
+            except Exception:   # a missed poll only shortens the record; the check reports it
+                pass
+            if self._stop.wait(self.POLL_S):
+                return
 
     def result(self, prompt_tokens, length_finished: int,
                output_limit_finished: int) -> dict[str, Any] | None:
@@ -266,9 +287,15 @@ class _CapacityWatch:
         if self.args.engine in capacity.PREEMPTION_COUNTERS:
             counters, difference = capacity.PREEMPTION_COUNTERS[self.args.engine]
             delta = difference(self.before, counters(capacity.fetch_metrics(self.args.base_url)))
+        active = None
+        if self._thread is not None:
+            self._stop.set()
+            self._thread.join()
+            active = capacity.trtllm_active(self._stats)
         post = capacity.post_check(self.args.engine, self.pre["max_prompt_tokens_planned"],
                                    prompt_tokens, vllm_delta=delta, length_finished=length_finished,
-                                   output_limit_finished=output_limit_finished)
+                                   output_limit_finished=output_limit_finished, trt_active=active,
+                                   concurrency=self.args.concurrency)
         return {**self.pre, "post_check": post}
 
 

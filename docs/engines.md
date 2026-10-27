@@ -26,7 +26,7 @@ KVキャッシュは、リクエストごとに「これまでのトークン」
 | --- | --- | --- | --- |
 | vLLM | 今の空きで受け入れる（楽観的） | 走っているリクエストを一度外し（preemption）、後で計算し直す | `vllm:num_preemptions`が0か |
 | SGLang | 今の空きで受け入れる（楽観的。`schedule_conservativeness`で調整できる） | 走っているリクエストを待ちの列に戻す（retraction） | `sglang:num_retracted_requests_total`が0か |
-| TensorRT-LLM | 既定の`GUARANTEED_NO_EVICT`：最大の長さ（プロンプト＋最大の出力）ぶんを先に確保できたときだけ受け入れる（`llmapi/llm_args.py`の`CapacitySchedulerPolicy`） | 起きない。入れないリクエストは列で待つ | 追い出しの数え方が無いので、llama.cppと同じく、文脈の長さで切れた答えが無いか |
+| TensorRT-LLM | 既定の`GUARANTEED_NO_EVICT`：最大の長さ（プロンプト＋最大の出力）ぶんを先に確保できたときだけ受け入れる（`llmapi/llm_args.py`の`CapacitySchedulerPolicy`） | 起きない。入れないリクエストは列で待つ | 文脈の長さで切れた答えが無いか。加えて、セルの間`/metrics`を2秒ごとに読み、同時に走ったリクエスト数（`numActiveRequests`の最大）が並行数に届いたか（読むたびに統計が消えるので、最後に1回では読めない。ADR-0009の2） |
 | llama.cpp | スロットの数（`--parallel`）まで受け入れる。KVは起動時にスロットごとに確保 | 起きない（スロットの文脈を超えると答えが切れる） | 文脈の長さで切れた答えが無いか |
 
 このプロジェクトは、並行数のセルを回す前に「全リクエストが最大の長さまで伸びても入るか」を全エンジン共通の式で確かめ、入らないセルは回さない（ADR-0005）。
