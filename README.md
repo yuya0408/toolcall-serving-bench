@@ -35,6 +35,8 @@
 各エンジンの中で、4bitとbf16のselectionを比べた（並行数1、greedy、200件×5試行）。許す差は −2.6pt で、Qwen3-8Bと4BのBFCLの差、
 つまりモデル1段階分にあたる（[ADR-0002](docs/adr/0002-equivalence-margin.md)）。片側99.5%のt区間の下限がこれを上回れば「非劣化を示せた」とする（[ADR-0008](docs/adr/0008-quantization-noninferiority.md)）。
 
+![量子化の非劣化：差と片側99.5%の下限](docs/figures/noninferiority.png)
+
 | 構成 | selection（bf16 → 4bit） | 差 | 片側99.5%の下限 | 判定 |
 | --- | --- | --- | --- | --- |
 | vLLM AWQ | 0.934 → 0.928 | −0.6pt | −2.48pt | **非劣化を示せた** |
@@ -48,6 +50,10 @@ llama.cpp Q4_K_Mは、この後の選定から外した。
 
 並行数1から倍々に上げ、各1,000件で会話用の基準を判定した（Clopper-Pearsonの片側95%限界で3値。[ADR-0003](docs/adr/0003-latency-pass-verdict.md)）。
 並行数1から「満たす」が続く範囲の最大を、その構成の最大の並行数とした。
+
+![並行数ごとのTTFT・TPOTのp99と会話用の基準](docs/figures/latency.png)
+
+判定は超過件数で行う（この結果では、TTFTとTPOTのp99がどちらも基準線より下にある点と一致する）。白抜きの点が「満たさない」。図に無い点は、対応していない構成（「[詳しい値](#詳しい値)」）。
 
 | 構成 | 最大の並行数 | 次の並行数での超過 |
 | --- | --- | --- |
@@ -150,6 +156,8 @@ vLLM AWQは、精度でもbf16より2.6pt以上悪くはないと示せている
 ### 精度
 
 並行数1、200件×5試行（本番2回目）。CIはケース単位のブートストラップ95%。CIはすべて重なっていて、構成の優劣は結論にしない。
+
+![構成ごとのselectionと95% CI](docs/figures/accuracy.png)
 
 | 構成 | selection（95% CI） | arg_exact |
 | --- | --- | --- |
@@ -290,6 +298,13 @@ python scripts/run_cell.py --pass-type accuracy --engine vllm \
 python scripts/noninferiority.py <bf16のraw.jsonl> <4bitのraw.jsonl>
 ```
 
+READMEの図を作り直す（値はスクリプトの中にある）：
+
+```bash
+pip install matplotlib
+python scripts/plot_results.py
+```
+
 GPUインスタンスでの実行（apply → 準備 → セルの一覧を回す → 回収 → destroy）は、[docs/gpu-runbook.md](docs/gpu-runbook.md)の手順で行う。
 手で打つのは`scripts/gpu/local.sh`のコマンドだけで、セルの一覧は`scripts/gpu/cells/*.json`にある。
 
@@ -306,6 +321,7 @@ GPUインスタンスでの実行（apply → 準備 → セルの一覧を回�
 | `eval_bench/` 直下 | 試行の繰り返しとCI（`repetition.py`）、レイテンシ（`latency.py`）、容量の判定（`capacity.py`）、セルの実行（`runner.py`） |
 | `scripts/` | セルの実行（`run_cell.py`）、非劣化の判定（`noninferiority.py`）、評価セットの生成と検査、プロンプトの長さの計測 |
 | `scripts/gpu/` | GPUインスタンスでの準備とセルの一覧の実行 |
+| `docs/figures/` | READMEの図（`scripts/plot_results.py`が結果の値から作る） |
 | `infra/` | Terraform（`infra/gpu/`がGPUインスタンス） |
 | `data_build/` | 評価セットを作ったときの中間データと検査の記録 |
 
