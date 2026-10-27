@@ -365,7 +365,7 @@ GPUインスタンスでの実行（apply → 準備 → セルの一覧を回�
 | `eval_bench/decoders/` | 生出力 →（ツール, 引数）。制約デコーディングを足すときの差し替え点（今は恒等） |
 | `eval_bench/scorers/` | 分離採点 |
 | `eval_bench/` 直下 | 試行の繰り返しとCI（`repetition.py`）、レイテンシ（`latency.py`）、容量の判定（`capacity.py`）、セルの実行（`runner.py`） |
-| `scripts/` | セルの実行（`run_cell.py`）、非劣化の判定（`noninferiority.py`）、評価セットの生成と検査、プロンプトの長さの計測 |
+| `scripts/` | セルの実行（`run_cell.py`）、非劣化の判定（`noninferiority.py`）、プリフィルの重なりの集計（`prefill_overlap.py`）、評価セットの生成と検査、プロンプトの長さの計測 |
 | `scripts/gpu/` | GPUインスタンスでの準備とセルの一覧の実行 |
 | `docs/figures/` | READMEの図（`scripts/plot_results.py`が結果の値から作る。手本にした外部の図はスクリプトの冒頭に書いてある） |
 | `infra/` | Terraform（`infra/gpu/`がGPUインスタンス） |
