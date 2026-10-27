@@ -1,6 +1,6 @@
 # ADR-0005: 並行数のセルが成り立つかを、全エンジン共通の容量の判定（`capacity_check`）で確かめる
 
-- Status: Proposed
+- Status: Accepted（2026-10-27。本番3回のapplyで、追記を含めたこの決定どおりに動かした）
 - Date: 2026-10-19
 
 ## Context

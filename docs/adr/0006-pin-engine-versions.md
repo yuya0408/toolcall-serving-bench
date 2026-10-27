@@ -1,6 +1,6 @@
 # ADR-0006: エンジンの版を、疎通で通しで動いた組み合わせに固定する
 
-- Status: Proposed
+- Status: Accepted（2026-10-27。本番3回のapplyで、追記を含めたこの決定どおりに動かした）
 - Date: 2026-10-21
 
 ## Context
