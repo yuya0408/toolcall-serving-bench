@@ -46,6 +46,29 @@ def test_vllm_server_has_the_flags_the_adrs_require():
     assert cmd[cmd.index("--max-model-len") + 1] == "8192"
 
 
+def test_sglang_server_reports_metrics_and_cached_tokens_and_matches_the_context():
+    cmd = run_cells.server_command({"engine": "sglang", "quantization": "fp8-block",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[1:3] == ["-m", "sglang.launch_server"]
+    assert cmd[cmd.index("--model-path") + 1] == "Qwen/Qwen3-8B-FP8"
+    assert cmd[cmd.index("--tool-call-parser") + 1] == "qwen"
+    for flag in ("--enable-metrics", "--enable-cache-report"):
+        assert flag in cmd
+    assert cmd[cmd.index("--context-length") + 1] == "8192"
+
+
+def test_tensorrt_llm_serves_the_local_modelopt_checkpoint_with_the_qwen3_parser():
+    cmd = run_cells.server_command({"engine": "tensorrt_llm", "quantization": "modelopt-int4-awq",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[0].endswith("trtllm-serve")
+    assert cmd[1] == str(run_cells.LOCAL_CHECKPOINTS["modelopt-int4-awq"])
+    assert cmd[cmd.index("--tool_parser") + 1] == "qwen3"
+    assert cmd[cmd.index("--backend") + 1] == "pytorch"
+    assert cmd[cmd.index("--max_seq_len") + 1] == "8192"
+    bf16 = run_cells.server_command({"engine": "tensorrt_llm", "quantization": "bf16-none"})
+    assert bf16[1] == "Qwen/Qwen3-8B"
+
+
 def test_llama_server_is_sized_to_the_requirement():
     # ADR-0005 1 and its 2026-10-23 addendum: one slot per request, each with its own
     # cache of (longest prompt + max_tokens + 1-token margin) padded to 256; --fit off.
@@ -86,6 +109,9 @@ def test_transformers_hf_needs_no_server_and_a_loaded_cell_gets_its_capacity_che
     {"engine": "llama_cpp", "quantization": "bf16-none"},     # llama_cpp runs the GGUF only
     {"engine": "vllm", "quantization": "gguf-bf16"},          # and only llama_cpp runs it
     {"engine": "vllm", "quantization": "gguf-q4_k_m"},        # either GGUF
+    {"engine": "tensorrt_llm", "quantization": "awq-4bit"},   # TensorRT-LLM 1.2.1 reads no HF AWQ
+    {"engine": "vllm", "quantization": "modelopt-int4-awq"},  # ModelOpt's checkpoint is for TensorRT-LLM
+    {"engine": "transformers_hf", "quantization": "fp8-block"},
     {"prefix": "dry-"},
     {"servr": {}},                                            # a typo must not be ignored
     {"n": 1},                                                 # consistency needs two trials

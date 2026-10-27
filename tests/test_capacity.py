@@ -43,6 +43,48 @@ def test_vllm_counter_delta_over_a_cell():
     assert delta["queue_time"]["count"] == 200 and delta["queue_time"]["buckets"]["+Inf"] == 200
 
 
+# SGLang v0.5.21 metric names (srt/observability/metrics_collector.py); the
+# label set is a guess until the smoke apply records a real /metrics.
+_SGLANG_METRICS = """\
+sglang:max_total_num_tokens{model_name="Qwen/Qwen3-8B",engine_type="unified"} 61440.0
+sglang:page_size{model_name="Qwen/Qwen3-8B",engine_type="unified"} 1.0
+sglang:num_retracted_requests_total{model_name="Qwen/Qwen3-8B",engine_type="unified"} 2.0
+sglang:queue_time_seconds_sum{model_name="Qwen/Qwen3-8B",engine_type="unified"} 3.5
+sglang:queue_time_seconds_count{model_name="Qwen/Qwen3-8B",engine_type="unified"} 100.0
+sglang:queue_time_seconds_bucket{le="0.5",model_name="Qwen/Qwen3-8B",engine_type="unified"} 90.0
+sglang:queue_time_seconds_bucket{le="+Inf",model_name="Qwen/Qwen3-8B",engine_type="unified"} 100.0
+"""
+
+
+def test_sglang_capacity_is_the_token_pool_in_pages():
+    assert capacity.sglang_capacity(_SGLANG_METRICS) == {"unit": "page", "unit_tokens": 1, "units": 61440,
+                                                         "tokens": 61440}
+    with pytest.raises(ValueError, match="enable-metrics"):
+        capacity.sglang_capacity("")
+
+
+def test_sglang_retractions_are_its_preemptions_in_the_post_check():
+    before = capacity.sglang_counters(_SGLANG_METRICS)
+    after = capacity.sglang_counters(_SGLANG_METRICS.replace("} 2.0", "} 5.0").replace("} 100.0", "} 150.0"))
+    delta = capacity.sglang_counter_delta(before, after)
+    assert delta["preemptions"] == 3 and delta["queue_time"]["count"] == 50
+    post = capacity.post_check("sglang", 2600, [2500], vllm_delta=delta)
+    assert not post["ok"] and post["problems"] == ["3 preemptions"]
+
+
+def test_tensorrt_llm_capacity_is_read_from_the_latest_iteration_with_kv_stats():
+    stats = [{"iter": 1, "kvCacheStats": {"maxNumBlocks": 1900, "tokensPerBlock": 32, "freeNumBlocks": 1899}},
+             {"iter": 2}]
+    assert capacity.trtllm_capacity(stats) == {"unit": "block", "unit_tokens": 32, "units": 1900, "tokens": 60800}
+    with pytest.raises(ValueError, match="enable_iter_perf_stats"):
+        capacity.trtllm_capacity([])
+
+
+def test_tensorrt_llm_post_check_counts_length_limited_responses_like_llama_cpp():
+    post = capacity.post_check("tensorrt_llm", 2600, [2500], length_finished=2, output_limit_finished=1)
+    assert not post["ok"] and "preemptions" not in post
+
+
 def test_startup_log_figure_tolerates_commas_and_misses_quietly():
     log = ("INFO [kv_cache_utils.py:2464] GPU KV cache size: 99,552 tokens, "
            "Maximum concurrency for 8,192 tokens per request: 12.15x\n")

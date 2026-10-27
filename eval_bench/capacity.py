@@ -7,10 +7,13 @@ does the arithmetic and reads the engines' machine-facing endpoints:
 
 - the pre-check, before the cell runs: c x (the longest request, rounded up
   to the engine's allocation unit) <= the KV capacity the server reports
-  (vLLM: /metrics `vllm:cache_config_info`; llama.cpp: the --ctx-size it was
-  started with, and /props `n_ctx` as the per-slot limit);
+  (vLLM: /metrics `vllm:cache_config_info`; SGLang: /metrics
+  `sglang:max_total_num_tokens`; TensorRT-LLM: /metrics kvCacheStats;
+  llama.cpp: the --ctx-size it was started with, and /props `n_ctx` as the
+  per-slot limit);
 - the post-check, after: vLLM preempted nothing (the `vllm:num_preemptions`
-  counter's delta); llama.cpp, which has no such counter, returned no
+  counter's delta), SGLang retracted nothing (`sglang:num_retracted_requests_total`);
+  llama.cpp and TensorRT-LLM, which have no such counter, returned no
   response cut off by the length limit;
 - the longest request: the longest prompt, counted offline by
   scripts/count_prompt_tokens.py into schema/prompt_budget.json, plus
@@ -140,16 +143,17 @@ def vllm_counters(metrics_text: str) -> dict[str, Any]:
         preemptions = _sum(s, "vllm:num_preemptions")
     if preemptions is None:
         raise ValueError("vllm:num_preemptions not found in /metrics")
+    return {"preemptions": preemptions, **_queue_time(s, "vllm:request_queue_time_seconds")}
+
+
+def _queue_time(s, histogram: str) -> dict[str, Any]:
     buckets: dict[str, float] = {}
     for name, labels, value in s:
-        if name == "vllm:request_queue_time_seconds_bucket":
+        if name == histogram + "_bucket":
             buckets[labels["le"]] = buckets.get(labels["le"], 0.0) + value
-    return {
-        "preemptions": preemptions,
-        "queue_time_sum_s": _sum(s, "vllm:request_queue_time_seconds_sum") or 0.0,
-        "queue_time_count": _sum(s, "vllm:request_queue_time_seconds_count") or 0.0,
-        "queue_time_buckets": buckets,
-    }
+    return {"queue_time_sum_s": _sum(s, histogram + "_sum") or 0.0,
+            "queue_time_count": _sum(s, histogram + "_count") or 0.0,
+            "queue_time_buckets": buckets}
 
 
 def vllm_counter_delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
@@ -173,6 +177,53 @@ def startup_log_max_concurrency(startup_log: str) -> Optional[float]:
     between versions, so a miss is None, never an error."""
     found = _VLLM_MAX_CONCURRENCY_RE.findall(startup_log)
     return float(found[-1].replace(",", "")) if found else None
+
+
+# ---------------------------------------------------------------- SGLang /metrics
+
+def sglang_capacity(metrics_text: str) -> dict[str, Any]:
+    """KV capacity from the gauges SGLang sets once at startup
+    (`sglang:max_total_num_tokens`, `sglang:page_size`; v0.5.21
+    srt/observability/metrics_collector.py). Needs --enable-metrics."""
+    s = parse_prometheus(metrics_text)
+    tokens = _sum(s, "sglang:max_total_num_tokens")
+    if tokens is None:
+        raise ValueError("sglang:max_total_num_tokens not found in /metrics (start with --enable-metrics)")
+    page = int(_sum(s, "sglang:page_size") or 1)
+    return {"unit": "page", "unit_tokens": page, "units": int(tokens) // page, "tokens": int(tokens)}
+
+
+def sglang_counters(metrics_text: str) -> dict[str, Any]:
+    """The cumulative values the post-check takes deltas of: SGLang retracts
+    (sends back to the queue) a running request when the KV cache runs out,
+    its counterpart of vLLM's preemption."""
+    s = parse_prometheus(metrics_text)
+    retracted = _sum(s, "sglang:num_retracted_requests_total")
+    if retracted is None:
+        raise ValueError("sglang:num_retracted_requests_total not found in /metrics")
+    # Stored under vLLM's key, so one delta function serves both engines.
+    return {"preemptions": retracted, **_queue_time(s, "sglang:queue_time_seconds")}
+
+
+# A retraction is SGLang's preemption; the delta has the same shape as vLLM's.
+sglang_counter_delta = vllm_counter_delta
+
+
+# ---------------------------------------------------------------- TensorRT-LLM /metrics
+
+def trtllm_capacity(iteration_stats: list[dict[str, Any]]) -> dict[str, Any]:
+    """KV capacity from trtllm-serve's /metrics, a JSON list of iteration
+    statistics (needs enable_iter_perf_stats). Each carries kvCacheStats
+    (maxNumBlocks, tokensPerBlock; v1.2.1 cpp/tensorrt_llm/executor/
+    jsonSerialization.cpp). The list is empty until the executor has run an
+    iteration, so the caller sends one short request first."""
+    for stat in reversed(iteration_stats):
+        kv = stat.get("kvCacheStats")
+        if kv and kv.get("maxNumBlocks"):
+            blocks, per_block = int(kv["maxNumBlocks"]), int(kv["tokensPerBlock"])
+            return {"unit": "block", "unit_tokens": per_block, "units": blocks, "tokens": blocks * per_block}
+    raise ValueError("no iteration statistics with kvCacheStats in /metrics "
+                     "(enable_iter_perf_stats, and at least one request served)")
 
 
 # ---------------------------------------------------------------- llama.cpp /props
@@ -209,6 +260,13 @@ def fetch_metrics(base_url: str) -> str:
     return response.text
 
 
+def fetch_json(base_url: str, path: str) -> Any:
+    import requests
+    response = requests.get(f"{base_url.rstrip('/')}{path}", timeout=30)
+    response.raise_for_status()
+    return response.json()
+
+
 def fetch_props(base_url: str) -> dict[str, Any]:
     import requests
     response = requests.get(f"{base_url.rstrip('/')}/props", timeout=30)
@@ -236,6 +294,14 @@ def pre_check(engine: str, capacity: dict[str, Any], max_prompt_tokens: int, max
     }
 
 
+# Engines whose post-check is a /metrics counter of requests sent back for
+# lack of KV cache (vLLM: preemption, SGLang: retraction); the rest (llama.cpp,
+# TensorRT-LLM, whose default scheduler GUARANTEED_NO_EVICT admits a request
+# only when its whole cache is reserved) are checked from the raw output.
+PREEMPTION_COUNTERS = {"vllm": (vllm_counters, vllm_counter_delta),
+                       "sglang": (sglang_counters, sglang_counter_delta)}
+
+
 def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Iterable[Optional[int]],
                vllm_delta: Optional[dict[str, Any]] = None, length_finished: int = 0,
                output_limit_finished: int = 0) -> dict[str, Any]:
@@ -250,9 +316,9 @@ def post_check(engine: str, planned_max_prompt: int, observed_prompt_tokens: Ite
     problems = []
     if observed_max is not None and observed_max > planned_max_prompt:
         problems.append(f"observed prompt {observed_max} > planned {planned_max_prompt}")
-    if engine == "vllm":
+    if engine in PREEMPTION_COUNTERS:
         if vllm_delta is None:
-            raise ValueError("the vLLM post-check needs the /metrics delta")
+            raise ValueError(f"the {engine} post-check needs the /metrics delta")
         result["preemptions"] = vllm_delta["preemptions"]
         result["queue_time"] = vllm_delta["queue_time"]
         if vllm_delta["preemptions"] > 0:

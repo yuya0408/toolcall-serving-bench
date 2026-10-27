@@ -1,8 +1,9 @@
-"""vllm / llama_cpp adapters: both serve an OpenAI-compatible chat completions
-endpoint (llama.cpp server's /v1/chat/completions, alongside its native
-/completion which this project does not use -- see
-docs/engine-performance-plan.md's '比較可能性の規律'), so one HTTP adapter
-covers both engines; only base_url/model/name differ per instance.
+"""vllm / sglang / tensorrt_llm / llama_cpp adapters: all serve an
+OpenAI-compatible chat completions endpoint (llama.cpp server's
+/v1/chat/completions, alongside its native /completion which this project
+does not use -- see docs/engine-performance-plan.md's '比較可能性の規律'), so
+one HTTP adapter covers them; only base_url/model/name and where the cached
+prompt tokens are reported differ per engine.
 
 Per the ModelAdapter contract (adapters/base.py), generate() hands back the
 raw `message` object the server returned, JSON-serialized, unparsed --
@@ -187,6 +188,29 @@ class VLLMAdapter(OpenAICompatibleChatAdapter):
             raise RuntimeError("vLLM reported no prompt_tokens_details.cached_tokens; "
                                "start the server with --enable-prompt-tokens-details")
         return details["cached_tokens"]
+
+
+class SGLangAdapter(OpenAICompatibleChatAdapter):
+    name = "sglang"
+
+    def cached_tokens(self, usage, timings) -> int:
+        details = usage.get("prompt_tokens_details") or {}
+        if details.get("cached_tokens") is None:
+            raise RuntimeError("SGLang reported no prompt_tokens_details.cached_tokens; "
+                               "start the server with --enable-cache-report")
+        return details["cached_tokens"]
+
+
+class TensorRTLLMAdapter(OpenAICompatibleChatAdapter):
+    name = "tensorrt_llm"
+
+    def cached_tokens(self, usage, timings) -> Optional[int]:
+        # trtllm-serve 1.2.1 fills prompt_tokens_details for non-streamed
+        # answers (serve/openai_server.py); whether a streamed usage block
+        # carries it is checked in the smoke apply (docs/adr/0009 2). Missing
+        # is recorded as None (no hit ratio), never as 0.
+        details = usage.get("prompt_tokens_details") or {}
+        return details.get("cached_tokens")
 
 
 class LlamaCppAdapter(OpenAICompatibleChatAdapter):

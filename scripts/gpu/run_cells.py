@@ -59,18 +59,40 @@ sys.path.insert(0, str(_ROOT))
 from eval_bench import capacity  # noqa: E402
 HOME = pathlib.Path.home()
 VENV_BIN = HOME / "venv" / "bin"
+# SGLang and TensorRT-LLM pin torch and transformers versions that clash with
+# vLLM's, so each has its own environment (docs/adr/0009 2; setup.sh).
+ENGINE_BIN = {"vllm": VENV_BIN, "sglang": HOME / "venv-sglang" / "bin",
+              "tensorrt_llm": HOME / "venv-trtllm" / "bin"}
+# trtllm-serve's extra options (--config): iteration statistics on, which its
+# /metrics needs for the KV capacity (eval_bench/capacity.trtllm_capacity).
+# Written by setup.sh; observability only, no scheduling setting.
+TRTLLM_CONFIG = HOME / "trtllm-serve.yaml"
 LLAMA_SERVER = HOME / "llama.cpp" / "build" / "bin" / "llama-server"
 GGUFS = {   # quantization -> the GGUF llama.cpp serves (setup.sh builds both from Qwen/Qwen3-8B)
     "gguf-bf16": HOME / "models" / "Qwen3-8B-bf16.gguf",
     "gguf-q4_k_m": HOME / "models" / "Qwen3-8B-Q4_K_M.gguf",   # docs/adr/0008
 }
-PORT = {"vllm": 8000, "llama_cpp": 8080}
-READY_TIMEOUT_S = {"vllm": 900, "llama_cpp": 300}
-MODELS = {   # quantization -> the model id the manifest records and vLLM serves (from the HF cache)
+PORT = {"vllm": 8000, "sglang": 30000, "tensorrt_llm": 8001, "llama_cpp": 8080}
+READY_TIMEOUT_S = {"vllm": 900, "sglang": 900, "tensorrt_llm": 1200, "llama_cpp": 300}
+MODELS = {   # quantization -> the model id the manifest records and the server serves (from the HF cache)
     "bf16-none": "Qwen/Qwen3-8B",
     "awq-4bit": "Qwen/Qwen3-8B-AWQ",
+    "fp8-block": "Qwen/Qwen3-8B-FP8",              # docs/adr/0009 4
+    "modelopt-int4-awq": "Qwen/Qwen3-8B",          # made on the instance from Qwen/Qwen3-8B (setup.sh)
     "gguf-bf16": "Qwen/Qwen3-8B",
     "gguf-q4_k_m": "Qwen/Qwen3-8B",
+}
+# Checkpoints a server loads from a local directory instead of the HF cache.
+LOCAL_CHECKPOINTS = {"modelopt-int4-awq": HOME / "models" / "Qwen3-8B-int4-awq-modelopt"}
+# Which quantizations each engine serves. TensorRT-LLM 1.2.1 reads no HF AWQ
+# checkpoint (_torch/model_config.py load_hf_quant_config has no awq branch), so
+# its 4-bit is ModelOpt's INT4 AWQ of the same base (docs/adr/0009 4).
+ENGINE_QUANTIZATIONS = {
+    "vllm": {"bf16-none", "awq-4bit", "fp8-block"},
+    "sglang": {"bf16-none", "awq-4bit", "fp8-block"},
+    "tensorrt_llm": {"bf16-none", "modelopt-int4-awq", "fp8-block"},
+    "llama_cpp": set(GGUFS),
+    "transformers_hf": {"bf16-none"},
 }
 # Arguments a cell may pass through to run_cell.py, as written in the cell list.
 RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurrency", "n",
@@ -79,7 +101,8 @@ RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurren
 MAX_TOKENS = 512
 # Server settings a cell may set. llama.cpp's context, slots and unified KV are
 # derived from the cell's concurrency (llama_server_settings), never written by hand.
-SERVER_KEYS = {"vllm": {"max_model_len"}, "llama_cpp": set()}
+SERVER_KEYS = {"vllm": {"max_model_len"}, "sglang": {"max_model_len"}, "tensorrt_llm": {"max_model_len"},
+               "llama_cpp": set()}
 # A cell's wall-clock limit unless it sets timeout_min: catches a hung server or
 # cell before it holds the list until the auto-shutdown. Not a measured
 # duration -- set timeout_min on cells expected to run longer.
@@ -106,8 +129,9 @@ def validate(cells: list[dict[str, Any]]) -> None:
             raise SystemExit(f"{c['name']}: prefix must be smoke-, pilot- or empty")
         if c["quantization"] not in MODELS:
             raise SystemExit(f"{c['name']}: unknown quantization {c['quantization']}")
-        if (c["engine"] == "llama_cpp") != (c["quantization"] in GGUFS):
-            raise SystemExit(f"{c['name']}: llama_cpp runs the GGUF, and only llama_cpp does")
+        if c["quantization"] not in ENGINE_QUANTIZATIONS.get(c["engine"], set()):
+            raise SystemExit(f"{c['name']}: {c['engine']} does not serve {c['quantization']} "
+                             f"(ENGINE_QUANTIZATIONS)")
         # run_cell.py's default is 5; consistency needs at least two trials per case
         if c["pass_type"] != "latency" and c.get("n", 5) < 2:
             raise SystemExit(f"{c['name']}: accuracy passes need n >= 2")
@@ -139,6 +163,27 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
         if "max_model_len" in server:
             cmd += ["--max-model-len", str(server["max_model_len"])]
         return cmd
+    if cell["engine"] == "sglang":
+        model = MODELS[cell["quantization"]]
+        # --enable-metrics opens /metrics (capacity, retractions); --enable-cache-report
+        # puts cached_tokens in usage.prompt_tokens_details, as vLLM's
+        # --enable-prompt-tokens-details does. Neither changes scheduling.
+        cmd = [str(ENGINE_BIN["sglang"] / "python"), "-m", "sglang.launch_server",
+               "--model-path", model, "--served-model-name", model,
+               "--host", "127.0.0.1", "--port", str(PORT["sglang"]),
+               "--tool-call-parser", "qwen", "--enable-metrics", "--enable-cache-report"]
+        if "max_model_len" in server:
+            cmd += ["--context-length", str(server["max_model_len"])]
+        return cmd
+    if cell["engine"] == "tensorrt_llm":
+        quantization = cell["quantization"]
+        path = LOCAL_CHECKPOINTS.get(quantization, MODELS[quantization])
+        cmd = [str(ENGINE_BIN["tensorrt_llm"] / "trtllm-serve"), str(path),
+               "--host", "127.0.0.1", "--port", str(PORT["tensorrt_llm"]),
+               "--backend", "pytorch", "--tool_parser", "qwen3", "--config", str(TRTLLM_CONFIG)]
+        if "max_model_len" in server:
+            cmd += ["--max_seq_len", str(server["max_model_len"])]
+        return cmd
     if cell["engine"] == "llama_cpp":
         if max_prompt_tokens is None:
             raise ValueError("a llama.cpp server is sized from the prompt budget")
@@ -155,8 +200,8 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
 
 
 def engine_version(engine: str, versions: dict[str, Any]) -> str:
-    return {"vllm": versions["vllm"], "llama_cpp": versions["llama_cpp_commit"],
-            "transformers_hf": versions["transformers"]}[engine]
+    key = {"llama_cpp": "llama_cpp_commit", "transformers_hf": "transformers"}.get(engine, engine)
+    return versions[key]
 
 
 def run_cell_command(cell: dict[str, Any], version: str, cell_dir: pathlib.Path,
@@ -178,11 +223,34 @@ def needs_capacity_check(cell: dict[str, Any]) -> bool:
     return cell["engine"] in PORT and cell.get("concurrency", 1) > 1
 
 
-def read_capacity(engine: str, ctx_size: int | None = None, kv: str = "split") -> dict[str, Any]:
+def read_capacity(engine: str, ctx_size: int | None = None, kv: str = "split",
+                  model: str | None = None) -> dict[str, Any]:
     base = f"http://127.0.0.1:{PORT[engine]}"
     if engine == "vllm":
         return capacity.vllm_capacity(capacity.fetch_metrics(base))
+    if engine == "sglang":
+        return capacity.sglang_capacity(capacity.fetch_metrics(base))
+    if engine == "tensorrt_llm":
+        _probe(base, model)   # the iteration statistics are empty until a request has run
+        return capacity.trtllm_capacity(capacity.fetch_json(base, "/metrics"))
     return capacity.llama_capacity(capacity.fetch_props(base), ctx_size, kv)
+
+
+def _served_capacity(cell: dict[str, Any]) -> dict[str, Any]:
+    """A batching engine's capacity; TensorRT-LLM also needs the model to probe with."""
+    if cell["engine"] == "tensorrt_llm":
+        return read_capacity("tensorrt_llm", model=MODELS[cell["quantization"]])
+    return read_capacity(cell["engine"])
+
+
+def _probe(base: str, model: str | None) -> None:
+    """One short request, so trtllm-serve has run an iteration and its /metrics
+    carries kvCacheStats. Unrelated to the cases (no tools), so it leaves
+    nothing a measured request could hit in the prefix cache."""
+    import requests
+    response = requests.post(f"{base}/v1/chat/completions", timeout=120, json={
+        "model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1})
+    response.raise_for_status()
 
 
 def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list[str]:
@@ -198,6 +266,8 @@ def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list
     paths = {"metrics": "/metrics"}
     if tag == "before":
         paths.update({"vllm": {"server_info": "/server_info?config_format=json"},
+                      "sglang": {"server_info": "/server_info"},
+                      "tensorrt_llm": {"version": "/version"},
                       "llama_cpp": {"props": "/props", "slots": "/slots"}}[engine])
     failed = []
     for name, path in paths.items():
@@ -271,7 +341,12 @@ def _wait_gpu_free(limit_mib: int = 1024, timeout_s: int = 120) -> bool:
 
 def _start_server(cell: dict[str, Any], server_cmd: list[str], server_log: pathlib.Path,
                   status: dict[str, Any]) -> tuple[subprocess.Popen, bool]:
-    env = {**os.environ, "VLLM_SERVER_DEV_MODE": "1"} if cell["engine"] == "vllm" else None
+    env = None
+    if cell["engine"] in ENGINE_BIN:
+        # The engine's own environment first on PATH (FlashInfer's JIT runs its ninja).
+        env = {**os.environ, "PATH": f"{ENGINE_BIN[cell['engine']]}{os.pathsep}{os.environ.get('PATH', '')}"}
+    if cell["engine"] == "vllm":
+        env["VLLM_SERVER_DEV_MODE"] = "1"
     with server_log.open("w") as log:
         server = _spawn(server_cmd, log, env)
     started = time.monotonic()
@@ -318,15 +393,15 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                 if not ready:
                     status.update(outcome="server_not_ready", returncode=server.poll())
                     return status
-                if cell["engine"] == "vllm":
-                    # Every vLLM startup's capacity, to see whether the short ones recur (ADR-0005).
-                    status.setdefault("kv_capacity_tokens", []).append(read_capacity("vllm")["tokens"])
+                if cell["engine"] in ENGINE_BIN:
+                    # Every startup's capacity, to see whether short ones recur (ADR-0005).
+                    status.setdefault("kv_capacity_tokens", []).append(_served_capacity(cell)["tokens"])
                 if not needs_capacity_check(cell):
                     break
                 if kv is not None:
                     held = read_capacity("llama_cpp", llama_server_settings(cell, max_prompt, kv)["ctx_size"], kv)
                 else:
-                    held = read_capacity(cell["engine"])
+                    held = _served_capacity(cell)
                 pre = capacity.pre_check(cell["engine"], held, max_prompt, MAX_TOKENS, cell["concurrency"])
                 if pre["fits"] or cell["engine"] != "vllm" or restarts == 1:
                     break
