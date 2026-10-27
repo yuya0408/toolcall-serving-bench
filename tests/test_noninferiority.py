@@ -79,3 +79,72 @@ def test_rho_is_low_when_discordance_is_spread_and_one_when_packed():
 ])
 def test_t_quantile_matches_the_t_distribution(q, df, want):
     assert ni.t_quantile(q, df) == pytest.approx(want, abs=1e-3)
+
+
+# docs/adr/0009 5 (option F), on scored arms: {(case, trial): 1 right / 0 wrong}
+
+def _scored(n, wrong):
+    return {(f"c{i}", t): int((i, t) not in wrong) for i in range(n) for t in range(_TRIALS)}
+
+
+def test_pooled_identical_arms_are_non_inferior_without_a_range_rule():
+    # ADR-0008 says 'not shown' here (p_d 0); option F has no range rule
+    r = ni.pooled_noninferiority([_scored(200, set()), _scored(200, set())], _scored(200, set()))
+    assert r["selection_diff"] == 0 and r["lower_bound"] == 0 and r["verdict"] == "non-inferior"
+    assert r["p_d_vs_each_reference"] == [0, 0]
+
+
+def test_pooled_uses_the_mean_of_the_references():
+    # the references split on 40 pairs: their mean is 0.5 there; the test arm is right on all
+    a = _scored(200, {(i, 0) for i in range(40)})
+    b = _scored(200, set())
+    r = ni.pooled_noninferiority([a, b], _scored(200, set()))
+    assert r["selection_diff"] == pytest.approx(20 / 1000)
+    assert r["p_d_vs_each_reference"] == [pytest.approx(0.04), 0]
+
+
+def test_pooled_losses_beyond_the_margin_are_not_shown():
+    lost = {(i, 0) for i in range(50)}   # -5pt
+    r = ni.pooled_noninferiority([_scored(200, set())], _scored(200, lost))
+    assert r["verdict"] == "not shown" and r["confidence"] == 0.999
+
+
+def _arms(bad=()):
+    """All nine configs right everywhere, except the names in `bad` lose 60 pairs (-6pt)."""
+    lost = {(i, 0) for i in range(60)}
+    return {f"{e}-{q}": _scored(200, lost if f"{e}-{q}" in bad else set())
+            for e in ni.BATCHING_ENGINES for q in ("bf16",) + ni.BATCHING_QUANT}
+
+
+def test_gate_bf16_references_are_the_other_bf16s_and_fixed():
+    g = ni.batching_gate(_arms(bad={"trt-bf16"}))
+    assert g["bf16"]["vllm-bf16"]["references"] == ["sglang-bf16", "trt-bf16"]   # trt kept though it fails
+    assert g["bf16"]["trt-bf16"]["verdict"] == "not shown"
+    assert g["passed_bf16"] == ["vllm-bf16", "sglang-bf16"]
+
+
+def test_gate_quantized_is_judged_against_passed_bf16s_even_if_its_own_failed():
+    g = ni.batching_gate(_arms(bad={"trt-bf16"}))
+    r = g["quantized"]["trt-fp8"]
+    assert r["references"] == ["vllm-bf16", "sglang-bf16"] and r["verdict"] == "non-inferior"
+    assert r["diff_vs_own_bf16"] == pytest.approx(60 / 1000)   # descriptive only
+    assert "trt-fp8" in g["passing"] and "trt-bf16" not in g["passing"]
+
+
+def test_gate_lone_bf16_is_the_reference():
+    arms = {k: v for k, v in _arms().items() if k.startswith("vllm-")}
+    g = ni.batching_gate(arms)
+    assert g["bf16"]["vllm-bf16"]["verdict"] == "reference"
+    assert g["quantized"]["vllm-awq"]["references"] == ["vllm-bf16"]
+
+
+def test_gate_nothing_passes_when_no_bf16_does():
+    # two engines whose bf16s disagree on half the cases, in opposite directions:
+    # each is 50pt below the other there, so neither is non-inferior to the other
+    half = {(i, t) for i in range(100) for t in range(_TRIALS)}
+    other = {(i, t) for i in range(100, 200) for t in range(_TRIALS)}
+    arms = {"vllm-bf16": _scored(200, half), "sglang-bf16": _scored(200, other),
+            "vllm-awq": _scored(200, set())}
+    g = ni.batching_gate(arms)
+    assert g["passed_bf16"] == [] and g["passing"] == []
+    assert g["quantized"]["vllm-awq"]["verdict"] == "not shown (no bf16 passed)"

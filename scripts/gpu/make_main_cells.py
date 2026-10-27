@@ -111,14 +111,14 @@ _ENGINES = ("vllm", "sglang", "trt")
 BATCHING_LATENCY = [("lat", f"{e}-{q}", c, m) for e in _ENGINES for q, levels in _LEVEL_MIN.items()
                     for c, m in levels.items()]
 # Plain accuracy for the new engines' bf16 (vLLM's is main-accuracy's); greedy
-# concurrency 1 for the bf16 gate and the non-inferiority of every quantized
-# config not yet measured (vLLM bf16 and AWQ are main-quant's). Minutes from
-# main-accuracy / main-quant (acc-vllm-bf16 74, ni-vllm-awq 32); FP8 between.
+# concurrency 1 for all nine configs, vLLM's included: the gate pools the bf16s
+# of this instance (docs/adr/0009 5). Minutes from main-accuracy / main-quant
+# (acc-vllm-bf16 74, ni-vllm-bf16 74, ni-vllm-awq 32); FP8 between.
 BATCHING_ACCURACY = [
     ("acc", "sglang-bf16", 1, 74), ("acc", "trt-bf16", 1, 74),
+    ("ni", "vllm-bf16", 1, 75), ("ni", "vllm-awq", 1, 35), ("ni", "vllm-fp8", 1, 55),
     ("ni", "sglang-bf16", 1, 75), ("ni", "sglang-awq", 1, 35), ("ni", "sglang-fp8", 1, 55),
     ("ni", "trt-bf16", 1, 75), ("ni", "trt-awq", 1, 35), ("ni", "trt-fp8", 1, 55),
-    ("ni", "vllm-fp8", 1, 55),
 ]
 # Smoke (docs/adr/0009 2): per configuration, a short accuracy cell (the
 # non-streamed tool-call shape, sampling knobs) and a short concurrency 16

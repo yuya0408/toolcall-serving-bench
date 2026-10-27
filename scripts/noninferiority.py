@@ -4,6 +4,9 @@ two raw-output logs of its greedy concurrency-1 cells.
     python scripts/noninferiority.py runs/<dir>/ni-vllm-bf16-c1/<run_id>.raw.jsonl \
         runs/<dir>/ni-vllm-awq-c1/<run_id>.raw.jsonl
 
+With --batching runs/<dir>, the phase-2 accuracy gate instead (docs/adr/0009 5,
+option F; see batching_gate). Phase 1 stays under the ADR-0008 verdict below.
+
 Both arms share seed_base, so trial t presented the same tool order in both
 and each (case, trial) is a matched pair. Per case, d = the 4bit arm's
 selection rate minus the bf16 arm's (the mean over its trials); the estimate
@@ -41,6 +44,9 @@ MARGIN = 0.026         # docs/adr/0002, reused by docs/adr/0008
 CONFIDENCE = 0.995     # one-sided; calibrated so the actual error rate is <= 2.5% (ADR-0008)
 MIN_P_D = 0.045        # the range the calibration covered
 MAX_RHO = 0.3
+POOLED_CONFIDENCE = 0.999   # docs/adr/0009 5; worst simulated error 2.3% (scripts/gate_simulation.py)
+BATCHING_ENGINES = ("vllm", "sglang", "trt")
+BATCHING_QUANT = ("awq", "fp8")
 
 
 def t_quantile(q: float, df: int) -> float:
@@ -63,6 +69,97 @@ def intra_case_rho(discordant_per_case: list[int], trials: int) -> float:
     msw = sum(x * (1 - x / trials) for x in discordant_per_case) / (k * (trials - 1))
     denom = msb + (trials - 1) * msw
     return (msb - msw) / denom if denom > 0 else float("nan")
+
+
+def _selection(arm: dict[tuple[str, int], dict[str, Any]],
+               cases: dict[str, dict[str, Any]]) -> dict[tuple[str, int], int]:
+    return {key: int(score_case(cases[key[0]], Prediction(row["decoded"]["tool"], row["decoded"]["args"]),
+                                _no_semantic_judge).selection) for key, row in arm.items()}
+
+
+def pooled_noninferiority(refs: list[dict[tuple[str, int], int]],
+                          test: dict[tuple[str, int], int]) -> dict[str, Any]:
+    """docs/adr/0009 5 (option F): the test arm against the per-(case, trial) mean
+    of one or more reference arms, all scored (1 = right tool). Per case, d = the
+    mean over trials of (test - mean of the references); claimed when the one-sided
+    99.9% t lower bound on mean(d) > -2.6pt. No range rule: the level was set so the
+    simulated error stays <= 2.5% for p_d 0-12% and rho <= 0.3 (rho is a limit, not
+    checked). p_d (vs each reference) and rho are reported, not used."""
+    if not refs or any(r.keys() != test.keys() for r in refs):
+        raise ValueError("every arm must cover the same (case, trial) pairs")
+    d: dict[str, list[float]] = {}
+    for key in sorted(test):
+        d.setdefault(key[0], []).append(test[key] - statistics.mean(r[key] for r in refs))
+    if len({len(v) for v in d.values()}) != 1:
+        raise ValueError("every case needs the same number of trials")
+    trials = len(next(iter(d.values())))
+    per_case = [statistics.mean(v) for v in d.values()]
+    n = len(per_case)
+    mean = statistics.mean(per_case)
+    sd = statistics.stdev(per_case)
+    lower = mean - t_quantile(POOLED_CONFIDENCE, n - 1) * sd / math.sqrt(n) if sd else mean
+    p_d, rho = [], []
+    for r in refs:
+        flips: dict[str, int] = {}
+        for key in test:
+            flips[key[0]] = flips.get(key[0], 0) + (test[key] != r[key])
+        share = sum(flips.values()) / (n * trials)
+        p_d.append(share)
+        rho.append(intra_case_rho(list(flips.values()), trials) if share else float("nan"))
+    return {"n_cases": n, "trials": trials, "n_references": len(refs),
+            "selection_diff": mean, "lower_bound": lower, "confidence": POOLED_CONFIDENCE, "margin": -MARGIN,
+            "p_d_vs_each_reference": p_d, "rho_vs_each_reference": rho,
+            "verdict": "non-inferior" if lower > -MARGIN else "not shown"}
+
+
+def batching_gate(arms: dict[str, dict[tuple[str, int], int]]) -> dict[str, Any]:
+    """The phase-2 gate (docs/adr/0009 5), on scored arms named '<engine>-<quant>'
+    (missing = not measured, e.g. dropped at the smoke apply).
+
+    1. Each bf16 against the other bf16s (fixed: not re-pooled by their verdicts).
+       A lone bf16 is the reference and passes untested.
+    2. Each quantized config against the bf16s that passed, whether or not its own
+       bf16 did; its difference from its own bf16 is reported, not judged.
+    3. No bf16 passed: nothing passes (the bf16s disagree); nothing is selected."""
+    bf16 = [f"{e}-bf16" for e in BATCHING_ENGINES if f"{e}-bf16" in arms]
+    out: dict[str, Any] = {"bf16": {}, "quantized": {}}
+    for name in bf16:
+        others = [o for o in bf16 if o != name]
+        if not others:
+            out["bf16"][name] = {"references": [], "verdict": "reference"}
+            continue
+        out["bf16"][name] = {"references": others,
+                             **pooled_noninferiority([arms[o] for o in others], arms[name])}
+    passed = [n for n, r in out["bf16"].items() if r["verdict"] in ("non-inferior", "reference")]
+    out["passed_bf16"] = passed
+    for e in BATCHING_ENGINES:
+        for q in BATCHING_QUANT:
+            name = f"{e}-{q}"
+            if name not in arms:
+                continue
+            if not passed:
+                out["quantized"][name] = {"references": [], "verdict": "not shown (no bf16 passed)"}
+                continue
+            r = {"references": passed, **pooled_noninferiority([arms[p] for p in passed], arms[name])}
+            own = f"{e}-bf16"
+            if own in arms:   # descriptive only
+                r["diff_vs_own_bf16"] = statistics.mean(arms[name][k] - arms[own][k] for k in arms[name])
+            out["quantized"][name] = r
+    out["passing"] = passed + [n for n, r in out["quantized"].items() if r["verdict"] == "non-inferior"]
+    return out
+
+
+def load_batching_arms(run_dir: pathlib.Path, cases: dict[str, dict[str, Any]]) -> dict[str, dict[tuple[str, int], int]]:
+    """The scored greedy arms ni-<engine>-<quant>-c1 under run_dir, one raw log each."""
+    arms = {}
+    for e in BATCHING_ENGINES:
+        for q in ("bf16",) + BATCHING_QUANT:
+            logs = sorted((run_dir / f"ni-{e}-{q}-c1").glob("*.raw.jsonl"))
+            if len(logs) > 1:
+                raise ValueError(f"{run_dir / f'ni-{e}-{q}-c1'}: more than one raw log")
+            if logs:
+                arms[f"{e}-{q}"] = _selection(load_arm(logs[0]), cases)
+    return arms
 
 
 def noninferiority(base: dict[tuple[str, int], dict[str, Any]],
@@ -113,13 +210,20 @@ def noninferiority(base: dict[tuple[str, int], dict[str, Any]],
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("base", type=pathlib.Path, help="raw log of the bf16 arm")
-    p.add_argument("quant", type=pathlib.Path, help="raw log of the 4bit arm")
+    p.add_argument("base", type=pathlib.Path, nargs="?", help="raw log of the bf16 arm")
+    p.add_argument("quant", type=pathlib.Path, nargs="?", help="raw log of the 4bit arm")
+    p.add_argument("--batching", type=pathlib.Path, metavar="RUN_DIR",
+                   help="the phase-2 gate over RUN_DIR/ni-<engine>-<quant>-c1 (docs/adr/0009)")
     p.add_argument("--data-dir", type=pathlib.Path, default=_ROOT / "data")
     args = p.parse_args(argv)
+    if (args.batching is None) == (args.base is None or args.quant is None):
+        p.error("give either base and quant, or --batching")
 
     cases = {c["id"]: c for c in load_cases(args.data_dir)}
-    result = noninferiority(load_arm(args.base), load_arm(args.quant), cases)
+    if args.batching is not None:
+        result = batching_gate(load_batching_arms(args.batching, cases))
+    else:
+        result = noninferiority(load_arm(args.base), load_arm(args.quant), cases)
     print(json.dumps(result, ensure_ascii=False, indent=1))
     return 0
 
