@@ -49,7 +49,7 @@ case "$cmd" in
     # collect does not watch SETUP_DONE, so a finished setup had no signal of its own.
     misses=0
     while true; do
-      if state=$(ssh_ -o ConnectTimeout=20 'cd ~/out && for f in SETUP_DONE SETUP_FAILED; do test -f $f && echo $f; done; true'); then
+      if state=$(ssh_ -n -o ConnectTimeout=20 'cd ~/out && for f in SETUP_DONE SETUP_FAILED; do test -f $f && echo $f; done; true'); then
         misses=0
         case "$state" in
           *SETUP_FAILED*)
@@ -92,13 +92,19 @@ case "$cmd" in
     fi
     mkdir -p "$dest"
     echo "$instance" > "$dest/.collect-instance"
+    # The last status line and outputs can land between the rsync and the marker
+    # read, so copy once more after DONE / FAILED before reporting or stopping.
+    final_rsync_() {
+      rsync -a -e "ssh -i $KEY -o ConnectTimeout=20" "$remote:out/" "$dest/" ||
+        { echo "the last copy failed; run collect again before destroy" >&2; exit 1; }
+    }
     misses=0
     while true; do
       # The markers are read on the instance: rsync -a never deletes, so a local
       # copy of RUNNING would outlive the run (and --delete could wipe an earlier
       # apply's results collected into the same directory).
       if rsync -a -e "ssh -i $KEY -o ConnectTimeout=20" "$remote:out/" "$dest/" &&
-         state=$(ssh_ -o ConnectTimeout=20 'cd ~/out && for f in RUNNING DONE FAILED SETUP_FAILED; do test -f $f && echo $f; done; true'); then
+         state=$(ssh_ -n -o ConnectTimeout=20 'cd ~/out && for f in RUNNING DONE FAILED SETUP_FAILED; do test -f $f && echo $f; done; true'); then
         misses=0
       else
         misses=$((misses + 1))
@@ -115,13 +121,16 @@ case "$cmd" in
       case "$state" in
         *RUNNING*) ;;
         *SETUP_FAILED*)
+          final_rsync_
           echo "setup.sh failed -- see $dest/SETUP_FAILED and $dest/setup.log" >&2
           exit 1 ;;
         *FAILED*)
+          final_rsync_
           echo "the cell list stopped early -- see $dest/FAILED:" >&2
           cat "$dest/FAILED" >&2
           exit 1 ;;
         *DONE*)
+          final_rsync_
           echo "collected into $dest ($(head -n 1 "$dest/DONE"))"
           break ;;
       esac

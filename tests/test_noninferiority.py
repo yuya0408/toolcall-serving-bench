@@ -154,12 +154,26 @@ def _status(tmp_path, rows):
     (tmp_path / "status.jsonl").write_text("".join(f'{{"name": "{n}", "outcome": "{o}"}}\n' for n, o in rows))
 
 
+_ARMS = tuple(f"{e}-{q}" for e in ni.BATCHING_ENGINES for q in ("bf16",) + ni.BATCHING_QUANT)
+
+
+def _others(*arms):
+    return tuple(a for a in _ARMS if a not in arms)
+
+
 def test_batching_loader_refuses_a_failed_arm_unless_excluded(tmp_path):
     # docs/adr/0009 5: a failed ni cell is rerun before the gate; only a repeat failure is left out, by name.
     _status(tmp_path, [("ni-vllm-bf16-c1", "error")])
     with pytest.raises(ValueError, match="rerun it"):
-        ni.load_batching_arms([tmp_path], {})
-    assert ni.load_batching_arms([tmp_path], {}, exclude=("vllm-bf16",)) == {}
+        ni.load_batching_arms([tmp_path], {}, exclude=_others("vllm-bf16"))
+    assert ni.load_batching_arms([tmp_path], {}, exclude=_ARMS) == {}
+
+
+def test_batching_loader_refuses_an_arm_with_no_status_line(tmp_path):
+    # a cell that never ran, or whose line was not collected, is not silently left out of the gate
+    _status(tmp_path, [("ni-vllm-bf16-c1", "error")])
+    with pytest.raises(ValueError, match="ni-vllm-awq-c1 is in no status.jsonl"):
+        ni.load_batching_arms([tmp_path], {}, exclude=("vllm-bf16",))
 
 
 def test_batching_loader_uses_the_last_run_and_needs_its_raw_log(tmp_path):
@@ -167,7 +181,7 @@ def test_batching_loader_uses_the_last_run_and_needs_its_raw_log(tmp_path):
     (tmp_path / "ni-trt-awq-c1").mkdir()
     (tmp_path / "ni-trt-awq-c1" / "x.raw.partial.jsonl").write_text("")   # a failed run's partial log is not read
     with pytest.raises(ValueError, match="0 raw logs"):
-        ni.load_batching_arms([tmp_path], {})
+        ni.load_batching_arms([tmp_path], {}, exclude=_others("trt-awq"))
 
 
 def test_batching_loader_needs_the_status(tmp_path):
@@ -181,4 +195,4 @@ def test_batching_loader_takes_a_rerun_from_a_later_folder(tmp_path):
     _status(main, [("ni-vllm-bf16-c1", "error")])
     _status(rerun, [("ni-vllm-bf16-c1", "ok")])
     with pytest.raises(ValueError, match=r"rerun.ni-vllm-bf16-c1: 0 raw logs"):
-        ni.load_batching_arms([main, rerun], {})
+        ni.load_batching_arms([main, rerun], {}, exclude=_others("vllm-bf16"))
