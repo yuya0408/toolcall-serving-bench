@@ -293,19 +293,34 @@ def snapshot_engine_state(engine: str, cell_dir: pathlib.Path, tag: str) -> list
     return failed
 
 
-def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
+# A worker that died while its parent lives on: trtllm-serve's MPI worker
+# segfaulted at startup and the parent waited out READY_TIMEOUT_S (smoke apply
+# 2026-10-28, lat-trt-fp8-c16). The lines are the ones that run's server.log had.
+FATAL_LOG_LINES = {"tensorrt_llm": ("Segfault encountered", "the job has been aborted")}
+
+
+def _wait_server(engine: str, proc: subprocess.Popen, log: pathlib.Path | None = None) -> str:
+    """'ready', 'died' (the process exited, or its log shows a fatal error), or 'timeout'."""
     import requests
     deadline = time.monotonic() + READY_TIMEOUT_S[engine]
     while time.monotonic() < deadline:
         if proc.poll() is not None:
-            return False
+            return "died"
+        if log is not None and engine in FATAL_LOG_LINES and log.exists():
+            text = log.read_text(errors="replace")
+            if any(line in text for line in FATAL_LOG_LINES[engine]):
+                return "died"
         try:
             if requests.get(f"http://127.0.0.1:{PORT[engine]}/health", timeout=5).status_code == 200:
-                return True
+                return "ready"
         except requests.RequestException:
             pass
         time.sleep(5)
-    return False
+    return "timeout"
+
+
+def _wait_ready(engine: str, proc: subprocess.Popen) -> bool:
+    return _wait_server(engine, proc) == "ready"
 
 
 def _spawn(cmd: list[str], log, env: dict[str, str] | None = None) -> subprocess.Popen:
@@ -363,10 +378,12 @@ def _start_server(cell: dict[str, Any], server_cmd: list[str], server_log: pathl
         server = _spawn(server_cmd, log, env)
     started = time.monotonic()
     status["server_started_at"] = _now()
-    ready = _wait_ready(cell["engine"], server)
+    state = _wait_server(cell["engine"], server, server_log)
     # What restarting the server for every cell costs (docs/gpu-runbook.md).
     status["server_ready_s"] = round(time.monotonic() - started, 1)
-    return server, ready
+    if state != "ready":
+        status["server_exit"] = state
+    return server, state == "ready"
 
 
 def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
@@ -385,8 +402,22 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
         if server_cmd:
             (cell_dir / "server_command.txt").write_text(" ".join(server_cmd) + "\n")
             restarts = 0
+            crashed = 0
             while True:
                 server, ready = _start_server(cell, server_cmd, server_log, status)
+                if not ready and status.get("server_exit") == "died" and crashed == 0:
+                    # A server that died while starting gets one more start, for every
+                    # engine alike (nothing has been measured yet). Keep the failed log.
+                    crashed = 1
+                    status["startup_crashes"] = 1
+                    _stop(server)
+                    server = None
+                    server_log.replace(cell_dir / "server-crashed-startup.log")
+                    if not _wait_gpu_free():
+                        status.update(outcome="error", reason="GPU not freed for the restart after a crash")
+                        return status
+                    del status["server_exit"]
+                    continue
                 if not ready and kv == "split" and needs_capacity_check(cell):
                     # The split cache pads every slot; if it does not start, try the
                     # unified one once (ADR-0005, 2026-10-23). Keep the failed log.
@@ -405,12 +436,18 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
                 if not ready:
                     status.update(outcome="server_not_ready", returncode=server.poll())
                     return status
+                if not needs_capacity_check(cell):
+                    # Recorded only: a failed read must not cost a cell that has no pre-check.
+                    if cell["engine"] in ENGINE_BIN:
+                        try:
+                            status.setdefault("kv_capacity_tokens", []).append(_served_capacity(cell)["tokens"])
+                        except Exception as exc:
+                            status["kv_capacity_read_failed"] = f"{type(exc).__name__}: {exc}"
+                    break
                 try:
                     if cell["engine"] in ENGINE_BIN:
                         # Every startup's capacity, to see whether short ones recur (ADR-0005).
                         status.setdefault("kv_capacity_tokens", []).append(_served_capacity(cell)["tokens"])
-                    if not needs_capacity_check(cell):
-                        break
                     if kv is not None:
                         held = read_capacity("llama_cpp", llama_server_settings(cell, max_prompt, kv)["ctx_size"], kv)
                     else:
@@ -505,6 +542,31 @@ def _mark(out: pathlib.Path, name: str, text: str | None) -> None:
         path.write_text(text)
 
 
+SHUTDOWN_SCHEDULE = pathlib.Path("/run/systemd/shutdown/scheduled")   # written by `shutdown -h +N`
+
+
+def shutdown_shortfall(list_name: str, now_s: float | None = None,
+                       schedule: pathlib.Path = SHUTDOWN_SCHEDULE) -> str | None:
+    """Why the list would not finish before the instance's auto-shutdown, or
+    None. Compares the minutes left with make_main_cells' estimate for the list
+    (lists it does not estimate, and an instance with no shutdown, pass)."""
+    if not schedule.exists():
+        return None
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("make_main_cells", pathlib.Path(__file__).with_name("make_main_cells.py"))
+    make = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(make)
+    estimate = make.estimated_minutes().get(list_name)
+    usec = dict(l.split("=", 1) for l in schedule.read_text().split() if "=" in l).get("USEC")
+    if estimate is None or usec is None:
+        return None
+    left = (int(usec) / 1e6 - (time.time() if now_s is None else now_s)) / 60
+    if left < estimate:
+        return (f"the auto-shutdown is {left:.0f} min away but {list_name} is estimated at {estimate} min; "
+                "apply again with a larger auto_shutdown_minutes (docs/gpu-runbook.md)")
+    return None
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("cells", type=pathlib.Path)
@@ -528,7 +590,12 @@ def main(argv: list[str] | None = None) -> int:
         versions = json.loads((args.out / "versions.json").read_text())   # written by setup.sh
         budget = load_budget(cells)
         swaps = swap_devices()
-        if swaps:
+        # A rerun of a few cells (--only) is not the whole list's estimate.
+        short = None if args.only else shutdown_shortfall(args.cells.name)
+        if short:
+            failure = short
+            cells = []
+        elif swaps:
             failure = (f"swap is active ({', '.join(swaps)}); paging would distort the measurements. "
                        "Turn it off (sudo swapoff -a) and start the list again")
             cells = []

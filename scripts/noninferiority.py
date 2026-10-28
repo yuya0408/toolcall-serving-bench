@@ -4,7 +4,7 @@ two raw-output logs of its greedy concurrency-1 cells.
     python scripts/noninferiority.py runs/<dir>/ni-vllm-bf16-c1/<run_id>.raw.jsonl \
         runs/<dir>/ni-vllm-awq-c1/<run_id>.raw.jsonl
 
-With --batching runs/<dir>, the phase-2 accuracy gate instead (docs/adr/0009 5,
+With --batching runs/<dir> [runs/<rerun dir> ...], the phase-2 accuracy gate instead (docs/adr/0009 5,
 option F; see batching_gate). Phase 1 stays under the ADR-0008 verdict below.
 
 Both arms share seed_base, so trial t presented the same tool order in both
@@ -149,16 +149,39 @@ def batching_gate(arms: dict[str, dict[tuple[str, int], int]]) -> dict[str, Any]
     return out
 
 
-def load_batching_arms(run_dir: pathlib.Path, cases: dict[str, dict[str, Any]]) -> dict[str, dict[tuple[str, int], int]]:
-    """The scored greedy arms ni-<engine>-<quant>-c1 under run_dir, one raw log each."""
+def load_batching_arms(run_dirs: list[pathlib.Path], cases: dict[str, dict[str, Any]],
+                       exclude: tuple[str, ...] = ()) -> dict[str, dict[tuple[str, int], int]]:
+    """The scored greedy arms ni-<engine>-<quant>-c1, one raw log each, from the
+    main run's folder and then any rerun's (a later folder's run of a cell wins).
+
+    An arm the run's status.jsonl does not list was not in the cell list (an
+    engine dropped at the smoke apply) and is left out. An arm it lists must have
+    finished ok: a failed one is rerun on a new apply before the gate is read
+    (docs/adr/0009 5), and only a config that fails again is left out, by name
+    (exclude), so no arm goes missing without saying so."""
+    outcome, where = {}, {}
+    for run_dir in run_dirs:
+        status_path = run_dir / "status.jsonl"
+        if not status_path.exists():
+            raise ValueError(f"{status_path} not found: the gate reads which cells finished from it")
+        for line in status_path.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                row = json.loads(line)
+                outcome[row["name"]] = row["outcome"]   # the last run of a cell counts
+                where[row["name"]] = run_dir
     arms = {}
     for e in BATCHING_ENGINES:
         for q in ("bf16",) + BATCHING_QUANT:
-            logs = sorted((run_dir / f"ni-{e}-{q}-c1").glob("*.raw.jsonl"))
-            if len(logs) > 1:
-                raise ValueError(f"{run_dir / f'ni-{e}-{q}-c1'}: more than one raw log")
-            if logs:
-                arms[f"{e}-{q}"] = _selection(load_arm(logs[0]), cases)
+            name = f"ni-{e}-{q}-c1"
+            if f"{e}-{q}" in exclude or name not in outcome:
+                continue
+            if outcome[name] != "ok":
+                raise ValueError(f"{name} finished as {outcome[name]}: rerun it on a new apply (docs/adr/0009 5), "
+                                 f"or pass --exclude {e}-{q} if it failed again")
+            logs = sorted((where[name] / name).glob("*.raw.jsonl"))
+            if len(logs) != 1:
+                raise ValueError(f"{where[name] / name}: {len(logs)} raw logs, expected one")
+            arms[f"{e}-{q}"] = _selection(load_arm(logs[0]), cases)
     return arms
 
 
@@ -212,8 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     p.add_argument("base", type=pathlib.Path, nargs="?", help="raw log of the bf16 arm")
     p.add_argument("quant", type=pathlib.Path, nargs="?", help="raw log of the 4bit arm")
-    p.add_argument("--batching", type=pathlib.Path, metavar="RUN_DIR",
-                   help="the phase-2 gate over RUN_DIR/ni-<engine>-<quant>-c1 (docs/adr/0009)")
+    p.add_argument("--batching", type=pathlib.Path, nargs="+", metavar="RUN_DIR",
+                   help="the phase-2 gate over RUN_DIR/ni-<engine>-<quant>-c1 (docs/adr/0009); "
+                        "the main run's folder first, then any rerun's")
+    p.add_argument("--exclude", nargs="*", default=[], metavar="ENGINE-QUANT",
+                   help="with --batching: configs whose ni cell failed again after a rerun (docs/adr/0009 5)")
     p.add_argument("--data-dir", type=pathlib.Path, default=_ROOT / "data")
     args = p.parse_args(argv)
     if (args.batching is None) == (args.base is None or args.quant is None):
@@ -221,7 +247,8 @@ def main(argv: list[str] | None = None) -> int:
 
     cases = {c["id"]: c for c in load_cases(args.data_dir)}
     if args.batching is not None:
-        result = batching_gate(load_batching_arms(args.batching, cases))
+        result = batching_gate(load_batching_arms(args.batching, cases, tuple(args.exclude)))
+        result["excluded"] = list(args.exclude)
     else:
         result = noninferiority(load_arm(args.base), load_arm(args.quant), cases)
     print(json.dumps(result, ensure_ascii=False, indent=1))

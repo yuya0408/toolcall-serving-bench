@@ -338,6 +338,32 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke-batching-rerun.json
 ssh -n -i ~/.ssh/id_ed25519 ubuntu@$IP "setsid nohup ~/venv/bin/python ~/toolcall-serving-bench/scripts/gpu/run_cells.py ~/toolcall-serving-bench/scripts/gpu/cells/pilot-1.json --only <残ったセル名> > ~/out/cells-rest.log 2>&1 < /dev/null &"
 ```
 
+### 第2段階の本番（`cells/main-batching.json`、56セル）
+
+ADR-0009の3と7。速さの45セル（約26.4時間）が先で、精度の11セル（約10.7時間）が後。準備を足して約39時間・約$46の見込み。
+
+```
+terraform -chdir=infra/gpu plan -var auto_shutdown_minutes=2700 -out=main-batching.tfplan   # 既定の360分では約6時間で止まる
+terraform -chdir=infra/gpu apply main-batching.tfplan
+SETUP_LLAMA=0 scripts/gpu/local.sh setup $IP
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-batching.json
+scripts/gpu/local.sh collect $IP     # cellsが始まってから
+```
+
+- `run_cells.py`は、自動シャットダウンまでの残りが一覧の見込み（`make_main_cells.py`の`estimated_minutes`）より短いと、セルを1つも回さずに`FAILED`を書いて止まる。
+  `-var`を付け忘れたら、ここで分かる（`--only`で一部だけ流すときは確かめない）。
+- 回した後に確かめること：`status.jsonl`の`outcome`（`startup_crashes`があれば、そのセルは起動し直している）、並行数2以上の`post_check`、
+  精度の足切り（`python scripts/noninferiority.py --batching runs/<本番のフォルダ>`）。
+- **足切りのセル（`ni-*-c1`）が失敗したとき**（ADR-0009の5）：判定のスクリプトは止まる。そのセルだけを新しいapplyで流し直し、両方のフォルダを渡して判定する：
+
+  ```
+  ssh -n ubuntu@$IP "setsid nohup ~/venv/bin/python ~/toolcall-serving-bench/scripts/gpu/run_cells.py ~/toolcall-serving-bench/scripts/gpu/cells/main-batching.json --only <失敗したセル名> > ~/out/cells-rerun.log 2>&1 < /dev/null &"
+  python scripts/noninferiority.py --batching runs/<本番のフォルダ> runs/<流し直しのフォルダ>
+  ```
+
+  流し直しても失敗したら、その構成を`--exclude <エンジン>-<量子化>`で外して判定し、外したことを報告する。
+- 途中で止まったときは、ADR-0009の7の通り（速さのセルが終わる前なら、速さの45セルを全部新しいインスタンスで測り直す）。
+
 ## 4. 疎通の後：パイロットに進むか、止めるか
 
 疎通（`smoke.json`）が終わったら、次をすべて満たすときだけ2回目のapplyでパイロットに進む。1つでも外れたら、パイロットには進まず、
