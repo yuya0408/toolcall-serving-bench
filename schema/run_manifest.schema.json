@@ -323,7 +323,18 @@
               }
             },
             "length_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: responses that stopped at the length limit." },
-            "output_limit_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: of length_finished, those that had generated max_tokens (the output limit the pre-check reserved, not a problem)." }
+            "output_limit_finished": { "type": "integer", "minimum": 0, "description": "llama.cpp: of length_finished, those that had generated max_tokens (the output limit the pre-check reserved, not a problem)." },
+            "active_requests": {
+              "type": "object",
+              "description": "TensorRT-LLM: from /metrics iteration stats polled every 2 s (docs/adr/0009). Fails the cell if no iteration was seen or max_active < the concurrency.",
+              "required": ["iterations", "max_active", "max_queued"],
+              "additionalProperties": false,
+              "properties": {
+                "iterations": { "type": "integer", "minimum": 0 },
+                "max_active": { "type": "integer", "minimum": 0 },
+                "max_queued": { "type": "integer", "minimum": 0 }
+              }
+            }
           }
         }
       }

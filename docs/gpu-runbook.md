@@ -319,6 +319,15 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke-batching.json
 | ストリームの使用量 | `lat-*`の生出力の`prompt_tokens_details` |
 | 準備の時間 | `setup.log`の各段階の時刻（本番の見積もりに使う） |
 
+1回目（2026-10-28）で落ちたセルと、設定を変えたSGLangのセルは、直した後に同じインスタンスで`cells/smoke-batching-rerun.json`（20セル、約1.3時間）を流す。
+`run_cells.py`は同じ名前のセルのフォルダをそのまま使うので、1回目のフォルダは先に`~/out/pass1/`へ移す（回収の`rsync`は消さないので、手元には両方が残る）：
+
+```
+ssh ubuntu@$IP 'mkdir -p ~/out/pass1 && cd ~/out && mv acc-* ni-* lat-* status.jsonl cells-smoke-batching.log pass1/ && cp repo_commit.txt pass1/ && rm -f DONE'
+scripts/gpu/local.sh push $IP    # 直したmainをインスタンスへ
+scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke-batching-rerun.json
+```
+
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 

@@ -194,11 +194,11 @@ class SGLangAdapter(OpenAICompatibleChatAdapter):
     name = "sglang"
 
     def cached_tokens(self, usage, timings) -> int:
+        # With --enable-cache-report (always passed, tests/test_gpu_run_cells.py),
+        # SGLang leaves prompt_tokens_details out when nothing was cached
+        # (srt/entrypoints/openai/usage_processor.py, _details_if_cached, 0.5.21).
         details = usage.get("prompt_tokens_details") or {}
-        if details.get("cached_tokens") is None:
-            raise RuntimeError("SGLang reported no prompt_tokens_details.cached_tokens; "
-                               "start the server with --enable-cache-report")
-        return details["cached_tokens"]
+        return details.get("cached_tokens") or 0
 
 
 class TensorRTLLMAdapter(OpenAICompatibleChatAdapter):

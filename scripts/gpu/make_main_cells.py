@@ -128,6 +128,14 @@ BATCHING_ACCURACY = [
 SMOKE_BATCHING = ([("acc", f"{e}-bf16", 1, "") for e in _ENGINES]
                   + [(k, f"{e}-{q}", c, r) for e in _ENGINES for q in _LEVEL_MIN
                      for k, c, r in (("ni", 1, ""), ("ni", 1, "-r2"), ("lat", 1, ""), ("lat", 16, ""))])
+# The cells the first smoke pass (2026-10-28) lost or measured under a setting
+# since changed: every SGLang cell (its memory fraction is new, docs/engines.md),
+# TensorRT-LLM's latency cells (the probe shared a token with the cases), and
+# SGLang bf16 at concurrency 8, the load the fraction was sized for, which the
+# first pass did not have.
+SMOKE_BATCHING_RERUN = ([e for e in SMOKE_BATCHING if e[1].startswith("sglang-")
+                         or (e[1].startswith("trt-") and e[0] == "lat")]
+                        + [("lat", "sglang-bf16", 8, "")])
 
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
@@ -177,7 +185,8 @@ def lists() -> dict[str, list[dict]]:
     return {"main-latency.json": ordered(LATENCY, rng), "main-accuracy.json": ordered(ACCURACY, rng),
             "main-quant.json": ordered(QUANT, random.Random(QUANT_SEED)),
             "main-batching.json": ordered(BATCHING_LATENCY, batching) + ordered(BATCHING_ACCURACY, batching),
-            "smoke-batching.json": [smoke(*e) for e in SMOKE_BATCHING]}
+            "smoke-batching.json": [smoke(*e) for e in SMOKE_BATCHING],
+            "smoke-batching-rerun.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN]}
 
 
 def estimated_minutes() -> dict[str, int]:
@@ -185,7 +194,8 @@ def estimated_minutes() -> dict[str, int]:
             "main-accuracy.json": sum(e[3] for e in ACCURACY),
             "main-quant.json": sum(e[3] for e in QUANT),
             "main-batching.json": sum(e[3] for e in BATCHING_LATENCY + BATCHING_ACCURACY),
-            "smoke-batching.json": 4 * len(SMOKE_BATCHING)}   # ~4 min each, mostly the server start
+            "smoke-batching.json": 4 * len(SMOKE_BATCHING),
+            "smoke-batching-rerun.json": 4 * len(SMOKE_BATCHING_RERUN)}   # ~4 min each, mostly the server start
 
 
 if __name__ == "__main__":

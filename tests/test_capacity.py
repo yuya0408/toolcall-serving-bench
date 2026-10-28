@@ -72,6 +72,15 @@ def test_sglang_retractions_are_its_preemptions_in_the_post_check():
     assert not post["ok"] and post["problems"] == ["3 preemptions"]
 
 
+def test_sglang_retraction_counter_is_absent_until_the_first_retraction():
+    # 0.5.21: the labelled counter has no sample before its first increment; the gauge is always there.
+    no_counter = "".join(l for l in _SGLANG_METRICS.splitlines(keepends=True) if "retracted" not in l)
+    gauge = 'sglang:num_retracted_reqs{model_name="Qwen/Qwen3-8B",engine_type="unified"} 0.0\n'
+    assert capacity.sglang_counters(no_counter + gauge)["preemptions"] == 0
+    with pytest.raises(ValueError, match="num_retracted"):
+        capacity.sglang_counters(no_counter)
+
+
 def test_tensorrt_llm_capacity_is_read_from_the_latest_iteration_with_kv_stats():
     stats = [{"iter": 1, "kvCacheStats": {"maxNumBlocks": 1900, "tokensPerBlock": 32, "freeNumBlocks": 1899}},
              {"iter": 2}]

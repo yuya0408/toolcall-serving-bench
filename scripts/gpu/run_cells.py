@@ -14,7 +14,9 @@ cell its own startup log. run_cell.py still resets vLLM's prefix cache before
 a latency cell.
 
 Memory is sized to the requirement, never searched (docs/adr/0005 1): vLLM
-keeps its default --gpu-memory-utilization; llama.cpp gets
+keeps its default --gpu-memory-utilization; SGLang gets the lowest
+--mem-fraction-static holding bf16 at concurrency 8 (its automatic value left
+bf16 no KV cache); llama.cpp gets
 --ctx-size = concurrency x the longest request (schema/prompt_budget.json +
 max_tokens), one KV cache per slot (--no-kv-unified, the default with a fixed
 --parallel) and --fit off; a concurrency>1 cell whose split cache does not
@@ -73,6 +75,7 @@ GGUFS = {   # quantization -> the GGUF llama.cpp serves (setup.sh builds both fr
     "gguf-q4_k_m": HOME / "models" / "Qwen3-8B-Q4_K_M.gguf",   # docs/adr/0008
 }
 PORT = {"vllm": 8000, "sglang": 30000, "tensorrt_llm": 8001, "llama_cpp": 8080}
+SGLANG_MEM_FRACTION = 0.86   # measured at the smoke apply, 2026-10-28 (docs/engines.md)
 READY_TIMEOUT_S = {"vllm": 900, "sglang": 900, "tensorrt_llm": 1200, "llama_cpp": 300}
 MODELS = {   # quantization -> the model id the manifest records and the server serves (from the HF cache)
     "bf16-none": "Qwen/Qwen3-8B",
@@ -174,7 +177,11 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
         cmd = [str(ENGINE_BIN["sglang"] / "python"), "-m", "sglang.launch_server",
                "--model-path", model, "--served-model-name", model,
                "--host", "127.0.0.1", "--port", str(PORT["sglang"]),
-               "--tool-call-parser", "qwen", "--enable-metrics", "--enable-cache-report"]
+               "--tool-call-parser", "qwen", "--enable-metrics", "--enable-cache-report",
+               # The automatic 0.684 left bf16 no KV cache on the L4; 0.86 is the
+               # lowest (0.01 steps) holding bf16 at concurrency 8, as vLLM's
+               # default does; one value for every checkpoint (docs/engines.md).
+               "--mem-fraction-static", str(SGLANG_MEM_FRACTION)]
         if "max_model_len" in server:
             cmd += ["--context-length", str(server["max_model_len"])]
         return cmd
@@ -248,11 +255,12 @@ def _served_capacity(cell: dict[str, Any]) -> dict[str, Any]:
 
 def _probe(base: str, model: str | None) -> None:
     """One short request, so trtllm-serve has run an iteration and its /metrics
-    carries kvCacheStats. Unrelated to the cases (no tools), so it leaves
-    nothing a measured request could hit in the prefix cache."""
+    carries kvCacheStats. A raw completion, not a chat one: the chat template's
+    first token (<|im_start|>) would be shared with every case and reported as
+    1 cached token (smoke apply 2026-10-28), so the cell would not start cold."""
     import requests
-    response = requests.post(f"{base}/v1/chat/completions", timeout=120, json={
-        "model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1})
+    response = requests.post(f"{base}/v1/completions", timeout=120, json={
+        "model": model, "prompt": "ping", "max_tokens": 1})
     response.raise_for_status()
 
 

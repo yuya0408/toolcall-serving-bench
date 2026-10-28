@@ -146,6 +146,32 @@ def test_latency_manifest_requires_concurrency_and_accepts_capacity_check():
     _validate(manifest)
 
 
+def test_capacity_check_accepts_tensorrt_llm_active_requests():
+    check = {**_capacity_check(), "engine": "tensorrt_llm",
+             "post_check": {"ok": True, "problems": [], "max_prompt_tokens_observed": 2500,
+                            "active_requests": {"iterations": 307, "max_active": 16, "max_queued": 15}}}
+    manifest = {
+        "run_id": "run-trt",
+        "created_at": "2026-10-28T00:00:00Z",
+        "pass_type": "latency",
+        "cell": {
+            "engine": "tensorrt_llm",
+            "engine_version": "1.2.1",
+            "model": "Qwen/Qwen3-8B",
+            "quantization": "bf16-none",
+            "sampling_params": _SAMPLING,
+            "prompt_layout": "stable_first",
+            "tool_stage": 10,
+            "tool_catalog_version": "1.0.0",
+            "concurrency": 16,
+        },
+        "hardware": _HARDWARE,
+        "results": {**_latency_results(), "capacity_check": check,
+                    "reference_accuracy": {"n": 299, "selection_mean": 0.9, "arg_exact_mean": 0.8}},
+    }
+    _validate(manifest)
+
+
 def test_latency_manifest_without_concurrency_is_invalid():
     manifest = {
         "run_id": "run-3",

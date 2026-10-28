@@ -15,7 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from eval_bench.adapters.openai_compatible import LlamaCppAdapter, VLLMAdapter
+from eval_bench.adapters.openai_compatible import LlamaCppAdapter, SGLangAdapter, VLLMAdapter
 from eval_bench.adapters.transformers_hf import TransformersHFAdapter
 from eval_bench.latency import (
     SLO_CLASSES, CellAborted, TimedResult, clopper_pearson_one_sided, exceeds, is_stable,
@@ -274,6 +274,14 @@ def test_vllm_without_prompt_tokens_details_is_a_configuration_error():
     with _streaming_post(_sse(*_TOOL_CALL_STREAM, {"choices": [], "usage": usage})):
         with pytest.raises(RuntimeError, match="--enable-prompt-tokens-details"):
             VLLMAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
+
+
+def test_sglang_without_prompt_tokens_details_cached_nothing():
+    # SGLang 0.5.21 omits the details when the cached count is 0 (smoke apply 2026-10-28).
+    usage = {"prompt_tokens": 2200, "completion_tokens": 30}
+    with _streaming_post(_sse(*_TOOL_CALL_STREAM, {"choices": [], "usage": usage})):
+        result = SGLangAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
+    assert result.cached_tokens == 0
 
 
 def test_llama_cpp_stream_reads_cache_n_from_timings():
