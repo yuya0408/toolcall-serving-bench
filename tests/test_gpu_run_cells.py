@@ -433,3 +433,46 @@ def test_main_lists_are_the_generators_output_in_its_seeded_order():
         committed = (_ROOT / "scripts" / "gpu" / "cells" / name).read_text(encoding="utf-8")
         assert committed == make.render(cells), name
         assert len({c["name"] for c in cells}) == len(cells)
+
+
+# ---------------------------------------------------------------- a server that dies while starting
+
+def test_a_fatal_line_in_the_log_ends_the_wait_while_the_parent_lives(tmp_path):
+    # Smoke apply 2026-10-28: trtllm-serve's MPI worker segfaulted, its parent did not exit.
+    log = tmp_path / "server.log"
+    log.write_text("Model init total -- 63.14s\n!!!!!!! Segfault encountered !!!!!!!\n")
+    assert run_cells._wait_server("tensorrt_llm", _FakeServer(), log) == "died"
+
+
+def _crashing(monkeypatch, crashes):
+    """run_one with the first `crashes` startups dying and the rest coming up."""
+    starts = []
+
+    def start(cell, cmd, log, status):
+        log.write_text("startup\n")
+        starts.append(1)
+        if len(starts) <= crashes:
+            status["server_exit"] = "died"
+            return _FakeServer(), False
+        return _FakeServer(), True
+
+    monkeypatch.setattr(run_cells, "_start_server", start)
+    monkeypatch.setattr(run_cells, "_stop", lambda proc: None)
+    monkeypatch.setattr(run_cells, "_wait_gpu_free", lambda: True)
+    monkeypatch.setattr(run_cells, "read_capacity", lambda engine, ctx_size=None, kv="split", model=None: _vllm_cap(99552))
+    monkeypatch.setattr(run_cells, "run_cell_command", lambda cell, version, cell_dir, check: [sys.executable, "-c", "pass"])
+    monkeypatch.setattr(run_cells, "snapshot_engine_state", lambda engine, cell_dir, tag: [])
+    return starts
+
+
+def test_a_server_that_dies_while_starting_gets_one_more_start(tmp_path, monkeypatch):
+    starts = _crashing(monkeypatch, 1)
+    status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "ok" and status["startup_crashes"] == 1 and len(starts) == 2
+    assert (tmp_path / "load" / "server-crashed-startup.log").exists()
+
+
+def test_a_second_crash_is_the_cells_failure(tmp_path, monkeypatch):
+    starts = _crashing(monkeypatch, 2)
+    status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
+    assert status["outcome"] == "server_not_ready" and status["server_exit"] == "died" and len(starts) == 2
