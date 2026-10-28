@@ -328,6 +328,9 @@ scripts/gpu/local.sh push $IP    # 直したmainをインスタンスへ
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/smoke-batching-rerun.json
 ```
 
+2回目でSGLangの入力が100トークン長いと分かり、メモリの割合を0.87に直したので、SGLangの14セルを`cells/smoke-batching-rerun2.json`でもう一度流す。
+手順は同じで、移す先を`~/out/pass2/`にし、`mv`はSGLangのセル（`acc-sglang-* ni-sglang-* lat-sglang-*`）と`status.jsonl`・`cells-smoke-batching-rerun.log`にする。
+
 `pilot-1.json`も大事な順（vLLM AWQの第3パス → 並行数1 → 並行数16）に並べてある。それでも6時間に収まらなかったセルは、3回目のapplyで
 `pilot-2.json`の後に、名前を指定して回す（`&`が切り離すコマンドだけにかかる形にする。上の「SSHが戻らないとき」）：
 
