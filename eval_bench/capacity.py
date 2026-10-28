@@ -200,7 +200,13 @@ def sglang_counters(metrics_text: str) -> dict[str, Any]:
     s = parse_prometheus(metrics_text)
     retracted = _sum(s, "sglang:num_retracted_requests_total")
     if retracted is None:
-        raise ValueError("sglang:num_retracted_requests_total not found in /metrics")
+        # A labelled counter has no sample until its first increment
+        # (srt/observability/metrics_collector.py, increment_retracted_reqs, 0.5.21);
+        # its sibling gauge is always there, so its presence means "none yet".
+        if _sum(s, "sglang:num_retracted_reqs") is None:
+            raise ValueError("neither sglang:num_retracted_requests_total nor "
+                             "sglang:num_retracted_reqs found in /metrics")
+        retracted = 0.0
     # Stored under vLLM's key, so one delta function serves both engines.
     return {"preemptions": retracted, **_queue_time(s, "sglang:queue_time_seconds")}
 

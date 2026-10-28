@@ -25,7 +25,7 @@ KVキャッシュは、リクエストごとに「これまでのトークン」
 | エンジン | 受け入れ方 | 足りなくなったとき | 回した後の確かめ（ADR-0005） |
 | --- | --- | --- | --- |
 | vLLM | 今の空きで受け入れる（楽観的） | 走っているリクエストを一度外し（preemption）、後で計算し直す | `vllm:num_preemptions`が0か |
-| SGLang | 今の空きで受け入れる（楽観的。`schedule_conservativeness`で調整できる） | 走っているリクエストを待ちの列に戻す（retraction） | `sglang:num_retracted_requests_total`が0か |
+| SGLang | 今の空きで受け入れる（楽観的。`schedule_conservativeness`で調整できる） | 走っているリクエストを待ちの列に戻す（retraction） | `sglang:num_retracted_requests_total`が0か（このカウンタは1回目の追い出しまで`/metrics`に出ない。出ていなくて、同じ系統のゲージ`sglang:num_retracted_reqs`が出ていれば0回とみなす。0.5.21の`metrics_collector.py`） |
 | TensorRT-LLM | 既定の`GUARANTEED_NO_EVICT`：最大の長さ（プロンプト＋最大の出力）ぶんを先に確保できたときだけ受け入れる（`llmapi/llm_args.py`の`CapacitySchedulerPolicy`） | 起きない。入れないリクエストは列で待つ | 文脈の長さで切れた答えが無いか。加えて、セルの間`/metrics`を2秒ごとに読み、同時に走ったリクエスト数（`numActiveRequests`の最大）が並行数に届いたか（読むたびに統計が消えるので、最後に1回では読めない。ADR-0009の2） |
 | llama.cpp | スロットの数（`--parallel`）まで受け入れる。KVは起動時にスロットごとに確保 | 起きない（スロットの文脈を超えると答えが切れる） | 文脈の長さで切れた答えが無いか |
 
@@ -38,18 +38,28 @@ KVキャッシュは、リクエストごとに「これまでのトークン」
 | --- | --- | --- | --- |
 | vLLM | `/metrics`の`vllm:cache_config_info`（`num_gpu_blocks`×`block_size`） | ブロック（16トークン） | `vllm/v1/metrics/loggers.py`（0.31.0） |
 | SGLang | `/metrics`の`sglang:max_total_num_tokens`と`sglang:page_size`。`--enable-metrics`が要る | ページ | `srt/observability/metrics_collector.py`（0.5.21） |
-| TensorRT-LLM | `/metrics`（反復ごとの統計のJSON）の`kvCacheStats.maxNumBlocks`×`tokensPerBlock`。`enable_iter_perf_stats`が要り、1件のリクエストを処理するまで空なので、短いリクエストを1件送ってから読む（疎通で確かめる） | ブロック | `cpp/tensorrt_llm/executor/jsonSerialization.cpp`（1.2.1） |
+| TensorRT-LLM | `/metrics`（反復ごとの統計のJSON）の`kvCacheStats.maxNumBlocks`×`tokensPerBlock`。`enable_iter_perf_stats`が要り、1件のリクエストを処理するまで空なので、短いリクエストを1件送ってから読む。チャットの書式を通すと先頭の1トークン（`<|im_start|>`）が測定の質問と共有され、空のキャッシュから始まらなくなるので、書式を通さない`/v1/completions`で送る（疎通の1回目で分かった） | ブロック | `cpp/tensorrt_llm/executor/jsonSerialization.cpp`（1.2.1） |
 | llama.cpp | 起動時の`--ctx-size`と`/props`の`n_ctx` | トークン | ADR-0005の追記 |
 
-KVに割り当てるメモリの割合は、どのエンジンも既定のまま（vLLMの`--gpu-memory-utilization`は0.92〔本番1回目の`/metrics`〕、SGLangの`--mem-fraction-static`は自動、
+KVに割り当てるメモリの割合は、SGLang以外は既定のまま（vLLMの`--gpu-memory-utilization`は0.92〔本番1回目の`/metrics`〕、
 TensorRT-LLMの`free_gpu_memory_fraction` 0.9〔読み込み後の空きに対する割合〕）。そのため、同じGPUでも容量はエンジンで違い、それも測る対象に含まれる。
+
+SGLangだけは`--mem-fraction-static`を0.86に固定する（全チェックポイント共通）。
+
+- **既定で起動しなかった**：自動の値0.684は、プリフィル用に`chunked_prefill_size`×1.5（約6GB）を残す見積もり（`arg_groups/memory_hook.py`、0.5.21）で、
+  bf16では重みを載せるとKVの置き場が無く起動しなかった（疎通の1回目、2026-10-28。最低でも0.702が要るとエラーが示した）。
+- **値の決め方**：2026-10-18の疎通で決めた「要件を満たすように1エンジンにつき1つの設定を動かしてよい」に従う。vLLMの既定でbf16が載る並行数8
+  （8×3,103＋1＝24,825トークン）が載る最小の値を、0.01刻みで実測した。0.84は22,047トークン、0.86は25,224トークン（KV以外の残りは1.40GB）で、
+  0.85は差から約23,600トークンと見込み、足りない。
+- **AWQ・FP8も同じ値**：チェックポイントごとに値を変えると、同じエンジンの中で条件がそろわないため。既定の0.684で起動していたが、0.86ではKVが増える。
+- **残り1.40GBで並行数8のプリフィルに足りるか**は、疎通の流し直しに並行数8のセルを足して確かめる。
 
 ## プレフィックスキャッシュ
 
 | エンジン | 仕組み | 既定 | セルの境目での消し方 | 当たった量の読み方 |
 | --- | --- | --- | --- | --- |
 | vLLM | ブロック単位のハッシュで共有 | 有効 | `POST /reset_prefix_cache`（開発モード）＋サーバーの再起動 | `usage.prompt_tokens_details.cached_tokens`（`--enable-prompt-tokens-details`） |
-| SGLang | RadixAttention（プレフィックスの木） | 有効 | `POST /flush_cache`＋サーバーの再起動 | 同じ項目（`--enable-cache-report`） |
+| SGLang | RadixAttention（プレフィックスの木） | 有効 | `POST /flush_cache`＋サーバーの再起動 | 同じ項目（`--enable-cache-report`）。当たった量が0のときは項目ごと出さない（0.5.21の`usage_processor.py`）ので、無ければ0とする |
 | TensorRT-LLM | ブロックの再利用（`enable_block_reuse`） | 有効（`KvCacheConfig`の既定） | サーバーの再起動 | 同じ項目。ストリームで返るかは疎通で確かめる |
 | llama.cpp | スロットごとに直前のプロンプトを再利用。ホストのRAMにも退避する | 有効 | サーバーの再起動（全部を消すAPIが無い） | `timings.cache_n` |
 
