@@ -408,8 +408,14 @@ def main(argv: list[str] | None = None) -> int:
 
     watch = _CapacityWatch(args)
     watch.start()
-    results = run_accuracy_cell(cases, tools, cell, args.pass_type, predict,
-                                _no_semantic_judge, n=args.n, seed_base=args.seed_base)
+    try:
+        results = run_accuracy_cell(cases, tools, cell, args.pass_type, predict,
+                                    _no_semantic_judge, n=args.n, seed_base=args.seed_base)
+    except BaseException:
+        # Keep what was answered, for the diagnosis; a name the offline scripts
+        # do not read (*.raw.jsonl), since the cell did not finish.
+        raw_log.write(args.out_dir / f"{run_id}.raw.partial.jsonl")
+        raise
     raw_path = args.out_dir / f"{run_id}.raw.jsonl"
     raw_log.write(raw_path)
     print(f"wrote {raw_path}")

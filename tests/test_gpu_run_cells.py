@@ -476,3 +476,13 @@ def test_a_second_crash_is_the_cells_failure(tmp_path, monkeypatch):
     starts = _crashing(monkeypatch, 2)
     status = run_cells.run_one(_loaded(concurrency=1), _VERSIONS, tmp_path, _BUDGET)
     assert status["outcome"] == "server_not_ready" and status["server_exit"] == "died" and len(starts) == 2
+
+
+def test_a_list_longer_than_the_time_to_the_auto_shutdown_does_not_start(tmp_path):
+    schedule = tmp_path / "scheduled"
+    schedule.write_text("USEC=%d\nWARN_WALL=1\nMODE=poweroff\n" % ((1000 + 360 * 60) * 1_000_000))
+    # 360 min left (the default auto_shutdown) against main-batching's ~37 h.
+    assert "auto-shutdown" in run_cells.shutdown_shortfall("main-batching.json", now_s=1000, schedule=schedule)
+    assert run_cells.shutdown_shortfall("smoke-batching.json", now_s=1000, schedule=schedule) is None
+    assert run_cells.shutdown_shortfall("pilot-1.json", now_s=1000, schedule=schedule) is None   # not estimated
+    assert run_cells.shutdown_shortfall("main-batching.json", schedule=tmp_path / "absent") is None

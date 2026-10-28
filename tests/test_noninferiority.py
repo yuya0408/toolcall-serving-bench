@@ -148,3 +148,37 @@ def test_gate_nothing_passes_when_no_bf16_does():
     g = ni.batching_gate(arms)
     assert g["passed_bf16"] == [] and g["passing"] == []
     assert g["quantized"]["vllm-awq"]["verdict"] == "not shown (no bf16 passed)"
+
+
+def _status(tmp_path, rows):
+    (tmp_path / "status.jsonl").write_text("".join(f'{{"name": "{n}", "outcome": "{o}"}}\n' for n, o in rows))
+
+
+def test_batching_loader_refuses_a_failed_arm_unless_excluded(tmp_path):
+    # docs/adr/0009 5: a failed ni cell is rerun before the gate; only a repeat failure is left out, by name.
+    _status(tmp_path, [("ni-vllm-bf16-c1", "error")])
+    with pytest.raises(ValueError, match="rerun it"):
+        ni.load_batching_arms([tmp_path], {})
+    assert ni.load_batching_arms([tmp_path], {}, exclude=("vllm-bf16",)) == {}
+
+
+def test_batching_loader_uses_the_last_run_and_needs_its_raw_log(tmp_path):
+    _status(tmp_path, [("ni-trt-awq-c1", "error"), ("ni-trt-awq-c1", "ok")])
+    (tmp_path / "ni-trt-awq-c1").mkdir()
+    (tmp_path / "ni-trt-awq-c1" / "x.raw.partial.jsonl").write_text("")   # a failed run's partial log is not read
+    with pytest.raises(ValueError, match="0 raw logs"):
+        ni.load_batching_arms([tmp_path], {})
+
+
+def test_batching_loader_needs_the_status(tmp_path):
+    with pytest.raises(ValueError, match="status.jsonl"):
+        ni.load_batching_arms([tmp_path], {})
+
+
+def test_batching_loader_takes_a_rerun_from_a_later_folder(tmp_path):
+    main, rerun = tmp_path / "main", tmp_path / "rerun"
+    main.mkdir(); rerun.mkdir()
+    _status(main, [("ni-vllm-bf16-c1", "error")])
+    _status(rerun, [("ni-vllm-bf16-c1", "ok")])
+    with pytest.raises(ValueError, match=r"rerun.ni-vllm-bf16-c1: 0 raw logs"):
+        ni.load_batching_arms([main, rerun], {})
