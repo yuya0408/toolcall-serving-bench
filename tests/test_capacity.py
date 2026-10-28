@@ -81,6 +81,13 @@ def test_sglang_retraction_counter_is_absent_until_the_first_retraction():
         capacity.sglang_counters(no_counter)
 
 
+def test_an_engine_with_its_own_prompt_count_uses_it():
+    budget = {"max_prompt_tokens": 2591, "by_engine": {"sglang": {"max_prompt_tokens": 2691}}}
+    assert capacity.max_prompt_for(budget, "sglang") == 2691
+    assert capacity.max_prompt_for(budget, "tensorrt_llm") == 2591
+    assert capacity.max_prompt_for({"max_prompt_tokens": 2591}, "sglang") == 2591
+
+
 def test_tensorrt_llm_capacity_is_read_from_the_latest_iteration_with_kv_stats():
     stats = [{"iter": 1, "kvCacheStats": {"maxNumBlocks": 1900, "tokensPerBlock": 32, "freeNumBlocks": 1899}},
              {"iter": 2}]

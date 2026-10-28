@@ -373,7 +373,7 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
     cell_dir = out / cell["name"]
     cell_dir.mkdir(parents=True, exist_ok=True)
     status: dict[str, Any] = {"name": cell["name"], "started_at": _now()}
-    max_prompt = budget["max_prompt_tokens"] if budget else None
+    max_prompt = capacity.max_prompt_for(budget, cell["engine"]) if budget else None
     kv = capacity.LLAMA_KV_LAYOUTS[0] if cell["engine"] == "llama_cpp" else None
     server_cmd = server_command(cell, max_prompt, kv) if kv else server_command(cell, max_prompt)
     server_log = cell_dir / "server.log" if server_cmd else None

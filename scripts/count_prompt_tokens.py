@@ -21,7 +21,8 @@ it downloads from the Hub on first use:
     python scripts/count_prompt_tokens.py --tool-stage 10 --write-budget
 
 --write-budget records the result in schema/prompt_budget.json, which the GPU
-runs read (eval_bench/capacity.py). The entry carries the catalog version and a
+runs read (eval_bench/capacity.py). --engine sglang counts what SGLang renders
+instead (sglang_tools) and records it under the entry's by_engine. The entry carries the catalog version and a
 digest of the cases, so editing either makes the runs refuse the stale count.
 """
 from __future__ import annotations
@@ -51,6 +52,24 @@ _CATALOGS = {10: "tools.json", 50: "tools_extended.json", 100: "tools_extended.j
 _TAG = "0" * 8
 
 
+def sglang_tools(tool_set: list[dict]) -> list[dict]:
+    """The tools as SGLang 0.5.21 hands them to the chat template: it parses
+    each into its Tool model and dumps it back (serving_chat.py,
+    item.model_dump()), which reorders the function's keys and adds
+    "strict": false and "defer_loading": null (protocol.py, Function and Tool).
+    About 10 tokens per tool; the smoke apply (2026-10-28) saw +100 on every
+    case at stage 10 against vLLM and TensorRT-LLM (docs/engines.md)."""
+    return [{"type": t.get("type", "function"),
+             "function": {"description": t["function"].get("description"), "name": t["function"]["name"],
+                          "parameters": t["function"].get("parameters"),
+                          "strict": t["function"].get("strict", False)},
+             "defer_loading": t.get("defer_loading")}
+            for t in tool_set]
+
+
+_SERIALIZE = {"default": lambda tool_set: tool_set, "sglang": sglang_tools}
+
+
 def _count(tokenizer, query: str, tool_set: list[dict]) -> int:
     # Render to text first, then tokenize, as the servers do (the template
     # already contains every special token, so none are added again).
@@ -61,17 +80,18 @@ def _count(tokenizer, query: str, tool_set: list[dict]) -> int:
     return len(tokenizer(text, add_special_tokens=False)["input_ids"])
 
 
-def count(cases, tools, stage: int, tokenizer, trials: int) -> dict:
+def count(cases, tools, stage: int, tokenizer, trials: int, engine: str = "default") -> dict:
     """Per-case maximum over every request the cell can send for that case:
     the accuracy passes' `trials` shuffled orders and the latency pass's fixed
     seed-0 order with a request id appended."""
+    serialize = _SERIALIZE[engine]
     per_case = {}
     for case in cases:
         tool_set = build_tool_set(case, tools, stage, seed=0)
         lengths = [_count(tokenizer, case["query"],
-                          to_openai_tools_subset(tools, trial_order(case["id"], tool_set, stage, t)))
+                          serialize(to_openai_tools_subset(tools, trial_order(case["id"], tool_set, stage, t))))
                    for t in range(trials)]
-        fixed = to_openai_tools_subset(tools, tool_set)
+        fixed = serialize(to_openai_tools_subset(tools, tool_set))
         lengths.append(_count(tokenizer, tagged_query(case["query"], _TAG, 999_999), fixed))
         per_case[case["id"]] = max(lengths)
     longest = max(per_case, key=per_case.get)
@@ -90,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--data-dir", default=str(_ROOT / "data"))
     p.add_argument("--trials", type=int, default=5, help="shuffled orders per case (the accuracy passes' n)")
     p.add_argument("--revision", default=DEFAULT_REVISION)
+    p.add_argument("--engine", default="default", choices=sorted(_SERIALIZE),
+                   help="sglang: the tools as SGLang re-serializes them (sglang_tools)")
     p.add_argument("--write-budget", action="store_true",
                    help=f"record the result in {PROMPT_BUDGET_PATH.relative_to(_ROOT)}")
     args = p.parse_args(argv)
@@ -98,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
     tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen3-8B", revision=args.revision)
     tools = load_tools(_ROOT / "schema" / _CATALOGS[args.tool_stage])
     cases = load_cases(args.data_dir)
-    result = count(cases, tools, args.tool_stage, tokenizer, args.trials)
+    result = count(cases, tools, args.tool_stage, tokenizer, args.trials, args.engine)
     result["tokenizer_revision"] = args.revision
     result["tool_catalog_version"] = json.loads(
         (_ROOT / "schema" / _CATALOGS[args.tool_stage]).read_text(encoding="utf-8"))["version"]
@@ -106,7 +128,17 @@ def main(argv: list[str] | None = None) -> int:
     print(json.dumps(result, ensure_ascii=False, indent=2))
     if args.write_budget:
         budgets = json.loads(PROMPT_BUDGET_PATH.read_text(encoding="utf-8")) if PROMPT_BUDGET_PATH.exists() else {}
-        budgets[str(args.tool_stage)] = result
+        key = str(args.tool_stage)
+        old = budgets.get(key, {})
+        same = all(old.get(k) == result[k] for k in ("tool_catalog_version", "cases_sha256", "tokenizer_revision"))
+        if args.engine == "default":
+            # Keep the per-engine counts only if they were made against the same inputs.
+            budgets[key] = {**result, **({"by_engine": old["by_engine"]} if same and "by_engine" in old else {})}
+        else:
+            if not same:
+                raise SystemExit("count the default first (the per-engine count hangs off its entry)")
+            budgets[key].setdefault("by_engine", {})[args.engine] = {
+                k: result[k] for k in ("max_prompt_tokens", "max_case", "median_prompt_tokens")}
         PROMPT_BUDGET_PATH.write_text(json.dumps(budgets, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"wrote {PROMPT_BUDGET_PATH}")
     return 0
