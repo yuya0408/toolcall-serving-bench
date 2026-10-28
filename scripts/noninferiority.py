@@ -154,9 +154,9 @@ def load_batching_arms(run_dirs: list[pathlib.Path], cases: dict[str, dict[str, 
     """The scored greedy arms ni-<engine>-<quant>-c1, one raw log each, from the
     main run's folder and then any rerun's (a later folder's run of a cell wins).
 
-    An arm the run's status.jsonl does not list was not in the cell list (an
-    engine dropped at the smoke apply) and is left out. An arm it lists must have
-    finished ok: a failed one is rerun on a new apply before the gate is read
+    Every arm must be in some folder's status.jsonl: a missing line means the
+    cell never ran or was not collected, not that it was meant to be left out.
+    An arm must have finished ok: a failed one is rerun on a new apply before the gate is read
     (docs/adr/0009 5), and only a config that fails again is left out, by name
     (exclude), so no arm goes missing without saying so."""
     outcome, where = {}, {}
@@ -173,8 +173,11 @@ def load_batching_arms(run_dirs: list[pathlib.Path], cases: dict[str, dict[str, 
     for e in BATCHING_ENGINES:
         for q in ("bf16",) + BATCHING_QUANT:
             name = f"ni-{e}-{q}-c1"
-            if f"{e}-{q}" in exclude or name not in outcome:
+            if f"{e}-{q}" in exclude:
                 continue
+            if name not in outcome:
+                raise ValueError(f"{name} is in no status.jsonl: it never ran or was not collected; "
+                                 f"collect again, or pass --exclude {e}-{q}")
             if outcome[name] != "ok":
                 raise ValueError(f"{name} finished as {outcome[name]}: rerun it on a new apply (docs/adr/0009 5), "
                                  f"or pass --exclude {e}-{q} if it failed again")

@@ -345,10 +345,15 @@ ADR-0009の3と7。速さの45セル（約26.4時間）が先で、精度の11�
 ```
 terraform -chdir=infra/gpu plan -var auto_shutdown_minutes=2700 -out=main-batching.tfplan   # 既定の360分では約6時間で止まる
 terraform -chdir=infra/gpu apply main-batching.tfplan
+scripts/gpu/local.sh push $IP
 SETUP_LLAMA=0 scripts/gpu/local.sh setup $IP
+scripts/gpu/local.sh wait-setup $IP
 scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-batching.json
-scripts/gpu/local.sh collect $IP     # cellsが始まってから
+scripts/gpu/local.sh collect $IP runs/gpu-<applyした日>-<インスタンスID>     # 前面で回す。日付をまたぐので回収先は明示する
 ```
+
+- 回収はPCがスリープすると止まる。寝ている間もPCをスリープさせない。`collect`が止まっていたら、同じ回収先を渡してもう一度打つ（続きからコピーする）。
+- `collect`は、DONE・FAILEDを見た後にもう一度コピーしてから終わる（最後のセルの出力と`status.jsonl`の最後の行を取りこぼさないため）。
 
 - `run_cells.py`は、自動シャットダウンまでの残りが一覧の見込み（`make_main_cells.py`の`estimated_minutes`）より短いと、セルを1つも回さずに`FAILED`を書いて止まる。
   `-var`を付け忘れたら、ここで分かる（`--only`で一部だけ流すときは確かめない）。
