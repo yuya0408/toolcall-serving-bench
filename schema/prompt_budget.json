@@ -7,6 +7,13 @@
     "median_prompt_tokens": 2310.0,
     "tokenizer_revision": "b968826d9c46dd6066d109eabc6255188de91218",
     "tool_catalog_version": "2.1.1",
-    "cases_sha256": "eefa0240539bddd38e58920056cca8bccce4e309723dd554c42286ff0c88cfb0"
+    "cases_sha256": "eefa0240539bddd38e58920056cca8bccce4e309723dd554c42286ff0c88cfb0",
+    "by_engine": {
+      "sglang": {
+        "max_prompt_tokens": 2691,
+        "max_case": "case_1132",
+        "median_prompt_tokens": 2410.0
+      }
+    }
   }
 }

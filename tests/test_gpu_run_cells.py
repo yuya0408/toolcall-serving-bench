@@ -56,7 +56,7 @@ def test_sglang_server_reports_metrics_and_cached_tokens_and_matches_the_context
     for flag in ("--enable-metrics", "--enable-cache-report"):
         assert flag in cmd
     assert cmd[cmd.index("--context-length") + 1] == "8192"
-    assert cmd[cmd.index("--mem-fraction-static") + 1] == "0.86"
+    assert cmd[cmd.index("--mem-fraction-static") + 1] == "0.87"
 
 
 def test_tensorrt_llm_serves_the_local_modelopt_checkpoint_with_the_qwen3_parser():

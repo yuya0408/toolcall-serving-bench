@@ -75,7 +75,7 @@ GGUFS = {   # quantization -> the GGUF llama.cpp serves (setup.sh builds both fr
     "gguf-q4_k_m": HOME / "models" / "Qwen3-8B-Q4_K_M.gguf",   # docs/adr/0008
 }
 PORT = {"vllm": 8000, "sglang": 30000, "tensorrt_llm": 8001, "llama_cpp": 8080}
-SGLANG_MEM_FRACTION = 0.86   # measured at the smoke apply, 2026-10-28 (docs/engines.md)
+SGLANG_MEM_FRACTION = 0.87   # measured at the smoke apply, 2026-10-28 (docs/engines.md)
 READY_TIMEOUT_S = {"vllm": 900, "sglang": 900, "tensorrt_llm": 1200, "llama_cpp": 300}
 MODELS = {   # quantization -> the model id the manifest records and the server serves (from the HF cache)
     "bf16-none": "Qwen/Qwen3-8B",
@@ -178,9 +178,10 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
                "--model-path", model, "--served-model-name", model,
                "--host", "127.0.0.1", "--port", str(PORT["sglang"]),
                "--tool-call-parser", "qwen", "--enable-metrics", "--enable-cache-report",
-               # The automatic 0.684 left bf16 no KV cache on the L4; 0.86 is the
-               # lowest (0.01 steps) holding bf16 at concurrency 8, as vLLM's
-               # default does; one value for every checkpoint (docs/engines.md).
+               # The automatic 0.684 left bf16 no KV cache on the L4; 0.87 is the
+               # lowest (0.01 steps) holding bf16 at concurrency 8 with SGLang's
+               # own prompt count, as vLLM's default does; one value for every
+               # checkpoint (docs/engines.md).
                "--mem-fraction-static", str(SGLANG_MEM_FRACTION)]
         if "max_model_len" in server:
             cmd += ["--context-length", str(server["max_model_len"])]
@@ -373,7 +374,7 @@ def run_one(cell: dict[str, Any], versions: dict[str, Any], out: pathlib.Path,
     cell_dir = out / cell["name"]
     cell_dir.mkdir(parents=True, exist_ok=True)
     status: dict[str, Any] = {"name": cell["name"], "started_at": _now()}
-    max_prompt = budget["max_prompt_tokens"] if budget else None
+    max_prompt = capacity.max_prompt_for(budget, cell["engine"]) if budget else None
     kv = capacity.LLAMA_KV_LAYOUTS[0] if cell["engine"] == "llama_cpp" else None
     server_cmd = server_command(cell, max_prompt, kv) if kv else server_command(cell, max_prompt)
     server_log = cell_dir / "server.log" if server_cmd else None

@@ -66,6 +66,13 @@ def load_prompt_budget(stage: int, catalog_version: str, cases: list[dict[str, A
     return entry
 
 
+def max_prompt_for(budget: dict[str, Any], engine: str) -> int:
+    """The longest prompt this engine will see: its own count where it renders
+    the tools differently (SGLang, scripts/count_prompt_tokens.py --engine),
+    the shared one otherwise."""
+    return budget.get("by_engine", {}).get(engine, {}).get("max_prompt_tokens", budget["max_prompt_tokens"])
+
+
 def per_request_max(max_prompt_tokens: int, max_tokens: int) -> int:
     return max_prompt_tokens + max_tokens
 

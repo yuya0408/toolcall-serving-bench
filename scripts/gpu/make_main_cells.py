@@ -136,6 +136,10 @@ SMOKE_BATCHING = ([("acc", f"{e}-bf16", 1, "") for e in _ENGINES]
 SMOKE_BATCHING_RERUN = ([e for e in SMOKE_BATCHING if e[1].startswith("sglang-")
                          or (e[1].startswith("trt-") and e[0] == "lat")]
                         + [("lat", "sglang-bf16", 8, "")])
+# The second pass (2026-10-28): SGLang's prompt is 100 tokens longer than the
+# others' (docs/engines.md), which moved its memory fraction to 0.87, so every
+# SGLang cell again.
+SMOKE_BATCHING_RERUN2 = [e for e in SMOKE_BATCHING_RERUN if e[1].startswith("sglang-")]
 
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
@@ -186,7 +190,8 @@ def lists() -> dict[str, list[dict]]:
             "main-quant.json": ordered(QUANT, random.Random(QUANT_SEED)),
             "main-batching.json": ordered(BATCHING_LATENCY, batching) + ordered(BATCHING_ACCURACY, batching),
             "smoke-batching.json": [smoke(*e) for e in SMOKE_BATCHING],
-            "smoke-batching-rerun.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN]}
+            "smoke-batching-rerun.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN],
+            "smoke-batching-rerun2.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN2]}
 
 
 def estimated_minutes() -> dict[str, int]:
@@ -195,7 +200,8 @@ def estimated_minutes() -> dict[str, int]:
             "main-quant.json": sum(e[3] for e in QUANT),
             "main-batching.json": sum(e[3] for e in BATCHING_LATENCY + BATCHING_ACCURACY),
             "smoke-batching.json": 4 * len(SMOKE_BATCHING),
-            "smoke-batching-rerun.json": 4 * len(SMOKE_BATCHING_RERUN)}   # ~4 min each, mostly the server start
+            "smoke-batching-rerun.json": 4 * len(SMOKE_BATCHING_RERUN),
+            "smoke-batching-rerun2.json": 4 * len(SMOKE_BATCHING_RERUN2)}   # ~4 min each, mostly the server start
 
 
 if __name__ == "__main__":
