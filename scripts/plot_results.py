@@ -295,7 +295,7 @@ def throughput(phase, title_text, filename):
     plt.close(fig)
 
 
-def interval(phase, title_text, filename, interval_label, groups=None, left=0.4):
+def interval(phase, title_text, filename, interval_label, groups=None):
     """Difference with the verdict's interval. The t interval is symmetric, so
     the two-sided interval's left end is the one-sided lower bound used."""
     rows = list(phase.gate)
@@ -327,7 +327,7 @@ def interval(phase, title_text, filename, interval_label, groups=None, left=0.4)
     ax.axvline(0, color=INK, linewidth=1.2, zorder=1)
     ax.axvline(MARGIN, color=INK, linewidth=1.2, linestyle=(0, (2, 2)), zorder=1)
     ax.text(MARGIN - 0.08, n - 0.35, f"許す差 −Δ ＝ {fmt(MARGIN, 1)}pt", ha="right", va="top", fontsize=9, color=INK)
-    ax.set_xlim(lo, 3.6)
+    ax.set_xlim(lo, 4.0)
     ax.set_ylim(-0.8, n - 0.1)
     ax.set_yticks([])
     ax.spines["left"].set_visible(False)
@@ -336,7 +336,7 @@ def interval(phase, title_text, filename, interval_label, groups=None, left=0.4)
     ax.text(-0.1, -0.55, "← 劣る", ha="right", va="center", fontsize=9, color=INK_2)
     ax.text(0.1, -0.55, "優れる →", ha="left", va="center", fontsize=9, color=INK_2)
     top = title(fig, title_text, f"横線は判定の区間で、左端が下限（{interval_label}）。左端が網掛け（許す差より左）に入ると「示せなかった」")
-    fig.tight_layout(rect=(left, 0, 1, top))  # left: room for the row labels
+    fig.tight_layout(rect=(0, 0, 1, top))   # makes room for the row labels itself
     fig.savefig(OUT / filename, dpi=150)
     plt.close(fig)
 
@@ -348,7 +348,7 @@ def main():
     latency(PHASE1, "第1段階：TTFT・TPOTとも基準を満たす並行数は、vLLM AWQの4が最大", "latency.png")
     throughput(PHASE1, "第1段階：1台のスループット（参考。判定には使わない）", "throughput.png")
     interval(PHASE1, "第1段階：4bitで自分のbf16に対する非劣化を示せたのはvLLM AWQだけ", "noninferiority.png",
-             "片側99.5%の下限 ＝ 両側99%区間の左端。4bit − 自分のbf16", left=0.31)
+             "片側99.5%の下限 ＝ 両側99%区間の左端。4bit − 自分のbf16")
     selection(PHASE2, "第2段階：足切りを通った4構成のうち、TRT-LLM FP8が1台で最も多い並行数をさばく",
               "selection_batching.png")
     latency(PHASE2, "第2段階：並行数4でTTFT・TPOTとも基準を満たしたのは、TRT-LLM FP8だけ", "latency_batching.png")
