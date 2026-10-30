@@ -82,7 +82,7 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
    - a. vLLMのバージョン → `~/out/versions.json`
    - b. `--tool-call-parser hermes`があるか → `checks/vllm_tool_call_parser.txt`（ログの最後に「hermes parser: listed」と出る）
    - c. llama.cppが`seed`を守るか → `checks/llama_seed.json`。同じseedで2回送った答えが違えば、llama.cppの実行は1回ごとに再現するとは
-     みなさず、そのことを記事・結果に書く。
+     みなさず、そのことを結果に書く。
 6. 5のaで`versions.json`を書いた直後に、`pins.sh`と突き合わせ、エンジンの版かモデルのリビジョンが1つでも違えば、準備を失敗させる（`SETUP_FAILED`に「not the pinned versions」）。
 7. 終わると`~/out/SETUP_DONE`ができる。
 
@@ -424,5 +424,5 @@ terraform -chdir=infra/gpu destroy
 destroyの後、動いていた時間（インスタンスの`LaunchTime`から終了まで）×単価で費用を見積もり、翌日以降にCost Explorerの実額で確かめる。
 ADR-0003の費用の概算は、この実測で置き換える。
 
-[Source: User, GPUインスタンス起動手順書の整備, 2026-09-12]
-[Source: User, GPUでの実行を手動の操作なしでスクリプトにする, 2026-10-17]
+（決定日 2026-09-12）
+（決定日 2026-10-17）

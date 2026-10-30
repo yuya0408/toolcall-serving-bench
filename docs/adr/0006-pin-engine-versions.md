@@ -3,6 +3,12 @@
 - Status: Accepted（2026-10-27。本番3回のapplyで、追記を含めたこの決定どおりに動かした）
 - Date: 2026-10-21
 
+## 結論
+
+- 疎通（2026-10-18）で通しで動いた組み合わせに固定する：llama.cpp `848bbda`、vLLM 0.31.0、transformers 5.17.0、モデルのリビジョン。
+- 値は`scripts/gpu/pins.sh`の1か所に置き、準備の最後に入ったものと突き合わせ、違えば準備を失敗させる。
+- 第2段階で足した版（SGLang・TensorRT-LLM・ModelOpt）の固定は、ADR-0009の6。
+
 ## Context
 
 `scripts/gpu/setup.sh`は、llama.cppをmasterの先頭から取り、vLLMとtransformersを版を指定せずに入れていた。版は`~/out/versions.json`に記録するだけで、

@@ -3,6 +3,10 @@
 - Status: Proposed | Accepted | Superseded by ADR-YYYY
 - Date: YYYY-MM-DD
 
+## 結論
+
+- 何を決めたかを2〜5行で。追記で変わった所も、今の状態で書く。
+
 ## Context
 
 何が問題か。制約は何か。
