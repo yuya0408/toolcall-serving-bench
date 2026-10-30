@@ -1,7 +1,6 @@
 variable "ssh_allowed_cidr" {
-  description = "SSH接続を許可するグローバルIPのCIDR。回線側でIPが変わったらここを更新してreapplyする"
+  description = "SSH接続を許可するグローバルIPのCIDR（例：203.0.113.10/32）。既定値は置かず、applyのたびに今の回線のIPを渡す（runbookの0）"
   type        = string
-  default     = "110.135.196.164/32"
 }
 
 variable "auto_shutdown_minutes" {
