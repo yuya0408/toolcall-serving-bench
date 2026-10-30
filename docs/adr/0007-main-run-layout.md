@@ -24,7 +24,7 @@
 （課金の歯止めのため）」としていて、6時間の自動シャットダウンの中に収めると、準備（約37分）を除いて1回約5時間で、applyが5回になる。
 
 5回に分けると、比べたいセルが別のインスタンスに分かれる。applyが変わると物理的なGPUも変わり、同じ構成でもクロックが数%ずれる
-（下の実測）。6時間は消し忘れの歯止めとして置いた値で、測定の側には6時間である理由が無い。（決定日 2026-10-24）
+（下の実測）。6時間は消し忘れの歯止めとして置いた値で、測定の側には6時間である理由が無い。（決定日 2026-10-24）<!-- gbrain: [Source: User, 本番のセル一覧の相談, 2026-10-24] -->
 
 **パイロットのGPUの記録**（`gpu.csv`、5秒ごと。負荷のかかっている時間だけを集計）：
 
@@ -102,4 +102,4 @@
 - Abedi, A., & Brecht, T. (2017). Conducting Repeatable Experiments in Highly Variable Cloud Computing Environments. ICPE 2017. https://research.spec.org/icpe_proceedings/2017/proceedings/p287.pdf
 - Papadopoulos, A. V., et al. (2019). Methodological Principles for Reproducible Performance Evaluation in Cloud Computing. IEEE TSE. https://research.spec.org/fileadmin/user_upload/documents/rg_cloud/endorsed_publications/SPEC_RG_2019_Methodological_Principles_for_Reproducible_Performance_Evaluation_in_Cloud_Computing.pdf
 
-（決定日 2026-10-24）
+（決定日 2026-10-24）<!-- gbrain: [Source: User, 本番のセル一覧と、6時間の枠・順番の扱いの相談, 2026-10-24] -->

@@ -1,6 +1,6 @@
 # GPUインスタンスでの実行手順書
 
-[[docs/cloud-layer-plan|クラウド層の設計方針]]に基づき、`infra/gpu/`で`terraform apply`してから`destroy`するまでの手順。
+[クラウド層の設計方針](cloud-layer-plan.md)<!-- gbrain: [[docs/cloud-layer-plan|クラウド層の設計方針]] -->に基づき、`infra/gpu/`で`terraform apply`してから`destroy`するまでの手順。
 インスタンス上の作業（準備・サーバーの起動と再起動・セルの実行）は`scripts/gpu/`のスクリプトがやり、手で打つのは下の6つのコマンドだけにする。
 手で繰り返すと、llama.cppの再起動忘れや回収漏れのように、データを黙って壊す間違いが起きるためである。
 
@@ -76,7 +76,7 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 3. llama.cppを`pins.sh`のコミットにして、CUDA（L4はsm_89）でビルドする。**コミットハッシュは`~/out/llama_cpp_commit.txt`にすぐ書く**。destroyの後は二度と取れず、
    manifestの`engine_version`がこの形式（`^[0-9a-f]{7,40}$`）を求める。
 4. `Qwen/Qwen3-8B`と`Qwen/Qwen3-8B-AWQ`をHugging Faceのキャッシュへダウンロードし、`Qwen/Qwen3-8B`のsafetensorsから
-   BF16のGGUFを作る（[[docs/engine-performance-plan|計画書]]の「BF16 GGUF変換手順」。変換は別の環境`~/venv-convert`で行う。
+   BF16のGGUFを作る（[計画書](engine-performance-plan.md)<!-- gbrain: [[docs/engine-performance-plan|計画書]] -->の「BF16 GGUF変換手順」。変換は別の環境`~/venv-convert`で行う。
    変換ツールの依存がCPU版のtorchを入れ、vLLMのものを置き換えてしまうため）。
 5. 未検証の3点を確かめ、`~/out/checks/`に残す。
    - a. vLLMのバージョン → `~/out/versions.json`
@@ -424,5 +424,5 @@ terraform -chdir=infra/gpu destroy
 destroyの後、動いていた時間（インスタンスの`LaunchTime`から終了まで）×単価で費用を見積もり、翌日以降にCost Explorerの実額で確かめる。
 ADR-0003の費用の概算は、この実測で置き換える。
 
-（決定日 2026-09-12）
-（決定日 2026-10-17）
+（決定日 2026-09-12）<!-- gbrain: [Source: User, GPUインスタンス起動手順書の整備, 2026-09-12] -->
+（決定日 2026-10-17）<!-- gbrain: [Source: User, GPUでの実行を手動の操作なしでスクリプトにする, 2026-10-17] -->
