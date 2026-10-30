@@ -11,9 +11,10 @@
 
 ## 0. applyの前に
 
-- SSHを許可するIP（`infra/gpu/variables.tf`の`ssh_allowed_cidr`）が、今の回線のIPと同じか確かめる。違えば`-var`で渡す。
+- SSHを許可するIP（`infra/gpu/variables.tf`の`ssh_allowed_cidr`）には既定値が無い。同じシェルで今の回線のIPを環境変数に入れてから、applyとdestroyを打つ
+  （入れ忘れると、terraformが値を聞いてくる）。
   ```
-  curl -4 -s https://checkip.amazonaws.com
+  export TF_VAR_ssh_allowed_cidr="$(curl -4 -s https://checkip.amazonaws.com)/32"
   ```
 - 回したいコミットをコミットしておく。`local.sh push`はコミット済みの内容だけを送り、未コミットの変更があれば止まる
   （どのコミットとも一致しない実行を作らないため）。送ったコミットは`~/out/repo_commit.txt`に残る。
