@@ -1,5 +1,5 @@
 """Tests for the engine-specific Decoders added for the chat/tools API switch
-(docs/engine-performance-plan.md's '比較可能性の規律'). Each covers the same
+(the engine-performance plan (kept outside this repo)'s '比較可能性の規律'). Each covers the same
 three cases: a normal tool call, a well-formed decline (no call at all), and
 a malformed/partial output -- and checks that a parse failure never gets
 mistaken for a selection failure or vice versa (scorers/separated.py's

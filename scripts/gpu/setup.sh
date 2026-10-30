@@ -155,7 +155,7 @@ for q in int4_awq:Qwen3-8B-int4-awq-modelopt fp8:Qwen3-8B-fp8-modelopt; do
 done
 
 if [ "$SETUP_LLAMA" = 1 ]; then
-step "BF16 GGUF from the same safetensors (docs/engine-performance-plan.md)"
+step "BF16 GGUF from the same safetensors (the engine-performance plan (kept outside this repo))"
 # A separate environment: the converter's requirements pin a CPU torch that
 # would replace vLLM's CUDA build.
 uv venv --allow-existing --python 3.12 ~/venv-convert

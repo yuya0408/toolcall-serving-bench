@@ -493,7 +493,7 @@ GPUインスタンスでの実行（apply → 準備 → セルの一覧を回�
 | [0008](docs/adr/0008-quantization-noninferiority.md) | 量子化の非劣化を各エンジンで確かめ、精度の足切りと台数で構成を選ぶ | Accepted |
 | [0009](docs/adr/0009-batching-engines.md) | 連続バッチングの3エンジンを1台で比べ、bf16どうしを互いの基準にした足切りで選ぶ（第2段階） | Accepted |
 
-計画の全体は[docs/engine-performance-plan.md](docs/engine-performance-plan.md)、各applyの記録は
+各applyの記録は
 [第1段階の疎通](docs/gpu-smoke-2026-10-18.md)・[第2段階の疎通](docs/gpu-smoke-batching-2026-10-28.md)・[第2段階の本番](docs/gpu-main-batching-2026-10-30.md)にある。
 
 ## ライセンス・出典

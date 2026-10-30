@@ -1,7 +1,7 @@
 """vllm / sglang / tensorrt_llm / llama_cpp adapters: all serve an
 OpenAI-compatible chat completions endpoint (llama.cpp server's
 /v1/chat/completions, alongside its native /completion which this project
-does not use -- see docs/engine-performance-plan.md's '比較可能性の規律'), so
+does not use -- see the engine-performance plan (kept outside this repo)'s '比較可能性の規律'), so
 one HTTP adapter covers them; only base_url/model/name and where the cached
 prompt tokens are reported differ per engine.
 

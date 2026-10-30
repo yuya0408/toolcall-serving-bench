@@ -1,6 +1,6 @@
 """Tests for eval_bench/runner.py: the end-to-end orchestration from cases
 to a schema-valid manifest, and the three invariant guards nothing enforced
-before this (docs/engine-performance-plan.md's stage=10 catalog rule, the
+before this (the engine-performance plan (kept outside this repo)'s stage=10 catalog rule, the
 accuracy_under_load tool_stage=10 pin, and llama_cpp's commit-hash
 engine_version). EchoAdapter/a stub predict function exercise this without
 any GPU or live engine -- see runner.py's module docstring.

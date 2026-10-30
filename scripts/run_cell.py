@@ -63,7 +63,7 @@ _CATALOGS = {
 # Engines run as a server, reached over the OpenAI-compatible API.
 SERVED_ENGINES = ("vllm", "sglang", "tensorrt_llm", "llama_cpp")
 
-# docs/engine-performance-plan.md: Qwen3 non-thinking recommended sampling.
+# the engine-performance plan (kept outside this repo): Qwen3 non-thinking recommended sampling.
 _QWEN3_NON_THINKING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0}
 
 
