@@ -49,7 +49,7 @@ _TOOL_CALL_TAG_RE = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
 
 
 class HermesTagDecoder(IdentityDecoder):
-    """transformers_hf decoder (engine-performance-plan's naive baseline has no
+    """transformers_hf decoder (the engine-performance plan's naive baseline has no
     serving-level tool-call parser): Qwen3 emits a tool call as a raw
     '<tool_call>{...}</tool_call>' text block rather than a structured API
     field. Only the first block is read -- Prediction supports one tool call

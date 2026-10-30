@@ -68,7 +68,7 @@ def _require_capacity_check_if_needed(cell: dict[str, Any], results: dict[str, A
 
 def validate_cell_invariants(pass_type: str, cell: dict[str, Any],
                               tools: dict[str, dict[str, Any]]) -> None:
-    """Three rules docs/engine-performance-plan.md states but nothing in
+    """Three rules the engine-performance plan (kept outside this repo) states but nothing in
     code enforced until now. Runs before any model call (inside
     run_accuracy_cell, not just at manifest-build time) so a misconfigured
     cell fails before spending GPU time, not after.
@@ -79,13 +79,13 @@ def validate_cell_invariants(pass_type: str, cell: dict[str, Any],
         raise ValueError(
             "tool_stage=10 must use the original 40-tool catalog (schema/tools.json) -- "
             "passing the extended catalog changes the padding candidate pool and breaks "
-            "the Article-1-overlay property (docs/engine-performance-plan.md)"
+            "the Article-1-overlay property (the engine-performance plan (kept outside this repo))"
         )
 
     if pass_type == "accuracy_under_load" and tool_stage != 10:
         raise ValueError(
             "accuracy_under_load is pinned to tool_stage=10 (2026-09-11 decision, "
-            "docs/engine-performance-plan.md '並行数の具体的な水準'): per-trial tool "
+            "the engine-performance plan (kept outside this repo) '並行数の具体的な水準'): per-trial tool "
             "shuffling collapses prefix sharing beyond the system prompt, so higher "
             "stages don't fit AWQ's concurrency=16 headroom"
         )
@@ -95,7 +95,7 @@ def validate_cell_invariants(pass_type: str, cell: dict[str, Any],
         if not _COMMIT_HASH_RE.match(version):
             raise ValueError(
                 f"llama_cpp's engine_version must be a git commit hash (7-40 hex chars), "
-                f"got {version!r}. docs/engine-performance-plan.md requires commit-hash "
+                f"got {version!r}. the engine-performance plan (kept outside this repo) requires commit-hash "
                 "granularity (llama.cpp's version tags are too coarse to pin quantization/"
                 "kernel behavior), and this cannot be reconstructed once the GPU instance "
                 "that built it is destroyed -- it must be supplied, never defaulted."

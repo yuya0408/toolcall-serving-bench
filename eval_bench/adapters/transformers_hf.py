@@ -1,6 +1,6 @@
 """transformers_hf adapter: the naive baseline, in-process via transformers'
 own generate() with no serving-level optimizations (see
-docs/engine-performance-plan.md's engine roster).
+the engine-performance plan (kept outside this repo)'s engine roster).
 
 apply_chat_template(..., tools=tool_set) renders the same Hermes-aware
 prompt format Qwen3-8B was tuned on, but transformers has no server-side
@@ -72,7 +72,7 @@ class TransformersHFAdapter(ModelAdapter):
             tools=tool_set,
             tokenize=False,
             add_generation_prompt=True,
-            enable_thinking=False,  # docs/engine-performance-plan.md: measure selection/arg
+            enable_thinking=False,  # the engine-performance plan (kept outside this repo): measure selection/arg
                                      # extraction, not reasoning-trace quality or its latency cost
         )
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)

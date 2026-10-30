@@ -1,5 +1,5 @@
 """Invariants for schema/tools_extended.json (the 100-tool catalog for
-tool_stage=50/100, docs/engine-performance-plan.md). These are the checks a
+tool_stage=50/100, the engine-performance plan (kept outside this repo)). These are the checks a
 visual read of the generated JSON won't catch: a duplicate name silently
 collapses load_tools()'s dict to <100 entries, and stage=10 must still be
 run against the ORIGINAL 40-tool file, never this one -- if a case can't be

@@ -1,5 +1,5 @@
 """Generates schema/tools_extended.json: the 100-tool catalog for the
-engine-performance layer's tool_stage=50/100 (docs/engine-performance-plan.md).
+engine-performance layer's tool_stage=50/100 (the engine-performance plan (kept outside this repo)).
 
 Design constraints this generator encodes (see the plan doc for the full
 rationale, decided 2026-08-29):
@@ -697,7 +697,7 @@ def build_catalog():
     return {
         "$comment": (
             "Extended catalog for the engine-performance layer's tool_stage=50/100 "
-            "(docs/engine-performance-plan.md). The first 40 entries are byte-identical "
+            "(the engine-performance plan (kept outside this repo)). The first 40 entries are byte-identical "
             "to schema/tools.json (Article 1's catalog) so tool_stage=10 must be run "
             "against schema/tools.json directly, never against this file -- passing this "
             "100-tool dict at stage=10 would change the other-module padding candidate "

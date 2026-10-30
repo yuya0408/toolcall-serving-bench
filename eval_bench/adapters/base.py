@@ -8,7 +8,7 @@ Add one subclass per backend. Article 1 compares models by swapping adapters
 under an identical dataset/decoder/scorer.
 
 No few_shot parameter: the harness uses each engine's chat/tools API
-(docs/engine-performance-plan.md's '比較可能性の規律' -- 2026-09-10 switch from
+(the engine-performance plan (kept outside this repo)'s '比較可能性の規律' -- 2026-09-10 switch from
 raw completion endpoints), and Qwen3-8B is natively tool-calling-tuned, so
 no in-prompt examples are needed to induce structured output the way they
 would be for a raw-completion pattern-continuation approach.

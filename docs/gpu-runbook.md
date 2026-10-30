@@ -76,7 +76,8 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 3. llama.cppを`pins.sh`のコミットにして、CUDA（L4はsm_89）でビルドする。**コミットハッシュは`~/out/llama_cpp_commit.txt`にすぐ書く**。destroyの後は二度と取れず、
    manifestの`engine_version`がこの形式（`^[0-9a-f]{7,40}$`）を求める。
 4. `Qwen/Qwen3-8B`と`Qwen/Qwen3-8B-AWQ`をHugging Faceのキャッシュへダウンロードし、`Qwen/Qwen3-8B`のsafetensorsから
-   BF16のGGUFを作る（[計画書](engine-performance-plan.md)<!-- gbrain: [[docs/engine-performance-plan|計画書]] -->の「BF16 GGUF変換手順」。変換は別の環境`~/venv-convert`で行う。
+   BF16のGGUFを作る（llama.cpp同梱の`convert_hf_to_gguf.py --outtype bf16`。量子化ではなくGGUFへの詰め替えだけで、配布されたGGUFを使わないのは
+   vLLM・transformersと同じ重みであることを保証するため<!-- gbrain: [[docs/engine-performance-plan|計画書]] -->。変換は別の環境`~/venv-convert`で行う。
    変換ツールの依存がCPU版のtorchを入れ、vLLMのものを置き換えてしまうため）。
 5. 未検証の3点を確かめ、`~/out/checks/`に残す。
    - a. vLLMのバージョン → `~/out/versions.json`
