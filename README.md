@@ -188,20 +188,7 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 
 ## 判断の記録
 
-数字と方針の根拠は、却下した案とともにADRに残している。
-
-| ADR | 決めたこと | 状態 |
-| --- | --- | --- |
-| [0001](docs/adr/0001-ci-regression-threshold.md) | CIの回帰ゲートのしきい値 | Superseded by 0010（実装しなかった） |
-| [0002](docs/adr/0002-equivalence-margin.md) | 許す差を±2.6pt（モデル1段階分の差）に固定する | Accepted |
-| [0003](docs/adr/0003-latency-pass-verdict.md) | レイテンシは、MLPerfの8B向け基準を満たすかの3値で判定する | Accepted |
-| [0004](docs/adr/0004-expand-case-set.md) | 評価セットを200件に増やす（正解は機械で作り、クエリはLLMが書く） | Accepted |
-| [0005](docs/adr/0005-capacity-check.md) | 並行数のセルが成り立つかを、全エンジン共通の容量の判定で確かめる | Accepted |
-| [0006](docs/adr/0006-pin-engine-versions.md) | エンジンの版を固定する | Accepted |
-| [0007](docs/adr/0007-main-run-layout.md) | 本番の分け方、レイテンシを1台にまとめること、セルの順番 | Accepted |
-| [0008](docs/adr/0008-quantization-noninferiority.md) | 量子化の非劣化を確かめ、精度の足切りと台数で構成を選ぶ（第1段階） | Accepted |
-| [0009](docs/adr/0009-batching-engines.md) | 連続バッチングの3エンジンを1台で比べ、bf16どうしを互いの基準にした足切りで選ぶ（第2段階） | Accepted |
-| [0010](docs/adr/0010-ci-golden-gate.md) | CIの回帰ゲートを、保存済みの8Bの答えに対するゴールデンテストにする（モデルは動かさない） | Accepted |
+数字と方針の根拠は、却下した案とともにADRに残している（[一覧](docs/adr/README.md)）。中心は、許す差を±2.6ptに固定した[ADR-0002](docs/adr/0002-equivalence-margin.md)、レイテンシの3値判定の[ADR-0003](docs/adr/0003-latency-pass-verdict.md)、構成の選び方の[ADR-0008](docs/adr/0008-quantization-noninferiority.md)・[ADR-0009](docs/adr/0009-batching-engines.md)。
 
 ## ライセンス・出典
 
