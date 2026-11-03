@@ -174,6 +174,7 @@ python scripts/noninferiority.py --batching runs/<回収したフォルダ>
 
 GPUインスタンスでの実行（apply → 準備 → セルの一覧を回す → 回収 → destroy）は[docs/gpu-runbook.md](docs/gpu-runbook.md)の手順で行う。
 READMEの図は`python scripts/plot_results.py`で作り直せる。
+本番4回分の生の記録（manifest・生出力・実行条件）は[Release `runs-2026-10`](https://github.com/yuya0408/toolcall-serving-bench/releases/tag/runs-2026-10)にあり、`runs/`に展開すると上の足切りを作り直せる。
 
 ## ディレクトリ構成
 
