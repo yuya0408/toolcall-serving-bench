@@ -1,0 +1,87 @@
+{
+ "llama_cpp": {
+  "engine": "llama_cpp",
+  "model": "Qwen/Qwen3-8B",
+  "run_id": "accuracy-llama_cpp-gguf-bf16-s10-c1-t0.7-b0-20261025T134753Z",
+  "sampling_params": {
+   "max_tokens": 512,
+   "min_p": 0.0,
+   "seed": 42,
+   "temperature": 0.7,
+   "top_k": 20,
+   "top_p": 0.8
+  },
+  "seed_base": 0,
+  "selection_mean": 0.939,
+  "source": "gpu-20261025-i-062c245383e4af847/acc-llama-gguf",
+  "tool_stage": 10
+ },
+ "sglang": {
+  "engine": "sglang",
+  "model": "Qwen/Qwen3-8B",
+  "run_id": "accuracy-sglang-bf16-none-s10-c1-t0.7-b0-20261029T143702Z",
+  "sampling_params": {
+   "max_tokens": 512,
+   "min_p": 0.0,
+   "seed": 42,
+   "temperature": 0.7,
+   "top_k": 20,
+   "top_p": 0.8
+  },
+  "seed_base": 0,
+  "selection_mean": 0.929,
+  "source": "gpu-20261028-i-0bd6a9b5da22d5bf5/acc-sglang-bf16",
+  "tool_stage": 10
+ },
+ "tensorrt_llm": {
+  "engine": "tensorrt_llm",
+  "model": "Qwen/Qwen3-8B",
+  "run_id": "accuracy-tensorrt_llm-bf16-none-s10-c1-t0.7-b0-20261029T215232Z",
+  "sampling_params": {
+   "max_tokens": 512,
+   "min_p": 0.0,
+   "seed": 42,
+   "temperature": 0.7,
+   "top_k": 20,
+   "top_p": 0.8
+  },
+  "seed_base": 0,
+  "selection_mean": 0.934,
+  "source": "gpu-20261028-i-0bd6a9b5da22d5bf5/acc-trt-bf16",
+  "tool_stage": 10
+ },
+ "transformers_hf": {
+  "engine": "transformers_hf",
+  "model": "Qwen/Qwen3-8B",
+  "run_id": "accuracy-transformers_hf-bf16-none-s10-c1-t0.7-b0-20261025T115439Z",
+  "sampling_params": {
+   "max_tokens": 512,
+   "min_p": 0.0,
+   "seed": 42,
+   "temperature": 0.7,
+   "top_k": 20,
+   "top_p": 0.8
+  },
+  "seed_base": 0,
+  "selection_mean": 0.935,
+  "source": "gpu-20261025-i-062c245383e4af847/acc-hf-bf16",
+  "tool_stage": 10
+ },
+ "vllm": {
+  "engine": "vllm",
+  "model": "Qwen/Qwen3-8B",
+  "run_id": "accuracy-vllm-bf16-none-s10-c1-t0.7-b0-20261025T080226Z",
+  "sampling_params": {
+   "max_tokens": 512,
+   "min_p": 0.0,
+   "seed": 42,
+   "temperature": 0.7,
+   "top_k": 20,
+   "top_p": 0.8
+  },
+  "seed_base": 0,
+  "selection_mean": 0.937,
+  "source": "gpu-20261025-i-062c245383e4af847/acc-vllm-bf16",
+  "tool_stage": 10
+ }
+}

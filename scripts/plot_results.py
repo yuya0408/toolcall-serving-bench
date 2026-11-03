@@ -2,7 +2,8 @@
 
 The values are copied from the run manifests and scripts/noninferiority.py
 (README "詳しい値", ADR-0008 and docs/gpu-main-batching-2026-10-30.md),
-because the raw runs are not in the repository. Edit them here if a value changes.
+so the figures redraw without the raw runs (those are in Release runs-2026-10).
+Edit them here if a value changes.
 
     pip install matplotlib
     python scripts/plot_results.py        # writes docs/figures/*.png
