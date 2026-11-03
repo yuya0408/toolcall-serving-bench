@@ -160,7 +160,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 
 ```bash
 pip install -r requirements.txt pytest
-python -m pytest -q                       # PRごとにCIでも回る
+python -m pytest -q                       # PRごとにCIでも回る。保存済みの8Bの答えで、並び順・リクエスト・読み取り・採点を全件照合する（ADR-0010）
 ```
 
 1セルの実行（エンジンのサーバーが`localhost:8000`で立っている前提）と、精度の足切り：
@@ -192,7 +192,7 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 
 | ADR | 決めたこと | 状態 |
 | --- | --- | --- |
-| [0001](docs/adr/0001-ci-regression-threshold.md) | CIの回帰ゲートのしきい値 | Proposed（ゲートは未実装） |
+| [0001](docs/adr/0001-ci-regression-threshold.md) | CIの回帰ゲートのしきい値 | Superseded by 0010（実装しなかった） |
 | [0002](docs/adr/0002-equivalence-margin.md) | 許す差を±2.6pt（モデル1段階分の差）に固定する | Accepted |
 | [0003](docs/adr/0003-latency-pass-verdict.md) | レイテンシは、MLPerfの8B向け基準を満たすかの3値で判定する | Accepted |
 | [0004](docs/adr/0004-expand-case-set.md) | 評価セットを200件に増やす（正解は機械で作り、クエリはLLMが書く） | Accepted |
@@ -201,6 +201,7 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 | [0007](docs/adr/0007-main-run-layout.md) | 本番の分け方、レイテンシを1台にまとめること、セルの順番 | Accepted |
 | [0008](docs/adr/0008-quantization-noninferiority.md) | 量子化の非劣化を確かめ、精度の足切りと台数で構成を選ぶ（第1段階） | Accepted |
 | [0009](docs/adr/0009-batching-engines.md) | 連続バッチングの3エンジンを1台で比べ、bf16どうしを互いの基準にした足切りで選ぶ（第2段階） | Accepted |
+| [0010](docs/adr/0010-ci-golden-gate.md) | CIの回帰ゲートを、保存済みの8Bの答えに対するゴールデンテストにする（モデルは動かさない） | Accepted |
 
 ## ライセンス・出典
 

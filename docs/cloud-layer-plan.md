@@ -51,6 +51,7 @@ Nightly（上記に加えてconsistency）
 
 - 許容幅を広めに取るのは、LLM の非決定性によるノイズを回帰と誤判定させないため。
   しきい値の根拠は [ADR-0001](adr/0001-ci-regression-threshold.md) に記録する。
+  （2026-11-03：この案は実装せず、[ADR-0010](adr/0010-ci-golden-gate.md)のゴールデンテストに置き換えた）
 - `forbidden_tools` の呼び出しは減点でなく **即fail**（安全性に関わるため許容幅の対象外、PR/Nightly両方）
 - semantic judge を含む LLM-as-Judge は CI に入れない（既存方針と整合）。
   埋め込み judge は決定的なので CI 可

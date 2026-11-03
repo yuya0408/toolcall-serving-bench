@@ -6,8 +6,8 @@ llama.cpp cells only: vLLM's log has no per-request prefill time.
     python scripts/prefill_overlap.py runs/<dir>/lat-llama-q4km-c2/server.log \
         runs/<dir>/lat-llama-q4km-c2/<run_id>.raw.jsonl
 
-The runs/ logs are not in the repository, so this cannot be rerun from a clone;
-it records how the README numbers were made. Inputs:
+The runs/ logs are not in the repository; unpack Release runs-2026-10 into runs/
+(it keeps this cell's server.log) to rerun it. Inputs:
   server.log   llama-server output. Per task it reads the 'processing task'
                timestamp (start), 'new prompt ... task.n_tokens' (prompt length)
                and print_timing's 'prompt eval time' (prefill).
