@@ -193,4 +193,5 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 ## ライセンス・出典
 
 コードと評価セット（`data/`・`schema/`）は[MITライセンス](LICENSE)。
+モデルの重みはこのリポジトリでもReleaseでも配っていない（使ったQwen3-8Bとその量子化は、それぞれの配布元のライセンス。Qwen3はApache-2.0）。
 `grounded`の事例は、EDINETで公開されている有価証券報告書と、自治体の例規集を、文書の種類と年度の例として参照している（本文は収録していない）。
