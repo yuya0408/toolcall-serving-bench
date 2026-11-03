@@ -3,14 +3,14 @@
 - Status: Accepted
 - Date: 2026-10-15（Accepted 2026-10-16）
 
-## 結論
+## 結論（Summary）
 
 - 評価セットを自前で200件（既存14件＋新規186件、うちツールを呼ぶべきでない30件）に増やし、全パスで同じセットを使う。
 - 正解の呼び出しをスクリプトが固定シードで先に作り、LLMはクエリ文だけを書く。正解を見せない別のモデルの検査と、全件の人の確認を通す。
 - 正例は40個のツールに各4件以上を割り振り、同じ正解の呼び出しを2回使わない。
 - 正解ラベル2件とツールの説明1つは、本番の前に直した（追記2026-10-19）。
 
-## Context
+## 背景と問い（Context and Problem Statement）
 
 `data/`のケースは14件しかない。この件数は最初のコミット（2026-08-16）から変わっておらず、件数の妥当性は検討していなかった
 （[ADR-0003](0003-latency-pass-verdict.md)<!-- gbrain: [[docs/adr/0003-latency-pass-verdict|ADR-0003]] -->の追記F）。14件では、次の3つの用途のどれにも足りない。
@@ -37,7 +37,22 @@
 
 （決定日 2026-10-15）<!-- gbrain: [Source: User, ケース数の見直し, 2026-10-15] -->
 
-## Decision
+## 検討した案（Considered Options）
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| 14件のまま | 却下 | どの用途にも足りない（Context） |
+| BFCLを借りて、精度パスと第3パスに使う | 却下 | Apache 2.0で使え、件数がすぐ足り、ADR-0002のマージンと尺度がそろう利点はある。しかし、ツール数の段階（10・50・100）とlatencyパスには使えないので、2つのセットを保守することになる。パスによってデータが違うと、結論を同じワークロードの上で読めない。英語の汎用APIなので、日本語の業務領域という対象からも外れる |
+| Nejumi BFCL日本語版を使う | 却下 | 単発のカテゴリが各30件で足りない。ライセンスの記載が無い |
+| 約140件（統計の下限） | 却下 | 一般的な規模（200〜500件）に届かない |
+| 400〜500件 | 保留 | 作る手間が2倍以上。200件で手順を確かめてから判断する |
+| **自前のセットを200件に増やす（採用）** | 採用 | 全パスが同じケースで測られる。いちばん近い公開ベンチマークと同じ規模で、統計の下限を超える |
+| 言い換えで件数を増やす | 却下 | 同じ正解の言い換えは独立した件数にならない |
+| 人の確認で正解を一切変えない（直せない件は捨てるか、スクリプトで引き直す） | 却下 | 正解がすべてシード固定のスクリプトから出る、という説明は単純になる。しかし、正しい方向に直せる件まで捨てることになる |
+| 正解は、クエリに書いた条件を引数として足す場合だけ直せる | 却下 | 正解が検査モデルの答えに寄るのを防ぐ狙いだったが、直した件は検査をやり直し、`human_edit`で除いて計算し直せるので、値の変更まで禁じる必要はない |
+| 新規186件を全件、人が確認する | 最初は却下、抽出の結果を見て採用 | 評価セットの慣行（Nejumi BFCL日本語版は全件を人手で確認）。最初は、印の付いた件＋抽出で残る不備の上限を示せれば足りると判断したが、上限が約15%と大きく出たため、残りも確認することにした |
+
+## 決定（Decision Outcome）
 
 ### 1. 自前のセットを200件に増やし、全パスで同じセットを使う
 
@@ -142,22 +157,7 @@ APIGen（NeurIPS 2024）と同じく、正解を先に決めてから質問を�
 読み手が作り方ごとに数値を除外して計算し直せるようにする（READMEのデータの透明性ルール1）。
 LLMはクエリの文だけを書き、正解の値には触れない（同ルール2）。人が正解を直した件は`generation.human_edit`で区別する（2の手順4）。
 
-## 検討した案
-
-| 案 | 採否 | 理由 |
-| --- | --- | --- |
-| 14件のまま | 却下 | どの用途にも足りない（Context） |
-| BFCLを借りて、精度パスと第3パスに使う | 却下 | Apache 2.0で使え、件数がすぐ足り、ADR-0002のマージンと尺度がそろう利点はある。しかし、ツール数の段階（10・50・100）とlatencyパスには使えないので、2つのセットを保守することになる。パスによってデータが違うと、結論を同じワークロードの上で読めない。英語の汎用APIなので、日本語の業務領域という対象からも外れる |
-| Nejumi BFCL日本語版を使う | 却下 | 単発のカテゴリが各30件で足りない。ライセンスの記載が無い |
-| 約140件（統計の下限） | 却下 | 一般的な規模（200〜500件）に届かない |
-| 400〜500件 | 保留 | 作る手間が2倍以上。200件で手順を確かめてから判断する |
-| **自前のセットを200件に増やす（採用）** | 採用 | 全パスが同じケースで測られる。いちばん近い公開ベンチマークと同じ規模で、統計の下限を超える |
-| 言い換えで件数を増やす | 却下 | 同じ正解の言い換えは独立した件数にならない |
-| 人の確認で正解を一切変えない（直せない件は捨てるか、スクリプトで引き直す） | 却下 | 正解がすべてシード固定のスクリプトから出る、という説明は単純になる。しかし、正しい方向に直せる件まで捨てることになる |
-| 正解は、クエリに書いた条件を引数として足す場合だけ直せる | 却下 | 正解が検査モデルの答えに寄るのを防ぐ狙いだったが、直した件は検査をやり直し、`human_edit`で除いて計算し直せるので、値の変更まで禁じる必要はない |
-| 新規186件を全件、人が確認する | 最初は却下、抽出の結果を見て採用 | 評価セットの慣行（Nejumi BFCL日本語版は全件を人手で確認）。最初は、印の付いた件＋抽出で残る不備の上限を示せれば足りると判断したが、上限が約15%と大きく出たため、残りも確認することにした |
-
-## Consequences
+## 影響（Consequences）
 
 - **できたもの**：`data/generated/generated.jsonl`の186件（正例158件・negative 28件）。既存の14件と合わせて200件（negative 30件）。
   人の確認は186件すべて（印あり29件・無作為50件・残り107件）。人の手が入った件は21件（クエリのみ15件・クエリと正解6件、`generation.human_edit`）。
@@ -192,7 +192,28 @@ LLMはクエリの文だけを書き、正解の値には触れない（同ル�
 - **READMEの表現**：「評価セットが皆無」は、Nejumi BFCL日本語版があるので言い過ぎになった。範囲を絞った表現に直す（別の変更で行う）。
 - schemaの`provenance`のenumに`generated`を加えるので、コードの変更としてPRで行う。
 
-## 追記（2026-10-19）：正解ラベル2件とツールの説明1つを直す
+## 参考（More Information）
+
+- BFCL（gorilla-llm）のデータセットREADME — https://huggingface.co/datasets/gorilla-llm/Berkeley-Function-Calling-Leaderboard
+- Lee et al., FunctionChat-Bench, arXiv 2411.14054 — https://arxiv.org/abs/2411.14054
+- Liu et al., APIGen: Automated Pipeline for Generating Verifiable and Diverse Function-Calling Datasets, NeurIPS 2024, arXiv 2406.18518 — https://arxiv.org/abs/2406.18518
+- Liu et al., ToolACE, ICLR 2025, arXiv 2409.00920 — https://arxiv.org/abs/2409.00920
+- wandb/llm-leaderboard, BFCL日本語版の説明 — https://github.com/wandb/llm-leaderboard/blob/main/docs/README_bfcl_ja.md
+- Miller, Adding Error Bars to Evals, arXiv 2411.00640 — https://arxiv.org/abs/2411.00640
+- Bowyer et al., Position: Don't Use the CLT in LLM Evals With Fewer Than a Few Hundred Datapoints, arXiv 2503.01747 — https://arxiv.org/abs/2503.01747
+- Yao et al., τ-bench, retailのツールとポリシー — https://github.com/sierra-research/tau-bench/tree/main/tau_bench/envs/retail
+- BFCL V2 Live（利用者投稿のデータの説明） — https://gorilla.cs.berkeley.edu/blogs/12_bfcl_v2_live.html
+- Huang et al., MetaTool Benchmark, ICLR 2024, arXiv 2310.03128 — https://arxiv.org/abs/2310.03128
+
+## 追記（Amendments）
+
+種類：**明確化**＝書き方だけを直した／**規則の追加**＝その規則で判定する結果を見る前に決めた／**結果の後の補完**＝その規則で判定する結果を見た後に決めた（理由を本文に書く）／**適用の記録**＝規則どおりに読んだ結果。結果を見た後に規則そのものを変えるときは、新しいADRを立ててこのADRをSupersededにする。
+
+| 番号 | 日付 | 見ていた結果 | 種類 | 中身 | 判定への影響 |
+| --- | --- | --- | --- | --- | --- |
+| A1 | 2026-10-19 | 第1段階の疎通 | 規則の追加 | 正解ラベル2件とツールの説明1つを直す | なし（本番の前） |
+
+### A1 追記（2026-10-19）：正解ラベル2件とツールの説明1つを直す
 
 1回目のapply（疎通）で、最初の20件のうち2件を、4つの構成がすべて同じように外した。生出力とツールの説明を照らし合わせると、
 モデルではなく正解ラベルの側に問題があった（`docs/gpu-smoke-2026-10-18.md`のD4）。
@@ -223,16 +244,3 @@ LLMはクエリの文だけを書き、正解の値には触れない（同ル�
 
 - **最初の14件との関係**：14件で測った数字は公表していないので、上の「既存の手作りの件の修正」と同じく、直したセットで測る。
 （決定日 2026-10-19）<!-- gbrain: [Source: User, 正解ラベルの疑いの検討, 2026-10-19] -->
-
-## 参考
-
-- BFCL（gorilla-llm）のデータセットREADME — https://huggingface.co/datasets/gorilla-llm/Berkeley-Function-Calling-Leaderboard
-- Lee et al., FunctionChat-Bench, arXiv 2411.14054 — https://arxiv.org/abs/2411.14054
-- Liu et al., APIGen: Automated Pipeline for Generating Verifiable and Diverse Function-Calling Datasets, NeurIPS 2024, arXiv 2406.18518 — https://arxiv.org/abs/2406.18518
-- Liu et al., ToolACE, ICLR 2025, arXiv 2409.00920 — https://arxiv.org/abs/2409.00920
-- wandb/llm-leaderboard, BFCL日本語版の説明 — https://github.com/wandb/llm-leaderboard/blob/main/docs/README_bfcl_ja.md
-- Miller, Adding Error Bars to Evals, arXiv 2411.00640 — https://arxiv.org/abs/2411.00640
-- Bowyer et al., Position: Don't Use the CLT in LLM Evals With Fewer Than a Few Hundred Datapoints, arXiv 2503.01747 — https://arxiv.org/abs/2503.01747
-- Yao et al., τ-bench, retailのツールとポリシー — https://github.com/sierra-research/tau-bench/tree/main/tau_bench/envs/retail
-- BFCL V2 Live（利用者投稿のデータの説明） — https://gorilla.cs.berkeley.edu/blogs/12_bfcl_v2_live.html
-- Huang et al., MetaTool Benchmark, ICLR 2024, arXiv 2310.03128 — https://arxiv.org/abs/2310.03128

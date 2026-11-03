@@ -3,7 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-14
 
-## 結論
+## 結論（Summary）
 
 - 許す差を ±2.6pt に固定する。Qwen3-8Bと4BのBFCL v3の差（60.2 − 57.6）で、モデルを1段階小さくしたときの劣化にあたる。
 - 同時に送ると答えが変わるかの確認（第3パス）は、greedyで、並行数16で対応できる構成すべてについて並行数1と16を比べる。
@@ -11,7 +11,7 @@
 - 結果（追記2026-10-26）：vLLM AWQ（入れ替わり2/1,000）・llama.cpp bf16（1/1,000）とも、差はほぼ0だが「等価とは示せなかった」。
 - 同じ ±2.6pt を、量子化の非劣化（ADR-0008）と第2段階の足切り（ADR-0009）の許す差にも使う。
 
-## Context
+## 背景と問い（Context and Problem Statement）
 
 第3パス（`accuracy_under_load`：AWQ 4bit・`vllm`・`tool_stage=10`で、並行数1と16を比べる）の結論は、
 「並行化しても精度は落ちない」という証明ではなく、TOST型の等価性判定（`eval_bench/repetition.py`の
@@ -29,7 +29,7 @@ Xを「直列ベースラインの`selection_ci95`の半幅」とデータから
 
 そこで、Xをデータを見る前に数値で固定し、その根拠を外部の情報から取ることにした。（決定日 2026-10-14）<!-- gbrain: [Source: User, 等価性マージンの再検討, 2026-10-14] -->
 
-## 検討した案
+## 検討した案（Considered Options）
 
 | 案 | X | 採否 | 理由 |
 | --- | --- | --- | --- |
@@ -39,7 +39,7 @@ Xを「直列ベースラインの`selection_ci95`の半幅」とデータから
 | 実務の慣行・ADR-0001のCI回帰許容 | ±5pt | 却下（参照線として残す） | LLM回帰テストの実務ガイドに普遍的な数値は無く、5%前後は経験則。ADR-0001の-0.05も「初期値」で根拠は記録されていない。下記のとおり、モデル2段階分の劣化を「等価」と判定してしまう |
 | **モデル1段階分の差（採用）** | **±2.6pt** | **採用** | 下記Decision |
 
-## Decision
+## 決定（Decision Outcome）
 
 **X = 2.6pt（固定）。** 根拠は Qwen3 Technical Report（arXiv 2505.09388）Table 18 にある、
 BFCL v3（non-thinking）での **Qwen3-8B 60.2 と Qwen3-4B 57.6 の差**。
@@ -69,7 +69,7 @@ Qwen2.5-7B-Instruct 55.8（Table 18）。モデルを半分のサイズにして
    ケースが少ないうちは差のCIも広く、確認としての力も弱い。さらにモデル同士の比較は、
    このプロジェクトの問い（エンジンと並行化）から外れる。本番で使うのは8Bだけである。（決定日 2026-10-14）<!-- gbrain: [Source: User, 4B計測の要否, 2026-10-14] -->
 
-## Consequences
+## 影響（Consequences）
 
 - **計算のずれ**：BFCL v3は複数ターンを含む英語中心の総合スコアで、このハーネスの日本語ERP・単発のselectionとは尺度が違う。
   この限界は結果と一緒に書く。自前の計測では確かめない（Decisionの3）。
@@ -82,7 +82,36 @@ Qwen2.5-7B-Instruct 55.8（Table 18）。モデルを半分のサイズにして
 - 等価性の主張は「シャッフルのブレより小さい」から「モデル1段階分の差より小さい」に変わる。
   シャッフルによるブレそのものは、直列を2回回すA/A比較で実測し、ノイズの下限として別に報告する。
 
-## 追記（2026-10-15）：検出力シミュレーションの結果
+## 参考（More Information）
+
+- Qwen3 Technical Report, arXiv 2505.09388, Table 14・16・18 — https://arxiv.org/abs/2505.09388
+- Singh, Certifying Compressed Language Models: An Audit and a Statistical Toolkit, arXiv 2608.15046 — https://arxiv.org/abs/2608.15046
+- Atil et al., Non-Determinism of "Deterministic" LLM Settings, arXiv 2408.04667 — https://arxiv.org/abs/2408.04667
+- Ma et al., (Why) Is My Prompt Getting Worse? Rethinking Regression Testing for Evolving LLM APIs, arXiv 2311.11123 — https://arxiv.org/abs/2311.11123
+- Red Hat Developer, Deployment-ready reasoning with quantized DeepSeek-R1 models — https://developers.redhat.com/articles/2025/03/03/deployment-ready-reasoning-quantized-deepseek-r1-models
+- （追記）Morris, White & Crowther, Using simulation studies to evaluate statistical methods, Statistics in Medicine 38(11), 2019 — https://pmc.ncbi.nlm.nih.gov/articles/PMC6492164
+- （追記）Cohen, A power primer, Psychological Bulletin 112(1), 1992 — https://www.ece.uvic.ca/~bctill/papers/mocap/Cohen_1992.pdf
+- （追記）ICH E9, Statistical Principles for Clinical Trials — https://database.ich.org/sites/default/files/E9_Guideline.pdf
+- （追記）Schuirmann, A comparison of the Two One-Sided Tests Procedure and the Power Approach for assessing the equivalence of average bioavailability, J Pharmacokinet Biopharm 15, 1987（原典は未確認。TOSTと区間による判定の関係は arXiv 2306.06698 で確認）
+- （追記）Obuchowski, On the comparison of correlated proportions for clustered data, Statistics in Medicine 17(13), 1998、Yang, Sun & Hardin, A note on the tests for clustered matched-pair binary data, Biometrical Journal 52(5), 2010（式はRパッケージ clust.bin.pair の実装で確認） — https://cran.r-project.org/web/packages/clust.bin.pair/readme/README.html
+- （追記）Yang, Sun & Hardin, Testing non-inferiority for clustered matched-pair binary data in diagnostic medicine, CSDA 56(5), 2012（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v56y2012i5p1301-1320.html
+- （追記2026-10-19）Docker, Docker Model Runner Integrates vLLM for High-Throughput Inference — https://www.docker.com/blog/docker-model-runner-integrates-vllm/
+- （追記2026-10-19）Hugging Face, Inference Endpoints: llama.cpp — https://huggingface.co/docs/inference-endpoints/en/engines/llama_cpp
+- （追記）Nam, Power and sample size requirements for non-inferiority in studies comparing two matched proportions where the events are correlated, CSDA 55(10), 2011（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v55y2011i10p2880-2887.html
+
+## 追記（Amendments）
+
+種類：**明確化**＝書き方だけを直した／**規則の追加**＝その規則で判定する結果を見る前に決めた／**結果の後の補完**＝その規則で判定する結果を見た後に決めた（理由を本文に書く）／**適用の記録**＝規則どおりに読んだ結果。結果を見た後に規則そのものを変えるときは、新しいADRを立ててこのADRをSupersededにする。
+
+| 番号 | 日付 | 見ていた結果 | 種類 | 中身 | 判定への影響 |
+| --- | --- | --- | --- | --- | --- |
+| A1 | 2026-10-15 | 測定の前（シミュレーションだけ） | 規則の追加 | 必要なケース数と、解析方法が誤りの率を守れるか | なし |
+| A2 | 2026-10-19 | 第1段階の疎通 | 規則の追加 | 負荷の下の精度の対象を「並行数16で対応できる構成すべて」とする | なし（本番の前） |
+| A3 | 2026-10-22 | パイロット1 | 規則の追加 | 入れ替わりの割合の上限による本番の判定の規則 | なし（本番の前） |
+| A4 | 2026-10-24 | パイロット2 | 明確化 | greedyで起きた繰り返しと、採点が見ない呼びすぎを限界として書く | なし |
+| A5 | 2026-10-26 | 第1段階の本番2回目 | 適用の記録 | A3の規則で判定した結果 | 規則は変えていない |
+
+### A1 追記（2026-10-15）：検出力シミュレーションの結果
 
 Decisionの2（ケース数はパイロットで決める）に向けて、必要なケース数と、今の解析方法が誤りの率を守れるかをシミュレーションで調べた
 （`scripts/power_simulation.py`。Morris, White & Crowther 2019 のADEMPの形で設計）。
@@ -128,7 +157,7 @@ Yang, Sun & Hardin（2012）も、この形の非劣性の検定の性能は、�
 **ケース数そのものの問題**：今のケースセットは14件で、どの案でも等価性を言うには少なくとも約140件が要る。
 同じ問題は、精度パスのエンジン間の比較にも当てはまる（こちらは判定方法自体がまだ決まっていない）。ケースをどう増やすかは、別に決める。
 
-## 追記（2026-10-19）：第3パスの対象は「並行数16で対応できる構成すべて」とする
+### A2 追記（2026-10-19）：第3パスの対象は「並行数16で対応できる構成すべて」とする
 
 1回目のapply（疎通）の前に、セル一覧へllama.cpp（GGUF bf16）の負荷時の精度のセルを足していた。スキーマは第3パスをvLLM AWQに限っていたので、
 manifestの検証で拒否された（`docs/gpu-smoke-2026-10-18.md`のD3）。
@@ -141,7 +170,7 @@ transformers_hfは並行処理をしない。
   「並行数16で提供できる構成のうち、負荷の下で精度を保つのはどれか」に直す。
 - **交絡は入らない**：比べるのは各構成の中の並行数1と16なので、量子化の違いは入らない。並行数16での「llama.cpp bf16とvLLM AWQのどちらを選ぶか」は、
   精度パス・第3パス・latencyパスの結果をそろえた上で、エンジンと量子化の差が混ざった**構成の比較**として示す。
-- **経緯**：同じ日に、いったん「vLLM AWQだけ」と決めた。根拠は「業務の並行稼働はvLLMが中心」（Dockerは「Prototype locally with llama.cpp. Scale to production with vLLM.」と
+- **経緯**：同じ日に、いったん「vLLM AWQだけ」と決めた。根拠は「本番の並行稼働はvLLMが中心」（Dockerは「Prototype locally with llama.cpp. Scale to production with vLLM.」と
   役割を分けている）と、「llama.cpp bf16は並行数16に載らない」の2つだった。後者は誤りで、容量の見込みではllama.cpp bf16は並行数16に載る（ADR-0005）。
   前者は出どころとしては正しいが、自分のデータより先に置くと、vLLMを既定の答えにした非対称な設計になる。そこで決めを覆した。
 - **検討した案**
@@ -160,7 +189,7 @@ transformers_hfは並行処理をしない。
 - **限界**：第3パスの結論は、並行数16で対応できた構成についてしか言えない。
 （決定日 2026-10-19）<!-- gbrain: [Source: User, 第3パスの対象と選定の中立性の検討, 2026-10-19] -->
 
-## 追記（2026-10-22）：vLLM AWQのパイロットの結果と、本番の判定の規則
+### A3 追記（2026-10-22）：vLLM AWQのパイロットの結果と、本番の判定の規則
 
 **パイロットの結果**（2回目のapply、`pilot-1.json`の`third-vllm-awq-c1`・`-c16`、200件×5試行、`scripts/count_flips.py`で数えた）：
 
@@ -207,7 +236,7 @@ transformers_hfは並行処理をしない。
 
 （決定日 2026-10-22）<!-- gbrain: [Source: User, パイロットの入れ替わり件数と本番の判定の規則, 2026-10-22] -->
 
-## 追記（2026-10-24）：greedyで起きた繰り返しと、採点が見ない「呼びすぎ」
+### A4 追記（2026-10-24）：greedyで起きた繰り返しと、採点が見ない「呼びすぎ」
 
 pilot-2の`third-llama-gguf-c1`（llama.cpp bf16・並行数1・greedy、200件×5試行）で、1,000件中2件が出力の上限（512トークン）で切れた。
 1件は文章の答え（case_1183）、もう1件（case_1120、trial 1）は`search_master`を項目（登録住所・配送先・電話番号…）だけ変えて13回呼び続けた出力だった。
@@ -222,7 +251,7 @@ pilot-2の`third-llama-gguf-c1`（llama.cpp bf16・並行数1・greedy、200件�
   今のところ複数の呼び出しを出したのはllama.cppの2件（1,000件中）だけ、vLLM AWQは0件で、エンジン間の差になる項目ではない。
 （決定日 2026-10-24）<!-- gbrain: [Source: User, pilot-2の記録の見直し, 2026-10-24] -->
 
-## 追記（2026-10-26）：本番の結果
+### A5 追記（2026-10-26）：本番の結果
 
 本番2回目のapply（`main-accuracy.json`、200件×5試行、greedy）の第3パスを、追記2026-10-22の規則で判定した（`scripts/count_flips.py`）。
 vLLM bf16は並行数16が容量の判定で`unsupported`になったので、対象はvLLM AWQとllama.cpp bf16の2つ（追記2026-10-19のとおり）。
@@ -248,20 +277,3 @@ vLLM bf16は並行数16が容量の判定で`unsupported`になったので、�
 - **記録の確かめ**：vLLMの`num_preemptions`は前後とも0。出力の上限（512トークン）で切れたのは1,000件中1〜2件。並行数16の1件の最長はvLLM AWQで61秒、
   llama.cppで190秒で、精度のパスの上限（600秒）には届かなかった。
 （決定日 2026-10-26）<!-- gbrain: [Source: User, 本番2回目の第3パスの判定, 2026-10-26] -->
-
-## 参考
-
-- Qwen3 Technical Report, arXiv 2505.09388, Table 14・16・18 — https://arxiv.org/abs/2505.09388
-- Singh, Certifying Compressed Language Models: An Audit and a Statistical Toolkit, arXiv 2608.15046 — https://arxiv.org/abs/2608.15046
-- Atil et al., Non-Determinism of "Deterministic" LLM Settings, arXiv 2408.04667 — https://arxiv.org/abs/2408.04667
-- Ma et al., (Why) Is My Prompt Getting Worse? Rethinking Regression Testing for Evolving LLM APIs, arXiv 2311.11123 — https://arxiv.org/abs/2311.11123
-- Red Hat Developer, Deployment-ready reasoning with quantized DeepSeek-R1 models — https://developers.redhat.com/articles/2025/03/03/deployment-ready-reasoning-quantized-deepseek-r1-models
-- （追記）Morris, White & Crowther, Using simulation studies to evaluate statistical methods, Statistics in Medicine 38(11), 2019 — https://pmc.ncbi.nlm.nih.gov/articles/PMC6492164
-- （追記）Cohen, A power primer, Psychological Bulletin 112(1), 1992 — https://www.ece.uvic.ca/~bctill/papers/mocap/Cohen_1992.pdf
-- （追記）ICH E9, Statistical Principles for Clinical Trials — https://database.ich.org/sites/default/files/E9_Guideline.pdf
-- （追記）Schuirmann, A comparison of the Two One-Sided Tests Procedure and the Power Approach for assessing the equivalence of average bioavailability, J Pharmacokinet Biopharm 15, 1987（原典は未確認。TOSTと区間による判定の関係は arXiv 2306.06698 で確認）
-- （追記）Obuchowski, On the comparison of correlated proportions for clustered data, Statistics in Medicine 17(13), 1998、Yang, Sun & Hardin, A note on the tests for clustered matched-pair binary data, Biometrical Journal 52(5), 2010（式はRパッケージ clust.bin.pair の実装で確認） — https://cran.r-project.org/web/packages/clust.bin.pair/readme/README.html
-- （追記）Yang, Sun & Hardin, Testing non-inferiority for clustered matched-pair binary data in diagnostic medicine, CSDA 56(5), 2012（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v56y2012i5p1301-1320.html
-- （追記2026-10-19）Docker, Docker Model Runner Integrates vLLM for High-Throughput Inference — https://www.docker.com/blog/docker-model-runner-integrates-vllm/
-- （追記2026-10-19）Hugging Face, Inference Endpoints: llama.cpp — https://huggingface.co/docs/inference-endpoints/en/engines/llama_cpp
-- （追記）Nam, Power and sample size requirements for non-inferiority in studies comparing two matched proportions where the events are correlated, CSDA 55(10), 2011（要旨のみ確認） — https://ideas.repec.org/a/eee/csdana/v55y2011i10p2880-2887.html

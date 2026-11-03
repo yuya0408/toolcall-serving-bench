@@ -3,14 +3,14 @@
 - Status: Accepted（2026-10-27。本番3回のapplyで、追記を含めたこの決定どおりに動かした）
 - Date: 2026-10-19
 
-## 結論
+## 結論（Summary）
 
 - 並行数のセルは、要件（同時にc本、1本あたり入力の最大＋`max_tokens` 512）を全エンジンで同じにして比べる。
 - 回す前に「c × 1本の最大 ≤ KVキャッシュの容量」を計算で確かめ、入らなければ「対応していない」と記録する。設定を上げて載せることはしない。
 - 回した後に、追い出し・打ち切り・入力の長さを確かめ、容量不足が起きていないことを確かめる。
 - vLLMはメモリの割合を既定のまま。llama.cppは`--ctx-size`を要件から決め、KVはスロットごとに分ける（追記2026-10-21・23）。
 
-## Context
+## 背景と問い（Context and Problem Statement）
 
 並行数が2以上のセル（latencyパスと第3パス）では、そのエンジンのKVキャッシュに、同時に送るリクエストがすべて入りきるかを確かめる必要がある。
 入りきらないと、エンジンは処理中のリクエストを中断して計算し直したり（vLLMのpreemption）、受付で待たせたりする。そうなると、測っているものが
@@ -30,7 +30,20 @@
 - **容量が起動ごとに変わる**：vLLMの起動8回のうち、新しいインスタンスで最初に起動した2回だけ、KVがちょうど1.00GiB少なかった
   （bf16は30,240トークンが22,992に、AWQは99,552トークンが92,240に。設定はすべて既定の0.92）。原因は分かっていない。
 
-## Decision
+## 検討した案（Considered Options）
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| 起動ログの読み取りを、0.31.0の書式に合わせて直す | 却下 | 書式は版で予告なく変わる。機械が読む値は、機械向けの口（`/metrics`）から取る |
+| `Maximum concurrency`（`max_model_len`を使い切る前提）≥ c で判定する | 却下 | 実際のリクエストより2倍以上長い前提で、載る構成を捨てる |
+| 待ち時間でセルを捨てる | 却下 | ステップの上限による待ちとKV不足を区別できない（3節） |
+| KVキャッシュの総量そのものを全エンジンで揃える | 却下 | エンジンの効率だけを切り出すときの方法。運用で揃えるのは「1リクエストに保証する長さ」 |
+| 余白をllama.cppの`--fit-target`の既定値1,024MiBにそろえる | 却下 | READMEに既定値はあるが、理由の説明が無い。issue #18390で挙がる用途は画面表示を兼ねるGPUなどデスクトップ向けで、画面の無いサーバーではOSはGPUのメモリを使わない |
+| vLLMの`gpu_memory_utilization`を0.98から下げて、回せる最大の値を実測で探す | 却下 | 上げても判定が変わるセルが無い |
+| llama.cppの`--ctx-size`の上限を、起動の試し直しで探す | 却下 | 判定に効かず、併記する数字の精度が上がるだけ（約10〜15分のGPUの時間） |
+| 最悪の長さではなく、実際の長さ（約2,600トークン）で判定する | 却下 | 保証にならない。このワークロードではプロンプトが大半を占め、最悪の見積もりは実際の長さより約18%多いだけで、判定はほとんど変わらない（ADR-0003の追記G） |
+
+## 決定（Decision Outcome）
 
 ### 1. 要件を全エンジンで同じにし、各エンジンは要件ぶんだけメモリを載せる
 
@@ -101,20 +114,7 @@ vLLM専用の`vllm_diagnostics`を、全エンジン共通の`capacity_check`に
 | `queue_time`（vLLMのみ） | 待ち時間の合計・件数・ヒストグラムの区間ごとの件数（記録だけ） | `/metrics`の前後の差 |
 | `startup_log_max_concurrency`（vLLMのみ、任意） | 起動ログの`Maximum concurrency`（照合用。読めなければ省く） | 起動ログ |
 
-## 検討した案
-
-| 案 | 採否 | 理由 |
-| --- | --- | --- |
-| 起動ログの読み取りを、0.31.0の書式に合わせて直す | 却下 | 書式は版で予告なく変わる。機械が読む値は、機械向けの口（`/metrics`）から取る |
-| `Maximum concurrency`（`max_model_len`を使い切る前提）≥ c で判定する | 却下 | 実際のリクエストより2倍以上長い前提で、載る構成を捨てる |
-| 待ち時間でセルを捨てる | 却下 | ステップの上限による待ちとKV不足を区別できない（3節） |
-| KVキャッシュの総量そのものを全エンジンで揃える | 却下 | エンジンの効率だけを切り出すときの方法。運用で揃えるのは「1リクエストに保証する長さ」 |
-| 余白をllama.cppの`--fit-target`の既定値1,024MiBにそろえる | 却下 | READMEに既定値はあるが、理由の説明が無い。issue #18390で挙がる用途は画面表示を兼ねるGPUなどデスクトップ向けで、画面の無いサーバーではOSはGPUのメモリを使わない |
-| vLLMの`gpu_memory_utilization`を0.98から下げて、回せる最大の値を実測で探す | 却下 | 上げても判定が変わるセルが無い |
-| llama.cppの`--ctx-size`の上限を、起動の試し直しで探す | 却下 | 判定に効かず、併記する数字の精度が上がるだけ（約10〜15分のGPUの時間） |
-| 最悪の長さではなく、実際の長さ（約2,600トークン）で判定する | 却下 | 保証にならない。このワークロードではプロンプトが大半を占め、最悪の見積もりは実際の長さより約18%多いだけで、判定はほとんど変わらない（ADR-0003の追記G） |
-
-## Consequences
+## 影響（Consequences）
 
 - **普段の起動での容量**（導出。1リクエストの最大は、ADR-0004の追記でケースとツールの説明を直した後に`scripts/count_prompt_tokens.py`で数えた
   プロンプトの最大2,591（case_1132、カタログ2.1.1）＋ 512 ＝ 3,103トークン。vLLMは余裕16トークンを足してブロックで切り上げ、3,120）：
@@ -137,7 +137,28 @@ vLLM専用の`vllm_diagnostics`を、全エンジン共通の`capacity_check`に
   92,240でも並行数16の必要量49,920には足りたので、2節の起動し直しは起きなかった）
 - **ADR-0003の2節「vLLMは既存の`Maximum concurrency`ガードを、latencyパスでもそのまま使う」は、このADRで置き換える。**
 
-## 追記（2026-10-21）：llama.cppの総容量は`--ctx-size`から取り、`/props`の`n_ctx`は1スロットの上限として確かめる
+## 参考（More Information）
+
+- vLLM v0.31.0 ソース：`vllm/v1/metrics/loggers.py`（`vllm:cache_config_info`・`vllm:num_preemptions`・`vllm:request_queue_time_seconds`・`vllm:num_requests_waiting_by_reason`）、`vllm/config/cache.py`、`vllm/v1/worker/gpu_worker.py` — https://github.com/vllm-project/vllm
+- vLLM, Optimization and Tuning（preemptionと`gpu_memory_utilization`） — https://docs.vllm.ai/en/stable/configuration/optimization
+- ggml-org/llama.cpp, server README（`--fit`・`--fit-target`・`--ctx-size`・`--kv-unified`・`/props`・`/slots`・`/metrics`） — https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
+- ggml-org/llama.cpp, fit-params README — https://github.com/ggml-org/llama.cpp/blob/master/tools/fit-params/README.md
+- ggml-org/llama.cpp Issue #18390（`--fit-target`のデバイスごとの値） — https://github.com/ggml-org/llama.cpp/issues/18390
+- ggml-org/llama.cpp Discussion #22658（`--ctx-size`が統合KVの総量と1リクエストの上限を兼ねる） — https://github.com/ggml-org/llama.cpp/discussions/22658
+- mlcommons/inference_policies, inference_rules.adoc（Closed部門） — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
+
+## 追記（Amendments）
+
+種類：**明確化**＝書き方だけを直した／**規則の追加**＝その規則で判定する結果を見る前に決めた／**結果の後の補完**＝その規則で判定する結果を見た後に決めた（理由を本文に書く）／**適用の記録**＝規則どおりに読んだ結果。結果を見た後に規則そのものを変えるときは、新しいADRを立ててこのADRをSupersededにする。
+
+| 番号 | 日付 | 見ていた結果 | 種類 | 中身 | 判定への影響 |
+| --- | --- | --- | --- | --- | --- |
+| A1 | 2026-10-21 | 容量の疎通 | 規則の追加 | llama.cppの総容量を`--ctx-size`から取る | なし（本番の前） |
+| A2 | 2026-10-23 | パイロット1 | 規則の追加 | 事後の確かめで、max_tokensまで出して止まった応答を数えない | なし（本番の前） |
+| A3 | 2026-10-23 | パイロット1 | 規則の追加 | llama.cppのKVキャッシュをスロットごとに分ける（エンジンの既定） | なし（本番の前） |
+| A4 | 2026-10-24 | パイロット2 | 適用の記録 | 分割したKVで並行数16が起動したことと、その余裕 | なし |
+
+### A1 追記（2026-10-21）：llama.cppの総容量は`--ctx-size`から取り、`/props`の`n_ctx`は1スロットの上限として確かめる
 
 **起きたこと。** 2回目のapplyの`capacity-smoke.json`で、llama.cppの並行数16のセルが事前の判定で`unsupported`になった。
 `--ctx-size 49664 --parallel 16 --kv-unified`で起動したが、`/props`の`n_ctx`は40,960だった。起動ログには
@@ -170,7 +191,7 @@ llama-serverは、1スロットの文脈長をモデルの学習時の長さ（Q
 （このADRで`--ctx-size`を予算から決めるようにした後）、2回目のapplyで落ちて`checks/llama_seed.json`が作られなかった。
 並行数1のセルと同じ大きさで起動するようにした。
 
-## 追記（2026-10-23）：llama.cppの事後の確かめは、max_tokensまで出して止まった応答を数えない
+### A2 追記（2026-10-23）：llama.cppの事後の確かめは、max_tokensまで出して止まった応答を数えない
 
 **起きたこと。** 2回目のapply（pilot-1）で、llama.cpp bf16の並行数16のlatencyのセルが事後の確かめに落ちた（`capacity_misestimate`）。
 原因は、cooldownの1件（case_1120、ツールを呼ばずに文章で答えるケース）が`max_tokens`の512トークンを出し切って止まったことだった。
@@ -197,7 +218,7 @@ llama-serverは、1スロットの文脈長をモデルの学習時の長さ（Q
 | server.logの`truncated = 1`も数える | 今回は見送り | エンジン内部の値なので直接的だが、ログの書式は版で変わりうる（起動ログを却下したのと同じ理由）。応答側の判定はソースの条件と一致しており、ログは食い違いが出たときの確かめに使う |
 | llama.cppに、互換APIの応答にも`truncated`を載せるよう要望する | 見送り | `finish_reason`の曖昧さはOpenAIの仕様に由来する（vLLMも同じ）。応答側の回避策で足りている |
 
-## 追記（2026-10-23）：llama.cppのKVキャッシュは、スロットごとに分ける（エンジンの既定）。起動できなければ1回だけ共有に戻す
+### A3 追記（2026-10-23）：llama.cppのKVキャッシュは、スロットごとに分ける（エンジンの既定）。起動できなければ1回だけ共有に戻す
 
 **きっかけ。** pilot-1で、llama.cpp bf16の並行数16のlatencyのセルが極端に遅かった（TPOTの中央値1,384ms、並行数1は61ms。
 プロンプトの処理はリクエストあたり2,091→391 tokens/s、生成は59.5→1,322 ms/トークン、server.logの各応答の記録から）。
@@ -232,7 +253,7 @@ llama-serverのヘルプでは、`--kv-unified`の既定は「スロット数を
 pilot-1の並行数16（統合）はGPUのメモリを21,832MiB使っており、分割では約22,340MiBの見込みで、L4の23,034MiBに対して約700MiBの余裕がある。
 分割ではattentionの作業用メモリが小さくなる見込みもあるが、確かめていない。次のapplyの最初の容量の疎通で分かる。
 
-**この決定の限界と、検討した懸念。**
+**この決定の限界と、妥当性への脅威。**
 
 | 懸念 | 対処 | 残る影響 |
 | --- | --- | --- |
@@ -248,7 +269,7 @@ pilot-1の並行数16（統合）はGPUのメモリを21,832MiB使っており�
 | 分割で起動できなければ、その並行数は「対応していない」とする | 却下 | 規則は単純だが、統合なら載ると分かっている構成を、割り当ての単位の細かさの違いだけで捨てる |
 | 分割で載るように`n_ubatch`を下げる、KVを量子化する | 却下 | エンジンの調整か、モデルの振る舞いを変えることになる |
 
-## 追記（2026-10-24）：pilot-2で分かったこと（分割KVの並行数16）
+### A4 追記（2026-10-24）：pilot-2で分かったこと（分割KVの並行数16）
 
 - **分割で起動できた。** 容量の疎通と`third-llama-gguf-c16`のどちらも`llama_kv`が`split`で、容量は53,248トークン（1スロット3,328）。統合には戻っていない。
 - **VRAMの余裕は小さい。** GPUのメモリの使用の最大は22,284 / 23,034MiB。llama-serverの終了時の内訳では空きが279MiBだった（見込みの約700MiBより小さい）。
@@ -273,13 +294,3 @@ pilot-1の並行数16（統合）はGPUのメモリを21,832MiB使っており�
 - 精度のパスのリクエストの上限（120秒）で`third-llama-gguf-c16`が694/1,000件で止まり、上限を600秒にした（手順書）。このためpilot-2の第3パスの入れ替わりは数えられなかったが、
   本番の判定の規則（ADR-0002の追記2026-10-22）は件数によらず決まっているので、変わる判断は無い。
 （決定日 2026-10-24）<!-- gbrain: [Source: User, pilot-2の記録の見直し, 2026-10-24] -->
-
-## 参考
-
-- vLLM v0.31.0 ソース：`vllm/v1/metrics/loggers.py`（`vllm:cache_config_info`・`vllm:num_preemptions`・`vllm:request_queue_time_seconds`・`vllm:num_requests_waiting_by_reason`）、`vllm/config/cache.py`、`vllm/v1/worker/gpu_worker.py` — https://github.com/vllm-project/vllm
-- vLLM, Optimization and Tuning（preemptionと`gpu_memory_utilization`） — https://docs.vllm.ai/en/stable/configuration/optimization
-- ggml-org/llama.cpp, server README（`--fit`・`--fit-target`・`--ctx-size`・`--kv-unified`・`/props`・`/slots`・`/metrics`） — https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md
-- ggml-org/llama.cpp, fit-params README — https://github.com/ggml-org/llama.cpp/blob/master/tools/fit-params/README.md
-- ggml-org/llama.cpp Issue #18390（`--fit-target`のデバイスごとの値） — https://github.com/ggml-org/llama.cpp/issues/18390
-- ggml-org/llama.cpp Discussion #22658（`--ctx-size`が統合KVの総量と1リクエストの上限を兼ねる） — https://github.com/ggml-org/llama.cpp/discussions/22658
-- mlcommons/inference_policies, inference_rules.adoc（Closed部門） — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc

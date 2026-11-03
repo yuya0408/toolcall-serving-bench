@@ -3,14 +3,14 @@
 - Status: Accepted
 - Date: 2026-10-14
 
-## 結論
+## 結論（Summary）
 
 - 速さは、MLPerf InferenceのLlama 3.1 8B向けの会話用の基準（TTFT ≤ 2,000ms・TPOT ≤ 100ms）を満たすかで判定する。
 - 1件ごとに両方を見て超過を数え、超過率が1%以下かを Clopper-Pearsonの片側95%で3値（満たす／満たさない／判定不能）に分ける。
 - 並行数1から倍々に（上限32）上げ、「満たす」が続いた最大を、その構成の最大の並行数とする。
 - 1セル1,000件＋ウォームアップ200件（1周）。ツール定義はリクエストごとに変わる条件（Tool RAG）で、送り方は並行数を固定する方式（追記2026-10-23・24・27）。
 
-## Context
+## 背景と問い（Context and Problem Statement）
 
 latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に、次の4点を決める必要があった。何を比べて何を主張するか、
 1セルの件数、ウォームアップ、並行数の水準である。最初の案（ウォームアップ10件・1セル200件・並行数1/2/4/8）を見直したところ、
@@ -32,7 +32,18 @@ latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に�
 
 （決定日 2026-10-14）<!-- gbrain: [Source: User, latencyパスの設計の見直し, 2026-10-14] -->
 
-## Decision
+## 検討した案（Considered Options）
+
+| 案 | 採否 | 理由 |
+| --- | --- | --- |
+| ウォームアップ10件・1セル200件 | 却下 | どの数字にも根拠が無い。200件ではp99の限界も出せない |
+| 1つのセルのp99のCI半幅を10%以内にする | 却下 | 比較の精度ではなく、1つのセルの精度を決めている |
+| エンジン間で最小限検出したい差を20%（Seow）にする | 却下 | 原著を確認できず、二次情報しか無い |
+| エンジン間で最小限検出したい差を10%（時間弁別のWeber比）にする | 却下 | 一次研究の値が条件で大きく変わる。注意して聞き比べたときの閾値であり、実際に使っていて気づくかどうかとは別物 |
+| 知覚から離れて、GPU台数の削減で決める | 却下 | 閾値を自分で決めることになり、外部の根拠が無い |
+| **MLPerfの8B向け基準を満たすかの3値判定（採用）** | 採用 | 同じモデル規模に向けて公表された一次情報がある。件数がレイテンシのばらつきに依存しない。エンジン選定の意思決定にそのまま使える |
+
+## 決定（Decision Outcome）
 
 ### 1. 主張の形：基準を満たすかの3値判定と、満たせる最大の並行数
 
@@ -89,18 +100,7 @@ latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に�
   TTFTが実際より極端に短く出てしまうためである。識別子を付けると、ツール定義の部分はキャッシュに当たり、クエリの部分は毎回新しくなる。
 - TPOT = （全体の時間 − TTFT）÷（出力トークン数 − 1）。MLPerf・LLMPerf と同じく、TTFTを含めない。
 
-## 検討した案
-
-| 案 | 採否 | 理由 |
-| --- | --- | --- |
-| ウォームアップ10件・1セル200件 | 却下 | どの数字にも根拠が無い。200件ではp99の限界も出せない |
-| 1つのセルのp99のCI半幅を10%以内にする | 却下 | 比較の精度ではなく、1つのセルの精度を決めている |
-| エンジン間で最小限検出したい差を20%（Seow）にする | 却下 | 原著を確認できず、二次情報しか無い |
-| エンジン間で最小限検出したい差を10%（時間弁別のWeber比）にする | 却下 | 一次研究の値が条件で大きく変わる。注意して聞き比べたときの閾値であり、実際に使っていて気づくかどうかとは別物 |
-| 知覚から離れて、GPU台数の削減で決める | 却下 | 閾値を自分で決めることになり、外部の根拠が無い |
-| **MLPerfの8B向け基準を満たすかの3値判定（採用）** | 採用 | 同じモデル規模に向けて公表された一次情報がある。件数がレイテンシのばらつきに依存しない。エンジン選定の意思決定にそのまま使える |
-
-## Consequences
+## 影響（Consequences）
 
 - **L4の帯域による下限（推定）**：bf16の8Bは、1トークン生成するたびに約16GBの重みを読み出す。L4のメモリ帯域は約300GB/s（仕様値）なので、
   TPOTの下限は約53msになる。対話用の基準（TPOT 30ms）は、どのエンジンを使っても並行数1でも届かない。
@@ -116,12 +116,45 @@ latencyパス（TTFT・TPOT・全体レイテンシ）の実装に入る前に�
   計画書の該当箇所には、未検証の推定だったという訂正を書く。
 - 費用の数字（1件あたり約$0.001、1セル300件で全体約$2）と時間の見積もりは、L4の性能値からの概算である。パイロットの実測で置き換える。
 
-## 追記（2026-10-15）：実装で決めたこと
+## 参考（More Information）
+
+- MLCommons, MLPerf Inference 5.1: Benchmarking Small LLMs with Llama3.1-8B (2025-09-09) — https://mlcommons.org/2025/09/small-llm-inference-5-1/
+- MLCommons, MLPerf Client — https://mlcommons.org/benchmarks/client/
+- mlcommons/inference_policies, inference_rules.adoc — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
+- Zhong et al., DistServe (OSDI'24), arXiv 2401.09670 — https://arxiv.org/abs/2401.09670
+- vLLM, vllm bench serve CLI — https://docs.vllm.ai/en/latest/cli/bench/serve.html
+- NVIDIA, Perf Analyzer CLI — https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/docs/cli.html
+- Debian, llama-server(1) — https://manpages.debian.org/unstable/llama.cpp-tools/llama-server.1.en.html
+- ggml-org/llama.cpp Discussion #4130 — https://github.com/ggml-org/llama.cpp/discussions/4130
+- Penn State STAT 415, Lesson 19: Distribution-Free Confidence Intervals for Percentiles — https://online.stat.psu.edu/stat415/lesson/19
+- （追記）vLLM, Parameter Sweeps — https://docs.vllm.ai/en/latest/benchmarking/sweeps.html
+- （追記）vLLM, `vllm/entrypoints/serve/dev/cache/api_router.py`（`/reset_prefix_cache`）・`vllm/benchmarks/lib/endpoint_request_func.py`（TTFTの定義） — https://github.com/vllm-project/vllm
+- （追記）vLLM, vllm serve CLI（`--enable-prompt-tokens-details`） — https://docs.vllm.ai/en/latest/cli/serve.html
+- （追記）mlcommons/inference PR #2445 — https://github.com/mlcommons/inference/pull/2445
+- （追記）mlcommons/inference_policies Issue #300 — https://github.com/mlcommons/inference_policies/issues/300
+- （追記）Reddi et al., MLPerf Inference Benchmark, arXiv 1911.02549（IV-A節） — https://arxiv.org/abs/1911.02549
+- （追記）InferenceX, Prefix caching（用語集） — https://inferencex.semianalysis.com/glossary/prefix-caching
+
+## 追記（Amendments）
+
+種類：**明確化**＝書き方だけを直した／**規則の追加**＝その規則で判定する結果を見る前に決めた／**結果の後の補完**＝その規則で判定する結果を見た後に決めた（理由を本文に書く）／**適用の記録**＝規則どおりに読んだ結果。結果を見た後に規則そのものを変えるときは、新しいADRを立ててこのADRをSupersededにする。
+
+| 番号 | 日付 | 見ていた結果 | 種類 | 中身 | 判定への影響 |
+| --- | --- | --- | --- | --- | --- |
+| A1 | 2026-10-15 | 測定の前 | 規則の追加 | 実装で決めた6点（A〜F） | なし |
+| A2 | 2026-10-19 | 第1段階の疎通 | 規則の追加 | 「対応していない」の判定、パイロットのセル一覧など（G〜J） | なし（本番の前） |
+| A3 | 2026-10-23 | パイロット1 | 明確化 | Llama 3.1 8B向けの基準をQwen3-8Bに使う前提と限界 | なし |
+| A4 | 2026-10-23 | パイロット1 | 規則の追加 | 本番のnを1,000、ウォームアップを1周に固定する | なし（本番の前。nはパイロットで決めるとHで先に決めていた） |
+| A5 | 2026-10-24 | パイロット1・2 | 明確化 | 速さの測定の前提をTool RAGの構成と書き直す（送り方・ケース・件数は変えない） | なし |
+| A6 | 2026-10-25 | 第1段階の本番1回目（速さ） | 結果の後の補完 | 安定の確かめの窓を送った順に直し、本番1回目を生の記録から計算し直す | 安定の印だけ。会話用・対話用の判定は窓に依らず変わらない（直す前と後の値を両方載せた） |
+| A7 | 2026-10-27 | 第1段階の本番すべて | 明確化 | 並行数を固定する送り方と、MLPerfのServerとの違い | なし（測り直さない） |
+
+### A1 追記（2026-10-15）：実装で決めたこと
 
 latencyパスを実装する中で、次の6点を決めた（`eval_bench/latency.py`、`scripts/run_cell.py --pass-type latency`）。
 （決定日 2026-10-15）<!-- gbrain: [Source: User, latencyパスの実装, 2026-10-15] -->
 
-### A. prefix cacheは有効のまま測り、セルの境目でリセットする
+#### A. prefix cacheは有効のまま測り、セルの境目でリセットする
 
 - **セルの中では自然にキャッシュに当てる。** ツール定義はキャッシュに当たり、クエリの部分は一意の識別子があるので毎回新しく計算される（4節）。
 - **セルの初めに、キャッシュを空にする。** 前のセルのキャッシュが残ると、後に回したセルほど有利になり、結果が実行順で変わるためである。
@@ -160,7 +193,7 @@ vLLM・SGLangはツールの動作の記述で、「こう測るべき」とい�
 有効にしたまま測る主な根拠は、本番と同じ条件で測るという理由づけであり、出典は同じ判断をしている例として補強するにとどまる。
 （決定日 2026-10-15）<!-- gbrain: [Source: User, prefix cacheの扱いの確認, 2026-10-15] -->
 
-### B. ウォームアップの窓は「ケースセット1周分の件数」
+#### B. ウォームアップの窓は「ケースセット1周分の件数」
 
 3節の「5秒ごとの計測窓」は、並行数1では成り立たない。1件に約2.5秒かかる（推定：出力約40トークン × TPOT約53ms ＋ prefill）ので、
 5秒の窓には2件か3件しか入らず、エンジンの状態が同じでも、窓の境目にかかるかどうかだけでスループットが33〜50%動く。
@@ -177,7 +210,7 @@ Perf Analyzerは10窓（`--max-trials`）で安定しなければ打ち切るの
 - **未確認の点**：並行数が大きいと、窓の長さに「どの件がたまたま先に終わったか」による揺れが、おおよそ窓の件数分の1（14件で約7%）入る（推定）。
   10%の基準に近いので、並行数16・32のセルが安定判定を通るかをパイロットで確かめる。通らなければ、窓を「ケースセット何周分か」に広げる（その時点で決める）。
 
-### C. エラーの扱いは種類で分ける
+#### C. エラーの扱いは種類で分ける
 
 vLLMもllama.cppも、混んでいるときにリクエストを断らず列に並ばせる。そのため、タイムアウト以外のエラーは「混んでいるから時々起きる」ものではなく、
 そのセルの設定では動かないことを示す。
@@ -186,7 +219,7 @@ vLLMもllama.cppも、混んでいるときにリクエストを断らず列に�
 - **HTTPエラー・接続エラー・ストリーム中のエラー・thinkingの出力 → セルを打ち切る。** マニフェストではなく `<run_id>.aborted.json`
   （`"outcome": "unsupported"`）を書き、2節の「対応していない」として扱う。設定の問題を、レイテンシの裾の問題と混ぜないためである。
 
-### D. TTFTと全体の時間の定義
+#### D. TTFTと全体の時間の定義
 
 - **TTFT**：`choices`を含む最初のストリームのチャンクが届いた時刻（vLLM `bench serve` の `async_request_openai_chat_completions` と同じ。ソースで確認）。
   ツール呼び出しのパーサは、関数名が読めるまで差分を送らないことがあるので、本文やツール呼び出しの断片を含む最初のチャンクの時刻も別に記録し、実機で両者を比べる。
@@ -194,14 +227,14 @@ vLLMもllama.cppも、混んでいるときにリクエストを断らず列に�
 - **transformers_hf**：サーバを持たないので、`generate()`が1トークンごとに呼ぶ停止条件のフックで時刻を取る（CUDAを同期してから記録する）。
   TTFTは、チャットテンプレートを組み立てる前から測る（サーバのTTFTにはテンプレートの処理とトークン化が含まれるため）。
 
-### E. ツール定義はケースごとに固定する
+#### E. ツール定義はケースごとに固定する
 
 4節の「ツール定義の並び順は固定する」は、ケースごとのツール集合を、`build_tool_set`のseed=0の並びのまま毎回使う、という意味で実装した。
 ステージ10ではケースごとに正解ツールと紛らわしいツールが違い、1つの共通の10個に全ケースの正解を収められないためである。
 そのため、キャッシュに載るツール定義はケースの数だけ（今は14通り）ある。並行数が大きいときにキャッシュから追い出されるかは、
 当たったトークンの割合として結果に出る。
 
-### F. ケースの数（14件）は検討していない
+#### F. ケースの数（14件）は検討していない
 
 4節の「14ケース」は、`data/`に最初のコミット（2026-08-16）からある件数をそのまま使ったもので、件数の妥当性は検討していなかった
 （評価ハーネスの最初の版で、手作り5件・意図的に難しくした5件・有価証券報告書に接地した4件の3通りの作り方を見せるためのセット）。
@@ -214,9 +247,9 @@ vLLMもllama.cppも、混んでいるときにリクエストを断らず列に�
   実装は件数に依存しない（窓もケースセット1周分として決まる）。
 （決定日 2026-10-15）<!-- gbrain: [Source: User, ケース数の出どころの確認, 2026-10-15] -->
 
-## 追記（2026-10-19）：1回目のapplyを受けて決めたこと
+### A2 追記（2026-10-19）：1回目のapplyを受けて決めたこと
 
-### G. 「対応していない」の判定は、ADR-0005の`capacity_check`で行う
+#### G. 「対応していない」の判定は、ADR-0005の`capacity_check`で行う
 
 2節の「vLLMは既存の`Maximum concurrency`ガードを、latencyパスでもそのまま使う」は、[ADR-0005](0005-capacity-check.md)<!-- gbrain: [[docs/adr/0005-capacity-check|ADR-0005]] -->で置き換えた。
 「対応」の定義は**保証型**で、全リクエストが同時に最大の長さ（プロンプトの最大＋`max_tokens`）まで伸びても入りきることを指す。全エンジンに同じ式で当てる。
@@ -236,7 +269,7 @@ vLLMもllama.cppも、混んでいるときにリクエストを断らず列に�
 
 エンジンによって届く並行数がそろわない（見込みでは、vLLM bf16は8まで、llama.cpp bf16とvLLM AWQは16まで）のは、2節のとおり意図した結果である。
 
-### H. パイロットのセル一覧
+#### H. パイロットのセル一覧
 
 パイロットで決めるのは、本番の件数（latencyパスのn）、第3パスのケース数（ADR-0002）、高い並行数での安定判定（追記B）の3つである。
 中間の並行数（2/4/8）は本番で回すので、パイロットには入れない。
@@ -261,18 +294,18 @@ vLLMもllama.cppも、混んでいるときにリクエストを断らず列に�
 第3パスは同じエンジンの並行数1と16の比較なので、2セルが同じインスタンスにあれば足り、並行数1のlatencyの3エンジンは同じapplyに残る。
 シャットダウンの時刻を延ばす案は、課金の歯止めを緩めるので取らない。追加の費用は準備の約35分ぶん。
 
-### I. bf16の層の低い並行数で、エンジン間の差がどこで出始めるかを見る
+#### I. bf16の層の低い並行数で、エンジン間の差がどこで出始めるかを見る
 
-業務の並行稼働はvLLMが中心という見方（ADR-0002の追記2026-10-19の経緯）を、出どころだけに頼らないために、2節の全エンジン共通の1/2/4/8で、
+本番の並行稼働はvLLMが中心という見方（ADR-0002の追記2026-10-19の経緯）を、出どころだけに頼らないために、2節の全エンジン共通の1/2/4/8で、
 vLLMとllama.cppの差が出始めるかを見る。差が出始めれば見方の一部を裏付けられ、出なければそれも結果として報告する。2節の水準は変えない。
 
-### J. latencyパスでも、ツール呼び出しを保存して採点する（参考値）
+#### J. latencyパスでも、ツール呼び出しを保存して採点する（参考値）
 
 ストリームのツール呼び出しの断片を組み立てて生出力に残し、精度パスと同じ採点で、並行数ごとの正解率を参考値として出す。並行数を上げたときの正解率の傾きを、
 第3パスの2点（1と16）より細かく見るためである。サンプリング（temperature 0.7）とクエリ末尾のリクエストIDによる揺れが混ざるので、判定には使わない（ADR-0002の追記2026-10-19）。
 （決定日 2026-10-19）<!-- gbrain: [Source: User, パイロット前の設計判断, 2026-10-19] -->
 
-## 追記（2026-10-23）：Llama 3.1 8B向けの基準を、Qwen3-8Bに使う前提と限界
+### A3 追記（2026-10-23）：Llama 3.1 8B向けの基準を、Qwen3-8Bに使う前提と限界
 
 1節の基準はMLPerf InferenceがLlama 3.1 8B向けに決めたもので、このプロジェクトのモデルはQwen3-8Bである。この前提を書いていなかった。
 
@@ -295,7 +328,7 @@ MLPerfに提出されたLlama 3.1 8Bの結果と数値を比べることはし�
 - **トークンの粒度**：TPOTは「1トークンあたり」の基準なので、トークナイザが違えば、同じ100msでも1秒あたりに出る文字の量が変わる。
   このワークロードでどちらが細かく分けるかは測っていない。基準の体感の速さがLlama 3.1 8Bのときと同じとは言えないことを、限界として報告に書く。
 
-**検討した懸念。**
+**妥当性への脅威。**
 
 | 懸念 | 対処 | 残る影響 |
 | --- | --- | --- |
@@ -305,7 +338,7 @@ MLPerfに提出されたLlama 3.1 8Bの結果と数値を比べることはし�
 
 （決定日 2026-10-23）<!-- gbrain: [Source: User, MLPerfの基準をQwen3-8Bに使うことの確認, 2026-10-23] -->
 
-## 追記（2026-10-23）：パイロットを受けて、本番のnを1,000に、ウォームアップを1周に固定する
+### A4 追記（2026-10-23）：パイロットを受けて、本番のnを1,000に、ウォームアップを1周に固定する
 
 Hで、本番の件数nと、安定判定の扱いはパイロットで決めることになっていた。pilot-1（2回目のapply）の結果から次のように決める。
 
@@ -344,7 +377,7 @@ Hで、本番の件数nと、安定判定の扱いはパイロットで決める
 1セル1,200件、スループットは並行数1と16の実測の間を補って、合計約14〜15.5時間。applyの1回にセルを回せるのは約5時間なので、3回程度になる。
 幅は、llama.cppが分割KV（ADR-0005の追記2026-10-23）で並行数とともに速くなるかが分からないことによる。
 
-**検討した懸念。**
+**妥当性への脅威。**
 
 | 懸念 | 対処 | 残る影響 |
 | --- | --- | --- |
@@ -361,7 +394,7 @@ Hで、本番の件数nと、安定判定の扱いはパイロットで決める
 
 （決定日 2026-10-23）<!-- gbrain: [Source: User, 本番の件数とウォームアップの見直し, 2026-10-23] -->
 
-## 追記（2026-10-24）：速さの測定は「ツール定義がリクエストごとに変わる」条件と決め直す（Tool RAGの構成）
+### A5 追記（2026-10-24）：速さの測定は「ツール定義がリクエストごとに変わる」条件と決め直す（Tool RAGの構成）
 
 **分かったこと**：4節とAは、ツール定義の部分はprefix cacheに当たり、クエリの部分だけが毎回計算される、という前提で書いていた
 （4節「本番に近い形：ツール定義は固定でクエリが毎回変わる」）。pilot-1の速さの測定で、キャッシュから使えたトークンの割合を見ると、次のとおりだった。
@@ -399,7 +432,7 @@ Hで、本番の件数nと、安定判定の扱いはパイロットで決める
   llama.cpp（スロットごと）のキャッシュの扱いの差は、この条件では見えない。測れるのは、キャッシュの効かない状態でのプロンプト処理と生成の速さである。
 - ツール一式が固定の構成（ツール定義がキャッシュに当たる）では、TTFTは今回より短くなり、満たせる並行数も上がりうる。今回の判定は、その構成には当てはめない。
 
-**検討した懸念**：
+**妥当性への脅威**：
 
 | 懸念 | 対処 | 残る影響 |
 | --- | --- | --- |
@@ -417,11 +450,11 @@ Hで、本番の件数nと、安定判定の扱いはパイロットで決める
 RAG-MCP（https://arxiv.org/abs/2505.03275）。
 （決定日 2026-10-24）<!-- gbrain: [Source: User, 速さの測定の前提（Tool RAG）の見直し, 2026-10-24] -->
 
-## 追記（2026-10-25）：安定の確かめの窓を「送った順」に直す。TTFTとツール名が見えるまでの差
+### A6 追記（2026-10-25）：安定の確かめの窓を「送った順」に直す。TTFTとツール名が見えるまでの差
 
 本番1回目（`main-latency.json`、2026-10-24〜25）の記録を見直して分かった2点を書く。
 
-### 安定の確かめの窓を、完了した順から送った順に直す
+#### 安定の確かめの窓を、完了した順から送った順に直す
 
 **分かったこと**：追記2026-10-23は、計測の1,000件を**完了した順**に200件（1周）ずつの窓に切っていた。本番の15セルのうち3セル
 （vLLM AWQの並行数8・16、llama.cppの並行数16）で`stable`が`false`になった。原因を調べると、負荷の中で遅くなっていったのではなく、窓の切り方によるものだった。
@@ -465,7 +498,7 @@ RAG-MCP（https://arxiv.org/abs/2505.03275）。
 | lat-vllm-bf16-c4 | 3.8% / 2.5% | 安定 | 2.5% / 2.8% | 安定 |
 | lat-vllm-bf16-c8 | 6.6% / 8.4% | 安定 | 2.1% / 2.1% | 安定 |
 
-**検討した懸念**：
+**妥当性への脅威**：
 
 | 懸念 | 対処 | 残る影響 |
 | --- | --- | --- |
@@ -479,7 +512,7 @@ RAG-MCP（https://arxiv.org/abs/2505.03275）。
 | 完了した順の定義のまま、印を残して説明だけ書く | 却下 | 意図とずれた実装を残し、エンジンの振る舞いではない印を報告することになる |
 | 一定の秒数ごとに区切る（時間の窓） | 却下 | 窓ごとにケースの組が変わり、追記Bで窓を1周にした理由とぶつかる |
 
-### TTFTと、ツール名が見えるまでの時間の差（D節の比較）
+#### TTFTと、ツール名が見えるまでの時間の差（D節の比較）
 
 D節で「実機で両者を比べる」とした、TTFT（`choices`を含む最初のチャンク）と、本文かツール呼び出しの断片を含む最初のチャンク（`first_delta_ms`）の差を、
 TPOTで割ってトークンの数にすると、次のとおりだった（計測の件のうち`ok`のもの）。
@@ -495,7 +528,7 @@ transformers_hfとの比較では、TTFTが「最初のトークンが生成さ�
 
 （決定日 2026-10-25）<!-- gbrain: [Source: User, 本番1回目の記録の見直し, 2026-10-25] -->
 
-## 追記（2026-10-27）：負荷のかけ方（並行数を固定する送り方）と、MLPerfのServerとの違い
+### A7 追記（2026-10-27）：負荷のかけ方（並行数を固定する送り方）と、MLPerfのServerとの違い
 
 速さの測定は、並行数Nを固定し、1件が返ったらすぐ次を送る送り方（閉じた系）で行っている。この送り方は、計画の段階（2026-09-10）で
 「`vllm bench serve`もconcurrencyを引数に取る」ことを理由に決めたが、もう一方の送り方と比べた記録が無かった。後から見直して分かったので、ここに書く。
@@ -510,22 +543,3 @@ transformers_hfとの比較では、TTFTが「最初のトークンが生成さ�
   サーバーが遅れると次の要求も遅れて届くので、開いた系より待ちの列が伸びにくく、同じ平均の負荷なら満たしやすい側に寄りうる。
 - **結論との対応**：台数の表は「目標の並行数（同時に使い続ける人数）」ごとに出していて、測った送り方と合っている。「1秒にX件届くなら何台か」には、そのまま読み替えない。
 - **測り直さない**：送り方を変えると第1段階と比べられなくなる。ADR-0009の段階も同じ送り方で測り、限界に書く。
-
-## 参考
-
-- MLCommons, MLPerf Inference 5.1: Benchmarking Small LLMs with Llama3.1-8B (2025-09-09) — https://mlcommons.org/2025/09/small-llm-inference-5-1/
-- MLCommons, MLPerf Client — https://mlcommons.org/benchmarks/client/
-- mlcommons/inference_policies, inference_rules.adoc — https://github.com/mlcommons/inference_policies/blob/master/inference_rules.adoc
-- Zhong et al., DistServe (OSDI'24), arXiv 2401.09670 — https://arxiv.org/abs/2401.09670
-- vLLM, vllm bench serve CLI — https://docs.vllm.ai/en/latest/cli/bench/serve.html
-- NVIDIA, Perf Analyzer CLI — https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/perf_analyzer/docs/cli.html
-- Debian, llama-server(1) — https://manpages.debian.org/unstable/llama.cpp-tools/llama-server.1.en.html
-- ggml-org/llama.cpp Discussion #4130 — https://github.com/ggml-org/llama.cpp/discussions/4130
-- Penn State STAT 415, Lesson 19: Distribution-Free Confidence Intervals for Percentiles — https://online.stat.psu.edu/stat415/lesson/19
-- （追記）vLLM, Parameter Sweeps — https://docs.vllm.ai/en/latest/benchmarking/sweeps.html
-- （追記）vLLM, `vllm/entrypoints/serve/dev/cache/api_router.py`（`/reset_prefix_cache`）・`vllm/benchmarks/lib/endpoint_request_func.py`（TTFTの定義） — https://github.com/vllm-project/vllm
-- （追記）vLLM, vllm serve CLI（`--enable-prompt-tokens-details`） — https://docs.vllm.ai/en/latest/cli/serve.html
-- （追記）mlcommons/inference PR #2445 — https://github.com/mlcommons/inference/pull/2445
-- （追記）mlcommons/inference_policies Issue #300 — https://github.com/mlcommons/inference_policies/issues/300
-- （追記）Reddi et al., MLPerf Inference Benchmark, arXiv 1911.02549（IV-A節） — https://arxiv.org/abs/1911.02549
-- （追記）InferenceX, Prefix caching（用語集） — https://inferencex.semianalysis.com/glossary/prefix-caching
