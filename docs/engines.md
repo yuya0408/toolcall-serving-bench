@@ -72,8 +72,8 @@ SGLangのRadixAttentionの強みは、この条件では出にくい。
 | 方式 | vLLM | SGLang | TensorRT-LLM | 中身 |
 | --- | --- | --- | --- | --- |
 | bf16 | `Qwen/Qwen3-8B` | 同じ | 同じ | 元の重み |
-| 4bit（AWQ、W4A16） | `Qwen/Qwen3-8B-AWQ` | 同じ（疎通で確かめる） | **読めない**。1.2.1の読み込み処理に`awq`の分岐が無い（`_torch/model_config.py`の`load_hf_quant_config`）。ModelOptの`hf_ptq.py --qformat int4_awq`で同じbf16から作る | 重みを4bitに、計算は16bit。重要な重みを守るため、調整用のデータで倍率を決める |
-| FP8（W8A8） | `Qwen/Qwen3-8B-FP8`（128×128のブロック単位の倍率、動的な活性） | 同じ（疎通で確かめる） | **ブロック単位は対応外**（対応表でQwen-3もAda Lovelaceも`.`、`docs/source/features/quantization.md`）。ModelOptの`--qformat fp8`（テンソル単位）で同じbf16から作る | 重みと活性を8bitの浮動小数点に。L4（Ada）はFP8の計算回路を持つ |
+| 4bit（AWQ、W4A16） | `Qwen/Qwen3-8B-AWQ` | 同じ（疎通と本番で確かめた） | **読めない**。1.2.1の読み込み処理に`awq`の分岐が無い（`_torch/model_config.py`の`load_hf_quant_config`）。ModelOptの`hf_ptq.py --qformat int4_awq`で同じbf16から作る | 重みを4bitに、計算は16bit。重要な重みを守るため、調整用のデータで倍率を決める |
+| FP8（W8A8） | `Qwen/Qwen3-8B-FP8`（128×128のブロック単位の倍率、動的な活性） | 同じ（疎通と本番で確かめた） | **ブロック単位は対応外**（対応表でQwen-3もAda Lovelaceも`.`、`docs/source/features/quantization.md`）。ModelOptの`--qformat fp8`（テンソル単位）で同じbf16から作る | 重みと活性を8bitの浮動小数点に。L4（Ada）はFP8の計算回路を持つ |
 
 - 量子化の構成は、エンジンの間で方式をそろえず、各エンジンの中でbf16との非劣化を確かめる（ADR-0008・0009）。
 - NVIDIAが公開している`nvidia/Qwen3-8B-FP8`は、KVキャッシュもFP8にしてある（`hf_quant_config.json`の`kv_cache_quant_algo`）。

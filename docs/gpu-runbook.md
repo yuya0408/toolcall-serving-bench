@@ -1,6 +1,6 @@
 # GPUインスタンスでの実行手順書
 
-[クラウド層の設計方針](cloud-layer-plan.md)<!-- gbrain: [[docs/cloud-layer-plan|クラウド層の設計方針]] -->に基づき、`infra/gpu/`で`terraform apply`してから`destroy`するまでの手順。
+[クラウド層の設計方針](cloud-layer-plan.md)に基づき、`infra/gpu/`で`terraform apply`してから`destroy`するまでの手順。
 インスタンス上の作業（準備・サーバーの起動と再起動・セルの実行）は`scripts/gpu/`のスクリプトがやり、手で打つのは下の6つのコマンドだけにする。
 手で繰り返すと、llama.cppの再起動忘れや回収漏れのように、データを黙って壊す間違いが起きるためである。
 
@@ -78,7 +78,7 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
    manifestの`engine_version`がこの形式（`^[0-9a-f]{7,40}$`）を求める。
 4. `Qwen/Qwen3-8B`と`Qwen/Qwen3-8B-AWQ`をHugging Faceのキャッシュへダウンロードし、`Qwen/Qwen3-8B`のsafetensorsから
    BF16のGGUFを作る（llama.cpp同梱の`convert_hf_to_gguf.py --outtype bf16`。量子化ではなくGGUFへの詰め替えだけで、配布されたGGUFを使わないのは
-   vLLM・transformersと同じ重みであることを保証するため<!-- gbrain: [[docs/engine-performance-plan|計画書]] -->。変換は別の環境`~/venv-convert`で行う。
+   vLLM・transformersと同じ重みであることを保証するため。変換は別の環境`~/venv-convert`で行う。
    変換ツールの依存がCPU版のtorchを入れ、vLLMのものを置き換えてしまうため）。
 5. 未検証の3点を確かめ、`~/out/checks/`に残す。
    - a. vLLMのバージョン → `~/out/versions.json`
@@ -164,7 +164,7 @@ scripts/gpu/local.sh cells $IP scripts/gpu/cells/main-quant.json       # 本番3
 - `schema/prompt_budget.json`は、ケースとカタログから手元で数えた値（`scripts/count_prompt_tokens.py --tool-stage 10 --write-budget`）。
   ケースかカタログを変えたのに数え直していないと、`run_cells.py`は最初に止まる。
 - vLLMは`VLLM_SERVER_DEV_MODE=1`で、`--enable-auto-tool-choice --tool-call-parser hermes --enable-prompt-tokens-details`を付けて起動する。
-  `--max-model-len 8192`は、tool_stage 10のプロンプト（約2,200トークン、計画書の1リクエスト約306MiBから）と出力の上限512トークンに余裕を持たせた値。
+  `--max-model-len 8192`は、tool_stage 10のプロンプト（約2,200トークン。非公開の計画メモの1リクエスト約306MiBからの推定で、実測は約2,300）と出力の上限512トークンに余裕を持たせた値。
   既定の40,960トークンだと、bf16の重みを載せた後のKVキャッシュに収まらず、起動できない可能性がある。
 - llama.cppは`--jinja --no-kv-unified --fit off -lv 4 --metrics`で起動する。KVキャッシュはスロットごとに分かれる（`--parallel`を指定したときのllama.cppの既定）。
   `--parallel`はセルの並行数、`--ctx-size`は「1リクエストの最大」を256の倍数に切り上げた値 × 並行数で（llama.cppがスロットごとにそう切り上げるため）、
@@ -426,5 +426,5 @@ terraform -chdir=infra/gpu destroy
 destroyの後、動いていた時間（インスタンスの`LaunchTime`から終了まで）×単価で費用を見積もり、翌日以降にCost Explorerの実額で確かめる。
 ADR-0003の費用の概算は、この実測で置き換える。
 
-（決定日 2026-09-12）<!-- gbrain: [Source: User, GPUインスタンス起動手順書の整備, 2026-09-12] -->
-（決定日 2026-10-17）<!-- gbrain: [Source: User, GPUでの実行を手動の操作なしでスクリプトにする, 2026-10-17] -->
+（決定日 2026-09-12）
+（決定日 2026-10-17）
