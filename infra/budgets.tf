@@ -1,7 +1,8 @@
-# __generated__ by Terraform
-# Please review these resources and move them into your main configuration files.
+variable "budget_alert_email" {
+  description = "Address that receives the monthly budget alerts (pass it in a gitignored *.tfvars)"
+  type        = string
+}
 
-# __generated__ by Terraform
 resource "aws_budgets_budget" "monthly" {
   account_id        = "344261432226"
   billing_view_arn  = null
@@ -17,7 +18,7 @@ resource "aws_budgets_budget" "monthly" {
   notification {
     comparison_operator        = "GREATER_THAN"
     notification_type          = "ACTUAL"
-    subscriber_email_addresses = ["hirayuu0408@gmail.com"]
+    subscriber_email_addresses = [var.budget_alert_email]
     subscriber_sns_topic_arns  = []
     threshold                  = 100
     threshold_type             = "PERCENTAGE"
@@ -25,7 +26,7 @@ resource "aws_budgets_budget" "monthly" {
   notification {
     comparison_operator        = "GREATER_THAN"
     notification_type          = "ACTUAL"
-    subscriber_email_addresses = ["hirayuu0408@gmail.com"]
+    subscriber_email_addresses = [var.budget_alert_email]
     subscriber_sns_topic_arns  = []
     threshold                  = 50
     threshold_type             = "PERCENTAGE"
@@ -33,7 +34,7 @@ resource "aws_budgets_budget" "monthly" {
   notification {
     comparison_operator        = "GREATER_THAN"
     notification_type          = "FORECASTED"
-    subscriber_email_addresses = ["hirayuu0408@gmail.com"]
+    subscriber_email_addresses = [var.budget_alert_email]
     subscriber_sns_topic_arns  = []
     threshold                  = 100
     threshold_type             = "PERCENTAGE"

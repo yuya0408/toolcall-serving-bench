@@ -147,7 +147,7 @@ def run_repeated_cases_concurrent(
     the serialized baseline does), but dispatches every (case, trial) unit
     across *all* cases through a thread pool with up to `max_workers` in
     flight at once. This is what "concurrency=N" means for the
-    accuracy_under_load probe (the engine-performance plan (kept outside this repo)): N requests
+    accuracy_under_load probe (the design notes kept outside this repo): N requests
     simultaneously in flight against the engine -- not N trials of one case.
 
     ThreadPoolExecutor, not asyncio: a ModelAdapter's generate() is a
@@ -265,7 +265,7 @@ def _paired_cluster_bootstrap_diff_ci(
     """Bootstrap CI for the *paired difference* in pooled selection rate
     between two conditions measured over the same case set (e.g. the
     accuracy_under_load probe's concurrency=1 baseline vs. concurrency=16;
-    see the engine-performance plan (kept outside this repo)'s equivalence-margin section).
+    see the design notes kept outside this repo's equivalence-margin section).
 
     Resamples case INDICES once per iteration and reuses that same index set
     for both `baseline` and `loaded` -- referencing both conditions from a
@@ -325,7 +325,7 @@ def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
     BFCL v3, declared before any data: docs/adr/0002-equivalence-margin.md),
     TOST-style: the entire CI must sit inside
     (-margin, +margin) to call the two conditions equivalent -- not just the
-    point estimate (the engine-performance plan (kept outside this repo)'s option (a), chosen
+    point estimate (the design notes kept outside this repo's option (a), chosen
     2026-09-11 specifically to avoid the weaker, direction-blind version
     where a wide, uncertain difference could pass just because its center
     happened to be small).

@@ -2,10 +2,10 @@
 
 This is the deliberate swap point (see the cost-asymmetry principle).
 
-  - Article 1 uses IdentityDecoder: the model's raw output is parsed as-is.
+  - The benchmark uses IdentityDecoder: the model's raw output is parsed as-is.
     We measure the *bare* small-model ability, with no constraint help.
 
-  - Article 3 will drop in a constrained decoder (e.g. GBNF grammar) HERE,
+  - A constrained decoder could drop in (e.g. GBNF grammar) HERE,
     touching nothing else in the harness. The delta between IdentityDecoder
     and a constrained decoder is precisely the "constrained decoding" step of
     the few-shot -> constrained-decoding -> FT comparison.
@@ -29,7 +29,7 @@ class Decoder(ABC):
 
 
 class IdentityDecoder(Decoder):
-    """Article-1 decoder: parse the model's own JSON/tool-call output, no constraints."""
+    """Baseline decoder: parse the model's own JSON/tool-call output, no constraints."""
 
     def decode(self, raw_output: str, tool_schema: dict[str, Any]) -> Prediction:
         try:
@@ -49,7 +49,7 @@ _TOOL_CALL_TAG_RE = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
 
 
 class HermesTagDecoder(IdentityDecoder):
-    """transformers_hf decoder (the engine-performance plan's naive baseline has no
+    """transformers_hf decoder (the design notes' naive baseline has no
     serving-level tool-call parser): Qwen3 emits a tool call as a raw
     '<tool_call>{...}</tool_call>' text block rather than a structured API
     field. Only the first block is read -- Prediction supports one tool call
