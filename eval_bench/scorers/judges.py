@@ -1,6 +1,6 @@
 """Semantic judges (injected into the scorer).
 
-Primary judge for the article = embedding similarity with a fixed, *calibrated*
+Primary judge for reporting = embedding similarity with a fixed, *calibrated*
 threshold (reproducible). LLM-as-Judge is provided only as an audit judge to
 cross-check the embedding judge on the seed set; it is NOT the reporting judge.
 
@@ -35,7 +35,7 @@ def calibrate_threshold(embedder: Embedder,
                         negatives: list[tuple[str, str]]) -> dict[str, float]:
     """Pick the threshold that best separates hand-labeled positive/negative
     text pairs (from the seed set). Returns the chosen threshold plus the
-    accuracy at +/-0.05 so the article can report sensitivity, not a bare cut.
+    accuracy at +/-0.05 so a report can show sensitivity, not a bare cut.
     """
     def acc(t: float) -> float:
         ok = sum(1 for e, p in positives if _cosine(embedder.encode(e), embedder.encode(p)) >= t)

@@ -4,11 +4,11 @@ Each adapter takes (query, tool_set) and returns the model's raw output.
 Nothing here knows about scoring; parsing that output into a Prediction is
 the paired Decoder's job (eval_bench/decoders/base.py), not the adapter's --
 an adapter invokes the engine's API and hands back what it said, unparsed.
-Add one subclass per backend. Article 1 compares models by swapping adapters
+Add one subclass per backend. Engines are compared by swapping adapters
 under an identical dataset/decoder/scorer.
 
 No few_shot parameter: the harness uses each engine's chat/tools API
-(the engine-performance plan (kept outside this repo)'s '比較可能性の規律' -- 2026-09-10 switch from
+(the design notes kept outside this repo's '比較可能性の規律' -- 2026-09-10 switch from
 raw completion endpoints), and Qwen3-8B is natively tool-calling-tuned, so
 no in-prompt examples are needed to induce structured output the way they
 would be for a raw-completion pattern-continuation approach.

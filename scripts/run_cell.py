@@ -55,7 +55,7 @@ from eval_bench.runner import (  # noqa: E402
 from eval_bench.scorers.separated import score_case  # noqa: E402
 
 _CATALOGS = {
-    10: _ROOT / "schema" / "tools.json",            # Article-1 overlay point: original 40 only
+    10: _ROOT / "schema" / "tools.json",            # stage-10 comparability point: original 40 only
     50: _ROOT / "schema" / "tools_extended.json",
     100: _ROOT / "schema" / "tools_extended.json",
 }
