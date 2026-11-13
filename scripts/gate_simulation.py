@@ -30,6 +30,8 @@ Tables:
 Error cells are left out where the test arm cannot be 2.6pt worse
 (pd_test < 2.6%, or no k1 reaches it).
 Result (2026-10-27, 4000 sims): worst error at 99.9% = 2.3%, so 99.9% is used.
+The verdicts equal pooled_noninferiority's on every one of the 181 x 4000 error
+datasets (2026-11-13, docs/adr/0009 A3; tests/test_gate_simulation.py keeps checking).
 """
 import argparse
 import math
@@ -69,18 +71,28 @@ def solve_k1(mu, rho, k0, target=-M):
     return hi
 
 
-def tstats(rng, mu, rho, k0, k1, refs, sims, chunk=500):
-    out = []
+def arms(rng, mu, rho, k0, k1, refs, sims, chunk=500):
+    """The simulated arms, `chunk` datasets at a time: (test, [reference arms]),
+    each a bool array (datasets, CASES, TRIALS) with True = right tool."""
     for start in range(0, sims, chunk):
         n = min(chunk, sims - start)
         z = rng.random((n, CASES, 1)) < ACC
         h = beta(rng, mu, rho, (n, CASES, 1))
-        ref = np.zeros((n, CASES, TRIALS))
-        for _ in range(refs):
-            ref += z ^ (rng.random((n, CASES, TRIALS)) < h)
-        ref /= refs
+        ref_arms = [z ^ (rng.random((n, CASES, TRIALS)) < h) for _ in range(refs)]
         p = np.where(z, np.minimum(1, k1 * h), np.minimum(1, k0 * h))
-        test = z ^ (rng.random((n, CASES, TRIALS)) < p)
+        yield z ^ (rng.random((n, CASES, TRIALS)) < p), ref_arms
+
+
+def tstats(rng, mu, rho, k0, k1, refs, sims, chunk=500):
+    """The one-sided t statistic of noninferiority.pooled_noninferiority, per
+    dataset; claimed when above the t quantile (tests/test_gate_simulation.py
+    checks that the verdicts agree)."""
+    out = []
+    for test, ref_arms in arms(rng, mu, rho, k0, k1, refs, sims, chunk):
+        ref = np.zeros(test.shape)
+        for a in ref_arms:
+            ref += a
+        ref /= refs
         d = (test - ref).mean(axis=2)
         mean, sd = d.mean(axis=1), d.std(axis=1, ddof=1)
         with np.errstate(divide="ignore", invalid="ignore"):

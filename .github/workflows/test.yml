@@ -18,9 +18,9 @@ jobs:
         with:
           python-version: "3.13"
 
-      # torch/transformers/requests are imported lazily inside the adapters,
-      # so the test suite needs only the harness's own requirements.
-      - run: pip install -r requirements.txt pytest
+      # torch/transformers/requests are imported lazily inside the adapters;
+      # numpy/scipy are for the simulation and cross-check tests only.
+      - run: pip install -r requirements-dev.txt
 
       # python -m puts the repo root on sys.path (as local runs do), so the
       # tests can import eval_bench without packaging it.

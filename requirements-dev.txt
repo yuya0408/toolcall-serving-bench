@@ -1,0 +1,6 @@
+-r requirements.txt
+
+# tests only: the simulations and the scipy/numpy cross-checks of the verdict statistics
+numpy>=2.1
+scipy>=1.14
+pytest
