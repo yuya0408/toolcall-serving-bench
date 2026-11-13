@@ -159,7 +159,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 手元（GPU不要）：
 
 ```bash
-pip install -r requirements.txt pytest
+pip install -r requirements-dev.txt          # 実行だけならrequirements.txt。numpy・scipyはテストだけで使う
 python -m pytest -q                       # PRごとにCIでも回る。保存済みの8Bの答えで、並び順・リクエスト・読み取り・採点を全件照合する（ADR-0010）
 ```
 
