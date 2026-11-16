@@ -9,7 +9,8 @@ This prevents the failure mode where a case file and the tool definition drift
 apart and the harness silently scores against a stale contract.
 """
 from __future__ import annotations
-import json, pathlib
+import json
+import pathlib
 from typing import Any
 
 _TOOLS_PATH = pathlib.Path(__file__).resolve().parents[2] / "schema" / "tools.json"

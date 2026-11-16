@@ -1,5 +1,7 @@
 # toolcall-serving-bench ― 同じ8Bモデルを5つの推論エンジンで測り、精度の足切りの後にGPUの台数で構成を選んだ
 
+自前のGPUで8Bモデルにツール呼び出しをさせ、複数のリクエストを同時に受けるとき、どのエンジンと量子化を選べばGPUの台数を最も少なくできるか。量子化で精度が落ちないか・同時に受けると遅くなりすぎないかの2つを同時に満たす構成を、定量的に選定したかった。
+
 同じモデル（Qwen3-8B）を、同じGPU（NVIDIA L4 1台）で、5つの推論エンジンと量子化の組み合わせに載せ、
 **ツール呼び出し（function calling）の精度とレイテンシ**を測った。精度で足切りしてから、会話用の基準を満たす最大の並行数で台数を出し、台数が最も少ない構成を選んだ。
 評価セットは、汎用ERPのツール群に対する日本語の200件を自作した。
@@ -9,9 +11,22 @@
 
 ```mermaid
 flowchart LR
-    A["5エンジン × bf16・4bit・FP8<br/>2段階で計12構成"] -->|"精度の足切り<br/>（非劣化）"| B["精度を保った構成"]
-    B -->|"会話用の基準を<br/>満たす最大の並行数"| C["1台がさばく並行数"]
-    C -->|"台数 = 目標 ÷ 並行数"| D["目標4以上:<br/>TensorRT-LLM FP8"]
+    subgraph S1["第1段階：系統を比べる"]
+        direction TB
+        T["transformers<br/>素の実装"]
+        L["llama.cpp<br/>1リクエスト<br/>向け"]
+        V1["vLLM<br/>連続バッチング"]
+        T ~~~ L ~~~ V1
+    end
+    subgraph S2["第2段階：連続バッチングの中を比べる<br/>（別のインスタンスで、vLLMも測り直す）"]
+        direction TB
+        V2["vLLM"]
+        SG["SGLang"]
+        TR["TensorRT-LLM"]
+        V2 ~~~ SG ~~~ TR
+    end
+    S1 -->|"vLLM AWQが最少の台数<br/>同じ系統の候補は未比較"| S2
+    S2 -->|"× bf16・AWQ・FP8<br/>足切り → 最大の並行数 → 台数"| D["目標4以上:<br/>TensorRT-LLM FP8"]
 ```
 
 ---
@@ -32,7 +47,7 @@ flowchart LR
 | 用語 | 意味 |
 | --- | --- |
 | selection | 正しいツールを選べた割合（呼ぶべきでない場面で呼ばないことを含む） |
-| 並行数 | 同時に送るリクエストの数 |
+| 並行数 | 同時に処理中のリクエストの数（1件返ると次を送る）。利用者数ではない |
 | 会話用の基準 | MLPerf InferenceのLlama 3.1 8B向け（TTFT 2,000ms・TPOT 100ms）。超過が1%以下と言えれば「満たす」 |
 | 非劣化を示せた | 差の片側の下限が、許す差 −2.6pt（Qwen3-8Bと4BのBFCLの差）を上回った |
 | 最大の並行数 | 並行数1から倍々に上げ、「満たす」が続いた最大の値 |
@@ -113,6 +128,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 | 条件 | 値 |
 | --- | --- |
 | モデル・GPU | `Qwen/Qwen3-8B`（revision `b968826`）とその量子化、`g6.xlarge`（L4 24GB）1台。段階の中では全構成を同じ1台で測る |
+| ドライバ・CUDA | NVIDIAドライバは第1段階が595.91.07、第2段階が595.112.07（AMIをapplyのたびに最新版で取ったため）。CUDAは13.2。比べる組み合わせは段階の中で閉じていて、段階をまたいでは比べない |
 | 評価セット | 日本語200件（うちツールを呼ぶべきでない30件）。架空のERPの40個のツールから、ケースごとに10個を提示（約2,300トークン） |
 | 採点 | ツールの選択（selection）と引数（完全一致・意味の一致）を別々に採点し、選択を外したケースの引数はN/Aにする |
 | 精度のセル | 並行数1、200件×5試行（ツールの並び順を試行ごとに変える）。判定に使うのはgreedy（temperature 0.7の普通の精度も参考に測った） |
@@ -159,7 +175,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 手元（GPU不要）：
 
 ```bash
-pip install -r requirements-dev.txt          # 実行だけならrequirements.txt。numpy・scipyはテストだけで使う
+pip install -r requirements-dev.txt          # 実行だけならrequirements.txt。numpy・scipy・matplotlibはテストと図だけで使う
 python -m pytest -q                       # PRごとにCIでも回る。保存済みの8Bの答えで、並び順・リクエスト・読み取り・採点を全件照合する（ADR-0010）
 ```
 
@@ -173,7 +189,7 @@ python scripts/noninferiority.py --batching runs/<回収したフォルダ>
 ```
 
 GPUインスタンスでの実行（apply → 準備 → セルの一覧を回す → 回収 → destroy）は[docs/gpu-runbook.md](docs/gpu-runbook.md)の手順で行う。
-READMEの図は`python scripts/plot_results.py`で作り直せる。
+READMEの図は`python scripts/plot_results.py`で作り直せる（図の値は、`--check runs/`で生の記録と照合できる）。
 本番4回分の生の記録（manifest・生出力・実行条件）は[Release `runs-2026-10`](https://github.com/yuya0408/toolcall-serving-bench/releases/tag/runs-2026-10)にあり、`runs/`に展開すると上の足切りを作り直せる。
 
 ## ディレクトリ構成
@@ -181,8 +197,8 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 | 場所 | 中身 |
 | --- | --- |
 | `data/`・`schema/` | 評価セット、事例とrun manifestのschema、ツールカタログ |
-| `eval_bench/` | ハーネス本体（エンジンごとのadapter、分離採点、レイテンシ、容量の判定、セルの実行） |
-| `scripts/` | セルの実行・足切り・図の作成・評価セットの生成。`scripts/gpu/`はGPUインスタンスでの手順 |
+| `eval_bench/` | ハーネス本体（エンジンごとのadapter、分離採点、レイテンシ、容量の判定、非劣化と足切りの判定、ゴールデンの照合） |
+| `scripts/` | コマンド（セルの実行・足切り・図の作成・評価セットの生成）とシミュレーション。`scripts/gpu/`はGPUインスタンスでの手順 |
 | `infra/` | Terraform（GPUインスタンス） |
 | `docs/` | [詳しい結果](docs/results.md)、ADR、GPUでの実行の記録（`gpu-*.md`）、エンジンごとの違い（`engines.md`）、図 |
 

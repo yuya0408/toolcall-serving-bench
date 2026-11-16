@@ -1,17 +1,23 @@
-"""Decoder layer.
+"""Decoder layer: turn an engine's raw output into one (tool, args) Prediction.
 
-This is the deliberate swap point (see the cost-asymmetry principle).
+Which decoder each engine uses (scripts/run_cell.py _build_backend):
 
-  - The benchmark uses IdentityDecoder: the model's raw output is parsed as-is.
-    We measure the *bare* small-model ability, with no constraint help.
+  - transformers_hf -> HermesTagDecoder. transformers is a library, not a
+    server, so the harness gets Qwen3's text as written,
+    '<tool_call>{"name": ..., "arguments": ...}</tool_call>', and strips the
+    tag itself.
+  - vllm, sglang, tensorrt_llm, llama_cpp -> OpenAIToolCallDecoder. Each
+    server's own tool-call parser has already stripped the tag and returns
+    an OpenAI-style `message` with `tool_calls`; the decoder only reads it.
 
-  - A constrained decoder could drop in (e.g. GBNF grammar) HERE,
-    touching nothing else in the harness. The delta between IdentityDecoder
-    and a constrained decoder is precisely the "constrained decoding" step of
-    the few-shot -> constrained-decoding -> FT comparison.
+IdentityDecoder parses a bare '{"name": ..., "arguments": ...}' JSON object.
+It is the base HermesTagDecoder reuses once the tag is gone, and the decoder
+the tests pair with fake adapters; no engine uses it on its own.
 
 Keep this interface tiny on purpose: a decoder only turns raw model text into
-a (tool, args) Prediction. It must not call an LLM or touch scoring.
+a (tool, args) Prediction. It must not call an LLM or touch scoring. A
+constrained decoder (e.g. a grammar) would plug in here without touching the
+rest of the harness; none is used.
 """
 from __future__ import annotations
 import json
@@ -29,7 +35,7 @@ class Decoder(ABC):
 
 
 class IdentityDecoder(Decoder):
-    """Baseline decoder: parse the model's own JSON/tool-call output, no constraints."""
+    """Parse a bare {"name"/"tool": ..., "arguments"/"args": ...} JSON object, no constraints."""
 
     def decode(self, raw_output: str, tool_schema: dict[str, Any]) -> Prediction:
         try:
@@ -49,8 +55,8 @@ _TOOL_CALL_TAG_RE = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
 
 
 class HermesTagDecoder(IdentityDecoder):
-    """transformers_hf decoder (the design notes' naive baseline has no
-    serving-level tool-call parser): Qwen3 emits a tool call as a raw
+    """transformers_hf decoder (there is no server, so no serving-level
+    tool-call parser): Qwen3 emits a tool call as a raw
     '<tool_call>{...}</tool_call>' text block rather than a structured API
     field. Only the first block is read -- Prediction supports one tool call
     per turn, matching this project's scoring design (see scorers/separated.py).
@@ -71,9 +77,9 @@ class HermesTagDecoder(IdentityDecoder):
 
 
 class OpenAIToolCallDecoder(Decoder):
-    """vllm/llama_cpp decoder: both serve an OpenAI-compatible chat completions
-    endpoint with a built-in tool-call parser (vLLM's --tool-call-parser
-    hermes, llama.cpp server's --jinja-driven equivalent), so what the adapter
+    """vllm/sglang/tensorrt_llm/llama_cpp decoder: each serves an OpenAI-compatible
+    chat completions endpoint with a built-in tool-call parser (e.g. vLLM's
+    --tool-call-parser hermes, llama.cpp server's --jinja-driven equivalent), so what the adapter
     hands back is already a structured `message` object (JSON-serialized),
     not free text -- the server has already done the tag-stripping that
     HermesTagDecoder does by hand for transformers_hf.

@@ -52,7 +52,7 @@ from eval_bench import capacity  # noqa: E402
 from eval_bench.runner import (  # noqa: E402
     build_manifest, run_accuracy_cell, validate_cell_invariants, write_manifest,
 )
-from eval_bench.scorers.separated import score_case  # noqa: E402
+from eval_bench.scorers.separated import no_semantic_judge, score_case  # noqa: E402
 
 _CATALOGS = {
     10: _ROOT / "schema" / "tools.json",            # stage-10 comparability point: original 40 only
@@ -63,7 +63,7 @@ _CATALOGS = {
 # Engines run as a server, reached over the OpenAI-compatible API.
 SERVED_ENGINES = ("vllm", "sglang", "tensorrt_llm", "llama_cpp")
 
-# the engine-performance plan (kept outside this repo): Qwen3 non-thinking recommended sampling.
+# Qwen3's recommended sampling for non-thinking mode (Qwen3 model card).
 _QWEN3_NON_THINKING = {"temperature": 0.7, "top_p": 0.8, "top_k": 20, "min_p": 0.0}
 
 
@@ -145,13 +145,6 @@ def _query_gpu() -> tuple[str, float]:
     ).stdout.strip().splitlines()[0]
     name, mib = (s.strip() for s in out.split(","))
     return name, round(float(mib) / 1024, 1)
-
-
-def _no_semantic_judge(expected: str, predicted: str) -> bool:
-    raise RuntimeError(
-        "a semantic-scored field was scored, but schema/tools.json 2.1.1 has none -- "
-        "the catalog or a case changed without choosing a judge"
-    )
 
 
 class _RawLog:
@@ -323,7 +316,7 @@ def _reference_accuracy(rows, cases, decoder, engine: str) -> dict[str, Any]:
             raw = row["content"]
         else:
             raw = json.dumps({"tool_calls": [{"function": tc} for tc in row.get("tool_calls") or []]})
-        scores.append(score_case(by_id[row["case_id"]], decoder.decode(raw, {}), _no_semantic_judge))
+        scores.append(score_case(by_id[row["case_id"]], decoder.decode(raw, {}), no_semantic_judge))
 
     def mean(xs):
         return round(sum(xs) / len(xs), 4) if xs else None
@@ -410,7 +403,7 @@ def main(argv: list[str] | None = None) -> int:
     watch.start()
     try:
         results = run_accuracy_cell(cases, tools, cell, args.pass_type, predict,
-                                    _no_semantic_judge, n=args.n, seed_base=args.seed_base)
+                                    no_semantic_judge, n=args.n, seed_base=args.seed_base)
     except BaseException:
         # Keep what was answered, for the diagnosis; a name the offline scripts
         # do not read (*.raw.jsonl), since the cell did not finish.

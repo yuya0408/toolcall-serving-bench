@@ -1,5 +1,5 @@
 """Calibrate the one confidence level of the phase-2 accuracy gate
-(docs/adr/0009 5, option F; scripts/noninferiority.py batching_gate).
+(docs/adr/0009 5, option F; eval_bench/noninferiority.py batching_gate).
 
     python scripts/gate_simulation.py 4000            # both tables, ~30 min
     python scripts/gate_simulation.py 4000 --table spread
@@ -84,7 +84,7 @@ def arms(rng, mu, rho, k0, k1, refs, sims, chunk=500):
 
 
 def tstats(rng, mu, rho, k0, k1, refs, sims, chunk=500):
-    """The one-sided t statistic of noninferiority.pooled_noninferiority, per
+    """The one-sided t statistic of eval_bench.noninferiority.pooled_noninferiority, per
     dataset; claimed when above the t quantile (tests/test_gate_simulation.py
     checks that the verdicts agree)."""
     out = []

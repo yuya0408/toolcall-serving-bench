@@ -1,12 +1,13 @@
 """Invariants for schema/tools_extended.json (the 100-tool catalog for
-tool_stage=50/100, the engine-performance plan (kept outside this repo)). These are the checks a
+tool_stage=50/100). These are the checks a
 visual read of the generated JSON won't catch: a duplicate name silently
 collapses load_tools()'s dict to <100 entries, and stage=10 must still be
 run against the ORIGINAL 40-tool file, never this one -- if a case can't be
 validated or padded against the extended catalog at 50/100, that's a bug in
 the catalog, not in the case.
 """
-import pathlib, sys
+import pathlib
+import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval_bench.dataset.loader import load_cases

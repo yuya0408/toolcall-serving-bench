@@ -74,7 +74,7 @@ def test_sglang_retractions_are_its_preemptions_in_the_post_check():
 
 def test_sglang_retraction_counter_is_absent_until_the_first_retraction():
     # 0.5.21: the labelled counter has no sample before its first increment; the gauge is always there.
-    no_counter = "".join(l for l in _SGLANG_METRICS.splitlines(keepends=True) if "retracted" not in l)
+    no_counter = "".join(line for line in _SGLANG_METRICS.splitlines(keepends=True) if "retracted" not in line)
     gauge = 'sglang:num_retracted_reqs{model_name="Qwen/Qwen3-8B",engine_type="unified"} 0.0\n'
     assert capacity.sglang_counters(no_counter + gauge)["preemptions"] == 0
     with pytest.raises(ValueError, match="num_retracted"):

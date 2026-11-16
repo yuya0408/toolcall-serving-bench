@@ -29,7 +29,7 @@ from eval_bench.dataset.loader import load_cases
 from eval_bench.dataset.tools import load_tools, to_openai_tools_subset
 from eval_bench.dataset.toolsets import build_tool_set
 from eval_bench.repetition import trial_order
-from eval_bench.scorers.separated import Prediction, score_case
+from eval_bench.scorers.separated import Prediction, no_semantic_judge, score_case
 
 GOLDEN_DIR = pathlib.Path(__file__).resolve().parent.parent / "tests" / "golden"
 DATA_DIR = pathlib.Path(__file__).resolve().parent.parent / "data"
@@ -44,10 +44,6 @@ CELLS = {
     "tensorrt_llm": "gpu-20261028-i-0bd6a9b5da22d5bf5/acc-trt-bf16",
 }
 ANSWER_FIELDS = ("case_id", "trial", "tool_order", "raw_output", "decoded")
-
-
-def _no_semantic_judge(expected: str, predicted: str) -> bool:
-    raise RuntimeError("a semantic-scored field was scored, but the catalog has none")
 
 
 # --- files -----------------------------------------------------------------
@@ -139,7 +135,7 @@ def request_record(req: dict[str, Any]) -> dict[str, Any]:
 
 
 def score(case: dict, decoded: dict) -> dict[str, Any]:
-    s = score_case(case, Prediction(decoded["tool"], decoded["args"]), _no_semantic_judge)
+    s = score_case(case, Prediction(decoded["tool"], decoded["args"]), no_semantic_judge)
     return {"selection": s.selection, "arg_exact": s.arg_exact,
             "arg_semantic": s.arg_semantic, "e2e": s.e2e}
 

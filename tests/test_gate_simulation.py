@@ -4,26 +4,14 @@ the 99.9% level with (docs/adr/0009 5) belongs to a different rule. The full
 check (181 error cells x 4,000 datasets, no disagreement) is in docs/adr/0009
 A3; this runs a few cells, including the worst one, at both differences."""
 from __future__ import annotations
-import importlib.util
-import pathlib
 
 import pytest
 
 np = pytest.importorskip("numpy")
 stats = pytest.importorskip("scipy.stats")
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
-
-
-def _load(name):
-    spec = importlib.util.spec_from_file_location(name, _ROOT / "scripts" / f"{name}.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-sim = _load("gate_simulation")
-ni = _load("noninferiority")
+import gate_simulation as sim  # noqa: E402
+from eval_bench import noninferiority as ni  # noqa: E402
 
 _KEYS = [(f"c{c:03d}", t) for c in range(sim.CASES) for t in range(sim.TRIALS)]
 _SIMS = 100

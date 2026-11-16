@@ -51,6 +51,10 @@ step "AMI prerequisites"
 nvidia-smi | tee "$OUT/checks/nvidia-smi.txt"
 nvcc --version | tee "$OUT/checks/nvcc.txt"   # no nvcc -> no CUDA build of llama.cpp; stop here
 { shutdown --show 2>/dev/null || cat /run/systemd/shutdown/scheduled; } 2>&1 | tee "$OUT/checks/shutdown.txt" || true   # --show needs systemd >= 250
+# infra/gpu takes the latest DLAMI, so the driver can change between applies; keep which image this was
+IMDS_TOKEN=$(curl -sf -X PUT -H "X-aws-ec2-metadata-token-ttl-seconds: 60" http://169.254.169.254/latest/api/token) || true
+curl -sf -H "X-aws-ec2-metadata-token: $IMDS_TOKEN" http://169.254.169.254/latest/meta-data/ami-id | tee "$OUT/checks/ami-id.txt" || true
+echo
 
 step "system packages"
 sudo apt-get update -q
@@ -155,7 +159,7 @@ for q in int4_awq:Qwen3-8B-int4-awq-modelopt fp8:Qwen3-8B-fp8-modelopt; do
 done
 
 if [ "$SETUP_LLAMA" = 1 ]; then
-step "BF16 GGUF from the same safetensors (the engine-performance plan (kept outside this repo))"
+step "BF16 GGUF from the same safetensors (the same weights as vLLM/transformers)"
 # A separate environment: the converter's requirements pin a CPU torch that
 # would replace vLLM's CUDA build.
 uv venv --allow-existing --python 3.12 ~/venv-convert
@@ -180,6 +184,11 @@ step "version checks (runbook step 4)"
   ~/venv/bin/vllm serve --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || true
 ~/venv-sglang/bin/python -m sglang.launch_server --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/sglang_tool_call_parser.txt" || true
 ~/venv-trtllm/bin/trtllm-serve serve --help 2>&1 | grep -A3 -i "tool_parser" > "$OUT/checks/trtllm_tool_parser.txt" || true
+# Every package in each environment, not just the engines: the harness's client
+# (requests, urllib3) runs in ~/venv and its timeout handling depends on them.
+for env in venv venv-sglang venv-trtllm; do
+  uv pip freeze --python ~/$env/bin/python > "$OUT/checks/pip-freeze-$env.txt"
+done
 ENGINE_VERSIONS=$(printf '{"sglang": "%s", "tensorrt_llm": "%s", "modelopt": "%s", "trtllm_torch": "%s"}' \
   "$(~/venv-sglang/bin/python -c 'from importlib.metadata import version; print(version("sglang"))')" \
   "$(~/venv-trtllm/bin/python -c 'from importlib.metadata import version; print(version("tensorrt_llm"))')" \
@@ -195,6 +204,7 @@ for line in (out / "checks" / "model_paths.txt").read_text().splitlines():
     revisions[repo] = pathlib.Path(path).name   # the snapshot directory is the commit hash
 versions = {
     "vllm": version("vllm"), "transformers": version("transformers"), "torch": version("torch"),
+    "requests": version("requests"), "urllib3": version("urllib3"),   # the harness's client
     "llama_cpp_commit": ((out / "llama_cpp_commit.txt").read_text().strip()
                          if (out / "llama_cpp_commit.txt").exists() else None),
     **json.loads(sys.argv[2]),

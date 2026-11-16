@@ -1,8 +1,6 @@
 """The verdict path computes its statistics with the standard library only;
 these check them against scipy/numpy over the ranges the verdicts use."""
 from __future__ import annotations
-import importlib.util
-import pathlib
 import random
 
 import pytest
@@ -12,10 +10,7 @@ stats = pytest.importorskip("scipy.stats")
 
 from eval_bench.latency import clopper_pearson_one_sided, percentiles  # noqa: E402
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("noninferiority", _ROOT / "scripts" / "noninferiority.py")
-ni = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ni)
+from eval_bench import noninferiority as ni  # noqa: E402
 
 
 @pytest.mark.parametrize("n", [299, 1000])

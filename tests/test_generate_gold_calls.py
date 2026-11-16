@@ -2,7 +2,6 @@
 (docs/adr/0004-expand-case-set.md) must be reproducible, distinct, legal
 per the tool catalog, and free of the combinations no user would ask for."""
 from __future__ import annotations
-import importlib.util
 import json
 import pathlib
 import random
@@ -16,9 +15,7 @@ from eval_bench.dataset.tools import load_tools
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_ROOT / "scripts"))
-_spec = importlib.util.spec_from_file_location("generate_gold_calls", _ROOT / "scripts" / "generate_gold_calls.py")
-gen = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(gen)
+import generate_gold_calls as gen  # noqa: E402
 
 _TOOLS = load_tools(_ROOT / "schema" / "tools.json")
 _EXISTING = [c for c in load_cases(_ROOT / "data") if c["provenance"] != "generated"]

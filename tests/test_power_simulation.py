@@ -2,8 +2,6 @@
 pass analyzes real data (repetition._paired_cluster_bootstrap_diff_ci), or
 the case count it recommends answers a different question."""
 from __future__ import annotations
-import importlib.util
-import pathlib
 
 import pytest
 
@@ -12,10 +10,7 @@ np = pytest.importorskip("numpy")
 from eval_bench.repetition import RepeatedCaseResult, _paired_cluster_bootstrap_diff_ci  # noqa: E402
 from eval_bench.scorers.separated import CaseScore, Prediction  # noqa: E402
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("power_simulation", _ROOT / "scripts" / "power_simulation.py")
-sim = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(sim)
+import power_simulation as sim  # noqa: E402
 
 
 def _arm(case_id: str, selections: list[bool]) -> RepeatedCaseResult:

@@ -5,8 +5,8 @@ The values are copied from the run manifests and scripts/noninferiority.py
 so the figures redraw without the raw runs (those are in Release runs-2026-10).
 Edit them here if a value changes.
 
-    pip install matplotlib
-    python scripts/plot_results.py        # writes docs/figures/*.png
+    python scripts/plot_results.py               # writes docs/figures/*.png
+    python scripts/plot_results.py --check runs/ # compare every value with Release runs-2026-10
 
 Figures (phase 1 without a suffix, phase 2 with _batching; the two are drawn
 apart because the instance and the accuracy gate differ):
@@ -25,13 +25,16 @@ quantization. The chosen config is in color, the others that passed the gate
 in grey, and the excluded ones hatched (bars) or thin grey (lines).
 """
 
+import argparse
+import json
+import sys
 from math import ceil
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.pyplot as plt
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "figures"
 
@@ -342,7 +345,86 @@ def interval(phase, title_text, filename, interval_label, groups=None):
     plt.close(fig)
 
 
+# --check: where each written value comes from in Release runs-2026-10
+RUNS = {"第1段階": "gpu-20261024-main-latency", "第2段階": "gpu-20261028-i-0bd6a9b5da22d5bf5"}
+RUNS_PHASE1_Q4 = "gpu-20261026-i-0362dcd8fb58ed4b7"   # main run 3: Q4_K_M, and the phase-1 gate
+CELL = {"vLLM": "vllm", "SGLang": "sglang", "TRT-LLM": "trt", "transformers": "hf", "llama.cpp": "llama"}
+QUANT = {"bf16": "bf16", "AWQ": "awq", "FP8": "fp8", "Q4_K_M": "q4km"}
+VERDICT = {"meets": "m", "indeterminate": "i", "fails": "f"}
+
+
+def cell_dir(runs, phase, name, concurrency):
+    engine, quant = name.rsplit(" ", 1)
+    run = RUNS_PHASE1_Q4 if quant == "Q4_K_M" else RUNS[phase.label]
+    q = "gguf" if (engine, quant) == ("llama.cpp", "bf16") else QUANT[quant]
+    return runs / run / f"lat-{CELL[engine]}-{q}-c{concurrency}"
+
+
+def recorded_latency(cell):
+    """(TTFT p99, TPOT p99, req/s, verdict) from a cell's manifest, rounded as written."""
+    manifest = json.loads(next(cell.glob("latency-*Z.json")).read_text(encoding="utf-8"))["results"]
+    windows = manifest["measured_stability"]["windows"]
+    return (round(manifest["ttft_ms"]["p99"]), round(manifest["tpot_ms"]["p99"], 1),
+            round(sum(w["throughput_rps"] for w in windows) / len(windows), 3),
+            VERDICT[manifest["slo"]["conversational"]["verdict"]])
+
+
+def recorded_gates(runs):
+    """{phase label: {config: (diff pt, lower bound pt)}} from eval_bench.noninferiority."""
+    root = Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root))
+    from eval_bench.dataset.loader import load_cases
+    from eval_bench.flips import load_arm
+    from eval_bench.noninferiority import batching_gate, load_batching_arms, noninferiority
+
+    cases = {c["id"]: c for c in load_cases(root / "data")}
+    run3 = runs / RUNS_PHASE1_Q4
+
+    def arm(cell):
+        return load_arm(next((run3 / cell).glob("*.raw.jsonl")))
+    phase1 = {}
+    for name, base, quant in (("vLLM AWQ", "ni-vllm-bf16-c1", "ni-vllm-awq-c1"),
+                              ("llama.cpp Q4_K_M", "ni-llama-gguf-c1", "ni-llama-q4km-c1")):
+        r = noninferiority(arm(base), arm(quant), cases)
+        phase1[name] = (round(r["selection_diff"] * 100, 1), round(r["lower_bound"] * 100, 2))
+    gate = batching_gate(load_batching_arms([runs / RUNS["第2段階"]], cases))
+    names = {f"{CELL[e]}-{QUANT[q]}": f"{e} {q}" for e in ("vLLM", "SGLang", "TRT-LLM") for q in ("bf16", "AWQ", "FP8")}
+    phase2 = {names[k]: (round(r["selection_diff"] * 100, 2), round(r["lower_bound"] * 100, 2))
+              for k, r in {**gate["bf16"], **gate["quantized"]}.items()}
+    return {"第1段階": phase1, "第2段階": phase2}, set(names[k] for k in gate["passing"])
+
+
+def check(runs):
+    """Compare every value written above with the raw records; return the number that differ."""
+    gates, passing2 = recorded_gates(runs)
+    rows = []   # (where, written, recorded)
+    for phase in (PHASE1, PHASE2):
+        for name, points in phase.latency.items():
+            for c, *written in points:
+                rows.append((f"{phase.label} {name} c{c} (TTFT, TPOT, req/s, verdict)", tuple(written),
+                             recorded_latency(cell_dir(runs, phase, name, c))))
+        for name, diff, lower, _ in phase.gate:
+            rows.append((f"{phase.label} {name} gate (diff, lower)", (diff, lower), gates[phase.label][name]))
+        for name, max_c, passed in phase.selection:
+            meets = [c for c, *_, v in phase.latency[name] if v == "m"]
+            gate_ok = (name in passing2) if phase is PHASE2 else (
+                name not in gates["第1段階"] or gates["第1段階"][name][1] > MARGIN)
+            rows.append((f"{phase.label} {name} selection (max concurrency, passed)", (max_c, passed),
+                         (max(meets) if meets else 0, gate_ok)))
+    bad = [r for r in rows if r[1] != r[2]]
+    print(f"checked {len(rows)} entries: {len(rows) - len(bad)} match, {len(bad)} differ")
+    for where, written, recorded in bad:
+        print(f"  {where}: written {written}, recorded {recorded}")
+    return len(bad)
+
+
 def main():
+    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p.add_argument("--check", type=Path, metavar="RUNS_DIR",
+                   help="compare the values written here with the unpacked Release instead of drawing")
+    args = p.parse_args()
+    if args.check is not None:
+        return 1 if check(args.check) else 0
     OUT.mkdir(parents=True, exist_ok=True)
     style()
     selection(PHASE1, "第1段階：精度を保った構成のうち、vLLM AWQが1台で最も多い並行数をさばく", "selection.png")
@@ -361,4 +443,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -117,11 +117,26 @@ TensorRT-LLMはvLLMと全ケースで同じだった）。
 
 それぞれが固定する版がぶつかるので、環境を分ける。クライアント（`scripts/run_cell.py`）はどのエンジンでも`~/venv`から動かす。
 
+### 公式のコンテナを使わなかったこと
+
+第1段階はtransformersをクライアントと同じプロセスで動かすためホストのPython環境で始め、第2段階のエンジンも同じ形（エンジンごとのvenv）で足した。公式のコンテナと比べて選んだわけではない。エンジン本体と、エンジンが固定する依存（torch・FlashInferなど）の版は公式の指定どおりだが、公式イメージとは次の点が違う（2026-10-28の`setup.log`と、各エンジンのその版のDockerfile・文書を突き合わせた）。
+
+| エンジン | このプロジェクト（pip） | 公式イメージ |
+| --- | --- | --- |
+| vLLM 0.31.0 | torch 2.13.0+cu132（`uv pip install --torch-backend=auto`がドライバを見て選んだ）。FlashInfer 0.7.0.post1のカーネルは、ホストのCUDA 13.2でその場でコンパイルされた | CUDA 13.0.3が土台で、torchはcu130。FlashInferは同じ版で、事前にビルドしたカーネル（`flashinfer-jit-cache`）を入れる |
+| SGLang 0.5.21 | torch 2.13.0+cu132。FlashInfer 0.6.18は同上 | CUDA 13.0.3が土台で、torchはcu130。FlashInferは同じ版で、事前にビルドしたカーネル（`flashinfer-cubin`）を入れる |
+| TensorRT-LLM 1.2.1 | PyPIのwheelとtorch 2.9.1+cu130（文書のpipの手順）。OSはUbuntu 22.04 | NGC PyTorch 25.12（mainブランチから作ったtorch）が土台で、中には別のwheelがある。文書は「PyPIのwheelはNGC PyTorch 25.12と互換でない可能性がある」とし、試験環境をUbuntu 24.04としている |
+
+これらによる速さの差は確かめていない。違いはTensorRT-LLMがいちばん大きく、第2段階のエンジンの間の順位は、公式イメージで動かした場合と入れ替わり得る（ADR-0009の追記A4）。
+
+TensorRT-LLMの環境では、ModelOpt 0.37.0が読み込みのときに「transformers 4.57.3 is incompatible with nvidia-modelopt」と警告した（2026-10-28の`setup.log`）。どちらもTensorRT-LLM 1.2.1が要求する版である。量子化（INT4 AWQ・FP8）は最後まで通ったが、警告の影響は確かめていない。
+
 ## 出典
 
 - vLLM 0.31.0：`vllm/v1/metrics/loggers.py`、`vllm serve --help`
 - SGLang v0.5.21：https://github.com/sgl-project/sglang/tree/v0.5.21 （`python/sglang/srt/observability/metrics_collector.py`、`srt/entrypoints/http_server.py`、
   `srt/entrypoints/openai/protocol.py`、`srt/function_call/function_call_parser.py`、`srt/arg_groups/`）、ツールパーサーの文書 https://docs.sglang.io/advanced_features/tool_parser.html
+- 公式イメージ：vLLM v0.31.0の`docker/Dockerfile`・`requirements/cuda.txt`、SGLang v0.5.21の`docker/Dockerfile`、TensorRT-LLM v1.2.1の`docker/Dockerfile.multi`・`docs/source/installation/linux.md`
 - TensorRT-LLM v1.2.1：https://github.com/NVIDIA/TensorRT-LLM/tree/v1.2.1 （`tensorrt_llm/commands/serve.py`、`serve/openai_server.py`、`serve/openai_protocol.py`、
   `llmapi/llm_args.py`、`_torch/model_config.py`、`cpp/tensorrt_llm/executor/jsonSerialization.cpp`、`docs/source/features/quantization.md`、
   `docs/source/installation/linux.md`）、対応表 https://nvidia.github.io/TensorRT-LLM/1.2.1/legacy/reference/support-matrix.html

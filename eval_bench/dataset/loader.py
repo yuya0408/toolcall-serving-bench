@@ -4,20 +4,16 @@ Refuses to load a case missing provenance or (for grounded cases) source.
 Transparency is enforced here, not left to documentation.
 """
 from __future__ import annotations
-import json, pathlib
+import json
+import pathlib
 from typing import Any
 
-try:
-    import jsonschema
-except ImportError:
-    jsonschema = None
+import jsonschema
 
 _SCHEMA_PATH = pathlib.Path(__file__).resolve().parents[2] / "schema" / "case.schema.json"
 
 
 def _validator():
-    if jsonschema is None:
-        return None
     schema = json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
     return jsonschema.Draft202012Validator(schema)
 
@@ -31,8 +27,7 @@ def load_cases(data_dir: str | pathlib.Path) -> list[dict[str, Any]]:
             if not line:
                 continue
             case = json.loads(line)
-            if v is not None:
-                v.validate(case)
+            v.validate(case)
             cases.append(case)
     return cases
 
