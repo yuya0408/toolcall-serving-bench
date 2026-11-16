@@ -14,14 +14,16 @@ flowchart LR
     subgraph S1["第1段階：系統を比べる"]
         direction TB
         T["transformers<br/>素の実装"]
-        L["llama.cpp<br/>1リクエスト向け"]
+        L["llama.cpp<br/>1リクエスト<br/>向け"]
         V1["vLLM<br/>連続バッチング"]
+        T ~~~ L ~~~ V1
     end
     subgraph S2["第2段階：連続バッチングの中を比べる<br/>（別のインスタンスで、vLLMも測り直す）"]
         direction TB
         V2["vLLM"]
         SG["SGLang"]
         TR["TensorRT-LLM"]
+        V2 ~~~ SG ~~~ TR
     end
     S1 -->|"vLLM AWQが最少の台数<br/>同じ系統の候補は未比較"| S2
     S2 -->|"× bf16・AWQ・FP8<br/>足切り → 最大の並行数 → 台数"| D["目標4以上:<br/>TensorRT-LLM FP8"]
