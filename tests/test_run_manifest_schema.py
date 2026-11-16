@@ -1,12 +1,10 @@
 """Structural guards on schema/run_manifest.schema.json's allOf rules. These
 exist because a concurrency-under-load data point that got silently pooled
 with the plain accuracy sweep's implicit concurrency=1 baseline would corrupt
-the engine-performance-plan comparison without raising any error -- see
-the engine-performance plan (kept outside this repo)'s 'KVキャッシュブロッカーの解消' and the
-schema's own allOf $comments. Each guard is exercised on both a passing and a
+the engine comparison without raising any error -- see the schema's own
+allOf $comments. Each guard is exercised on both a passing and a
 failing manifest so a future edit that quietly weakens one of them fails loud.
 """
-import copy
 import json
 import pathlib
 

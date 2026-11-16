@@ -1,6 +1,10 @@
 -r requirements.txt
 
-# tests only: the simulations and the scipy/numpy cross-checks of the verdict statistics
+# development only: tests (the simulations and the scipy/numpy cross-checks of the
+# verdict statistics) and the README figures
 numpy>=2.1
 scipy>=1.14
 pytest
+matplotlib>=3.8
+# pinned: a newer ruff can add checks under the selected rules and fail CI on unchanged code
+ruff==0.17.5

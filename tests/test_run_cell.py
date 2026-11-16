@@ -6,7 +6,6 @@ choice, the runner's guards, raw-log trial recovery, manifest validation) is
 the real code path the GPU run will take.
 """
 from __future__ import annotations
-import importlib.util
 import itertools
 import json
 import pathlib
@@ -20,9 +19,7 @@ from eval_bench.decoders.base import IdentityDecoder, OpenAIToolCallDecoder
 from eval_bench.latency import TimedResult
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("run_cell", _ROOT / "scripts" / "run_cell.py")
-run_cell = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(run_cell)
+import run_cell  # noqa: E402
 
 _CASES = load_cases(_ROOT / "data")
 

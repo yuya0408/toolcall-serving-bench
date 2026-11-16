@@ -13,7 +13,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import run_cells  # noqa: E402
+import run_cells
 
 QUERY = "今年度の給与額の推移を、月次で出してください"
 

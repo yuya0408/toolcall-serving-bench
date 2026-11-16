@@ -1,7 +1,7 @@
 """vllm / sglang / tensorrt_llm / llama_cpp adapters: all serve an
 OpenAI-compatible chat completions endpoint (llama.cpp server's
 /v1/chat/completions, alongside its native /completion which this project
-does not use -- see the design notes kept outside this repo's '比較可能性の規律'), so
+does not use -- every engine is driven through its chat/tools API, docs/engines.md), so
 one HTTP adapter covers them; only base_url/model/name and where the cached
 prompt tokens are reported differ per engine.
 
@@ -16,6 +16,29 @@ from typing import Any, Optional
 
 from eval_bench.adapters.base import ModelAdapter
 from eval_bench.latency import TimedResult
+
+
+def _is_read_timeout(exc: BaseException) -> bool:
+    """A read timeout while streaming surfaces as requests' ConnectionError,
+    not Timeout: requests wraps urllib3's ReadTimeoutError in it
+    (requests/models.py iter_content). Look for that type inside rather than
+    for 'timed out' in the message, which depends on the library versions.
+    Only ReadTimeoutError: urllib3's NewConnectionError (connection refused)
+    is a subclass of its TimeoutError too."""
+    from urllib3.exceptions import ReadTimeoutError
+
+    stack, seen = [exc], set()
+    while stack:
+        e = stack.pop()
+        if id(e) in seen:
+            continue
+        seen.add(id(e))
+        if isinstance(e, (ReadTimeoutError, TimeoutError)):
+            return True
+        stack.extend(a for a in e.args if isinstance(a, BaseException))
+        stack.extend(c for c in (e.__cause__, e.__context__) if c is not None)
+    return False
+
 
 # Reserved keys generate() adds to the returned message JSON.
 USAGE_KEY = "_usage"
@@ -157,9 +180,7 @@ class OpenAICompatibleChatAdapter(ModelAdapter):
         except requests.exceptions.Timeout:
             return timed_out()
         except requests.exceptions.ConnectionError as exc:
-            # A read timeout while streaming surfaces as ConnectionError
-            # (requests wraps urllib3's ReadTimeoutError), not as Timeout.
-            if "timed out" in str(exc).lower():
+            if _is_read_timeout(exc):
                 return timed_out()
             raise
         # The request ends at its last choice-bearing event, as in vllm bench

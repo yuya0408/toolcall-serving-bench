@@ -1,0 +1,3 @@
+# Copy to infra/backend.hcl (gitignored) and put your own state bucket here.
+# Both infra/ and infra/gpu/ read it; each keeps its own key in backend.tf.
+bucket = "tool-call-bench-tfstate-<ACCOUNT_ID>"

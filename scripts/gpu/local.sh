@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run from WSL, in the repo, after `terraform apply` in infra/gpu (docs/gpu-runbook.md).
 #
-#     scripts/gpu/local.sh push    <ip>             # copy the committed repo (it is private: no git clone)
+#     scripts/gpu/local.sh push    <ip>             # copy the committed tree (git archive, so every run matches a commit)
 #     scripts/gpu/local.sh setup   <ip>             # start setup.sh on the instance, detached
 #     SETUP_LLAMA=0 scripts/gpu/local.sh setup <ip> # the same, without llama.cpp and the GGUFs (docs/adr/0009)
 #     scripts/gpu/local.sh wait-setup <ip>          # wait until setup.sh finished (SETUP_DONE / SETUP_FAILED)

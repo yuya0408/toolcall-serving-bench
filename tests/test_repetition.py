@@ -1,6 +1,7 @@
 """Smoke test for the repeated-trial harness: order-sensitivity produces
 inconsistency, order-insensitivity does not, and the aggregate is sane."""
-import pathlib, sys
+import pathlib
+import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 import pytest

@@ -25,6 +25,15 @@ from typing import Any, Callable, Optional
 SemanticJudge = Callable[[str, str], bool]
 
 
+def no_semantic_judge(expected: str, predicted: str) -> bool:
+    """The judge to pass while the catalog has no semantic-scored field: it
+    fails loudly instead of scoring if one ever appears."""
+    raise RuntimeError(
+        "a semantic-scored field was scored, but the catalog has none -- "
+        "the catalog or a case changed without choosing a judge"
+    )
+
+
 @dataclass
 class Prediction:
     """What a model produced for one case."""
@@ -91,10 +100,7 @@ def score_case(case: dict[str, Any], pred: Prediction, judge: SemanticJudge) -> 
         semantic = None
 
     # Derived only. E2E = selection AND every applicable arg metric passed.
-    e2e = sel and (exact in (True, None)) and (semantic in (True, None)) and not (
-        # a negative case is E2E-correct exactly when selection was correct
-        False
-    )
+    e2e = sel and (exact in (True, None)) and (semantic in (True, None))
 
     return CaseScore(
         case_id=case["id"],

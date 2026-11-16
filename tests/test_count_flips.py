@@ -1,16 +1,11 @@
-"""scripts/count_flips.py: the third pass's flip count (docs/adr/0002), on
+"""eval_bench/flips.py: the third pass's flip count (docs/adr/0002), on
 hand-made raw logs."""
 from __future__ import annotations
-import importlib.util
 import json
-import pathlib
 
 import pytest
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("count_flips", _ROOT / "scripts" / "count_flips.py")
-count_flips = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(count_flips)
+from eval_bench import flips as count_flips
 
 _CASES = {
     "pos": {"id": "pos", "expected_tool": "aggregate_sales",

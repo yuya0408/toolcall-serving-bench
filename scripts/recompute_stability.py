@@ -18,8 +18,8 @@ from pathlib import Path
 import jsonschema
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from eval_bench.latency import STABILITY_PCT, STABLE_WINDOWS, is_stable, measured_windows  # noqa: E402
-from eval_bench.runner import _MANIFEST_SCHEMA  # noqa: E402
+from eval_bench.latency import STABILITY_PCT, STABLE_WINDOWS, is_stable, measured_windows
+from eval_bench.runner import _MANIFEST_SCHEMA
 
 
 def recompute(manifest_path: Path) -> tuple[dict, dict]:

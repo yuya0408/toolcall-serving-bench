@@ -8,8 +8,9 @@ terraform {
     }
   }
 
+  # the bucket comes from infra/backend.hcl (gitignored; copy backend.hcl.example):
+  #   terraform -chdir=infra init -backend-config=backend.hcl
   backend "s3" {
-    bucket       = "tool-call-bench-tfstate-344261432226"
     key          = "cloud-layer/terraform.tfstate"
     region       = "ap-northeast-1"
     use_lockfile = true

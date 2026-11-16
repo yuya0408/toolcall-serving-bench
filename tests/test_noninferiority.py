@@ -1,15 +1,10 @@
-"""scripts/noninferiority.py: the quantization non-inferiority verdict
+"""eval_bench/noninferiority.py: the quantization non-inferiority verdict
 (docs/adr/0008), on hand-made arms."""
 from __future__ import annotations
-import importlib.util
-import pathlib
 
 import pytest
 
-_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("noninferiority", _ROOT / "scripts" / "noninferiority.py")
-ni = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(ni)
+from eval_bench import noninferiority as ni
 
 _RIGHT = {"tool": "aggregate_sales", "args": {"period": "last_month"}}
 _WRONG = {"tool": "trend_inventory", "args": {}}
@@ -191,7 +186,8 @@ def test_batching_loader_needs_the_status(tmp_path):
 
 def test_batching_loader_takes_a_rerun_from_a_later_folder(tmp_path):
     main, rerun = tmp_path / "main", tmp_path / "rerun"
-    main.mkdir(); rerun.mkdir()
+    main.mkdir()
+    rerun.mkdir()
     _status(main, [("ni-vllm-bf16-c1", "error")])
     _status(rerun, [("ni-vllm-bf16-c1", "ok")])
     with pytest.raises(ValueError, match=r"rerun.ni-vllm-bf16-c1: 0 raw logs"):

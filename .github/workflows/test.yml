@@ -11,17 +11,23 @@ permissions:
 jobs:
   pytest:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # 3.12 is what the GPU runs used (scripts/gpu/setup.sh); 3.13 checks a newer one
+        python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python-version }}
 
       # torch/transformers/requests are imported lazily inside the adapters;
       # numpy/scipy are for the simulation and cross-check tests only.
       - run: pip install -r requirements-dev.txt
 
-      # python -m puts the repo root on sys.path (as local runs do), so the
-      # tests can import eval_bench without packaging it.
+      # rules are in pyproject.toml [tool.ruff.lint]
+      - run: ruff check .
+
+      # pyproject.toml puts the repo root and scripts/ on the test path.
       - run: python -m pytest -q

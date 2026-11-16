@@ -557,7 +557,7 @@ def shutdown_shortfall(list_name: str, now_s: float | None = None,
     make = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(make)
     estimate = make.estimated_minutes().get(list_name)
-    usec = dict(l.split("=", 1) for l in schedule.read_text().split() if "=" in l).get("USEC")
+    usec = dict(kv.split("=", 1) for kv in schedule.read_text().split() if "=" in kv).get("USEC")
     if estimate is None or usec is None:
         return None
     left = (int(usec) / 1e6 - (time.time() if now_s is None else now_s)) / 60

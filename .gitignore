@@ -8,6 +8,7 @@ venv/
 *.tfstate
 *.tfstate.*
 *.tfvars
+backend.hcl
 *.tfplan
 crash.log
 crash.*.log
@@ -18,6 +19,8 @@ override.tf.json
 
 # Python tooling
 .pytest_cache/
+build/
+*.egg-info/
 
 # Local Claude Code settings
 .claude/settings.local.json

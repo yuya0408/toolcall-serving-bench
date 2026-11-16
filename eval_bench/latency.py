@@ -244,7 +244,7 @@ def run_latency_cell(cases: list[dict[str, Any]], send: SendFn, concurrency: int
             sent_at = clock()
             try:
                 result = send(case, index)
-            except Exception as exc:  # noqa: BLE001 -- any non-timeout failure aborts the cell
+            except Exception as exc:  # any non-timeout failure aborts the cell
                 with lock:
                     if state["error"] is None:
                         state["error"] = CellAborted(f"request {index} ({case['id']}): {exc!r}")

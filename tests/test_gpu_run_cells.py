@@ -1,7 +1,6 @@
 """scripts/gpu/run_cells.py without a GPU: the cell lists are valid, and each
 cell becomes the server and run_cell.py command it should."""
 from __future__ import annotations
-import importlib.util
 import json
 import pathlib
 import sys
@@ -9,13 +8,9 @@ import sys
 import pytest
 
 _ROOT = pathlib.Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("run_cells", _ROOT / "scripts" / "gpu" / "run_cells.py")
-run_cells = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(run_cells)
+import run_cells  # noqa: E402
 
-_spec_rc = importlib.util.spec_from_file_location("run_cell", _ROOT / "scripts" / "run_cell.py")
-run_cell = importlib.util.module_from_spec(_spec_rc)
-_spec_rc.loader.exec_module(run_cell)
+import run_cell  # noqa: E402
 
 _REAL_SWAP_DEVICES = run_cells.swap_devices   # kept before the autouse fixture replaces it
 _VERSIONS = {"vllm": "0.20.0", "transformers": "4.57.0", "llama_cpp_commit": "0123456789abcdef",
@@ -163,7 +158,7 @@ def test_the_list_stops_with_failed_when_the_gpu_is_not_freed(tmp_path, monkeypa
     _fake_run(monkeypatch, "pass", gpu_freed=False)
     assert _main(tmp_path, [_hf_cell("a"), _hf_cell("b")]) == 1
     lines = (tmp_path / "status.jsonl").read_text().splitlines()
-    assert [json.loads(l)["name"] for l in lines] == ["a"]          # b never started
+    assert [json.loads(line)["name"] for line in lines] == ["a"]          # b never started
     assert "GPU memory still in use after a" in (tmp_path / "FAILED").read_text()
     assert not (tmp_path / "RUNNING").exists() and not (tmp_path / "DONE").exists()
 
@@ -383,10 +378,7 @@ def test_a_single_slot_llama_cell_has_no_unified_fallback(tmp_path, monkeypatch)
 
 def test_the_seed_check_starts_a_sized_llama_server(tmp_path, monkeypatch):
     # 2026-10-21: it called server_command without the budget and never ran.
-    spec = importlib.util.spec_from_file_location("check_llama_seed",
-                                                  _ROOT / "scripts" / "gpu" / "check_llama_seed.py")
-    seed = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(seed)
+    import check_llama_seed as seed
     commands = []
 
     def spawn(cmd, log):
@@ -424,10 +416,7 @@ def test_a_failed_capacity_read_is_the_cells_error_not_the_lists(tmp_path, monke
 def test_main_lists_are_the_generators_output_in_its_seeded_order():
     # docs/adr/0007: the order is drawn once from SEED and is part of the record,
     # so a hand-edited or re-drawn list must fail here.
-    spec = importlib.util.spec_from_file_location("make_main_cells",
-                                                  _ROOT / "scripts" / "gpu" / "make_main_cells.py")
-    make = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(make)
+    import make_main_cells as make
     assert make.SEED == 20261024
     for name, cells in make.lists().items():
         committed = (_ROOT / "scripts" / "gpu" / "cells" / name).read_text(encoding="utf-8")

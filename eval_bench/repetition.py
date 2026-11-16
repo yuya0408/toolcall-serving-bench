@@ -147,7 +147,7 @@ def run_repeated_cases_concurrent(
     the serialized baseline does), but dispatches every (case, trial) unit
     across *all* cases through a thread pool with up to `max_workers` in
     flight at once. This is what "concurrency=N" means for the
-    accuracy_under_load probe (the design notes kept outside this repo): N requests
+    accuracy_under_load probe (docs/adr/0002): N requests
     simultaneously in flight against the engine -- not N trials of one case.
 
     ThreadPoolExecutor, not asyncio: a ModelAdapter's generate() is a
@@ -265,7 +265,7 @@ def _paired_cluster_bootstrap_diff_ci(
     """Bootstrap CI for the *paired difference* in pooled selection rate
     between two conditions measured over the same case set (e.g. the
     accuracy_under_load probe's concurrency=1 baseline vs. concurrency=16;
-    see the design notes kept outside this repo's equivalence-margin section).
+    see docs/adr/0002 for the margin).
 
     Resamples case INDICES once per iteration and reuses that same index set
     for both `baseline` and `loaded` -- referencing both conditions from a
@@ -287,7 +287,7 @@ def _paired_cluster_bootstrap_diff_ci(
         )
     if not baseline:
         return (float("nan"), float("nan"))
-    mismatched = [(b.case_id, l.case_id) for b, l in zip(baseline, loaded) if b.case_id != l.case_id]
+    mismatched = [(b.case_id, x.case_id) for b, x in zip(baseline, loaded) if b.case_id != x.case_id]
     if mismatched:
         raise ValueError(f"baseline/loaded case order mismatch, e.g. {mismatched[0]}")
 
@@ -325,8 +325,7 @@ def equivalence_verdict(diff_ci: tuple[float, float], margin: float) -> str:
     BFCL v3, declared before any data: docs/adr/0002-equivalence-margin.md),
     TOST-style: the entire CI must sit inside
     (-margin, +margin) to call the two conditions equivalent -- not just the
-    point estimate (the design notes kept outside this repo's option (a), chosen
-    2026-09-11 specifically to avoid the weaker, direction-blind version
+    point estimate (chosen 2026-09-11 specifically to avoid the weaker, direction-blind version
     where a wide, uncertain difference could pass just because its center
     happened to be small).
 

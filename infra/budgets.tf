@@ -3,8 +3,10 @@ variable "budget_alert_email" {
   type        = string
 }
 
+data "aws_caller_identity" "current" {}
+
 resource "aws_budgets_budget" "monthly" {
-  account_id        = "344261432226"
+  account_id        = data.aws_caller_identity.current.account_id
   billing_view_arn  = null
   budget_type       = "COST"
   limit_amount      = "60.0"

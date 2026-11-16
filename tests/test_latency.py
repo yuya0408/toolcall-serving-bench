@@ -5,7 +5,6 @@ against a fake engine on a virtual clock, so warmup windows, the measured
 slice and every abort path are deterministic.
 """
 from __future__ import annotations
-import itertools
 import json
 import sys
 import threading
@@ -14,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import requests
+import urllib3
 
 from eval_bench.adapters.openai_compatible import LlamaCppAdapter, SGLangAdapter, VLLMAdapter
 from eval_bench.adapters.transformers_hf import TransformersHFAdapter
@@ -292,17 +292,33 @@ def test_llama_cpp_stream_reads_cache_n_from_timings():
     assert result.cached_tokens == 2100
 
 
-def test_read_timeout_while_streaming_is_a_timeout_not_an_error():
+def _stream_then(exc):
     def lines():
         yield b"data: " + json.dumps(_TOOL_CALL_STREAM[0]).encode()
-        raise requests.exceptions.ConnectionError("HTTPConnectionPool(host='x'): Read timed out.")
-    with _streaming_post(lines()):
+        raise exc
+    return lines()
+
+
+def test_read_timeout_while_streaming_is_a_timeout_not_an_error():
+    # what requests' iter_content raises: urllib3's ReadTimeoutError wrapped in ConnectionError
+    read_timeout = urllib3.exceptions.ReadTimeoutError(None, "http://x", "Read timed out.")
+    with _streaming_post(_stream_then(requests.exceptions.ConnectionError(read_timeout))):
         result = VLLMAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
     assert result.status == "timeout" and result.ttft_s is not None
 
 
+def test_a_timeout_is_told_by_its_type_not_its_message():
+    # the words alone (no ReadTimeoutError inside) are a connection error, not a timeout
+    with _streaming_post(_stream_then(requests.exceptions.ConnectionError("Read timed out."))):
+        with pytest.raises(requests.exceptions.ConnectionError):
+            VLLMAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
+
+
 def test_refused_connection_raises():
-    with patch("requests.post", side_effect=requests.exceptions.ConnectionError("Connection refused")):
+    # urllib3's NewConnectionError subclasses its TimeoutError, so this must not count as one
+    refused = urllib3.exceptions.MaxRetryError(
+        None, "http://x", urllib3.exceptions.NewConnectionError(None, "Connection refused"))
+    with patch("requests.post", side_effect=requests.exceptions.ConnectionError(refused)):
         with pytest.raises(requests.exceptions.ConnectionError):
             VLLMAdapter("http://x", "m", _SAMPLING).generate_timed("q", _TOOLS, timeout=60)
 

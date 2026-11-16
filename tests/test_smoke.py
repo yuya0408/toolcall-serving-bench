@@ -1,5 +1,6 @@
 """Smoke test: schema validation, separated scoring, provenance split."""
-import pathlib, sys
+import pathlib
+import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from eval_bench.dataset.loader import load_cases, by_provenance

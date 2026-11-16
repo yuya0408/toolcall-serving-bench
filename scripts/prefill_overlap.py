@@ -66,7 +66,7 @@ def main() -> None:
     args = ap.parse_args()
 
     tasks = server_tasks(args.server_log)
-    rows = sorted((json.loads(l) for l in open(args.raw_jsonl, encoding="utf-8")), key=lambda r: r["sent_at_s"])
+    rows = sorted((json.loads(line) for line in open(args.raw_jsonl, encoding="utf-8")), key=lambda r: r["sent_at_s"])
     rows = [r for r in rows if r.get("ttft_ms") is not None]
     if len(rows) != len(tasks):
         raise SystemExit(f"count mismatch: {len(rows)} client records, {len(tasks)} server tasks")

@@ -113,6 +113,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 | 条件 | 値 |
 | --- | --- |
 | モデル・GPU | `Qwen/Qwen3-8B`（revision `b968826`）とその量子化、`g6.xlarge`（L4 24GB）1台。段階の中では全構成を同じ1台で測る |
+| ドライバ・CUDA | NVIDIAドライバは第1段階が595.91.07、第2段階が595.112.07（AMIをapplyのたびに最新版で取ったため）。CUDAは13.2。比べる組み合わせは段階の中で閉じていて、段階をまたいでは比べない |
 | 評価セット | 日本語200件（うちツールを呼ぶべきでない30件）。架空のERPの40個のツールから、ケースごとに10個を提示（約2,300トークン） |
 | 採点 | ツールの選択（selection）と引数（完全一致・意味の一致）を別々に採点し、選択を外したケースの引数はN/Aにする |
 | 精度のセル | 並行数1、200件×5試行（ツールの並び順を試行ごとに変える）。判定に使うのはgreedy（temperature 0.7の普通の精度も参考に測った） |
@@ -159,7 +160,7 @@ TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果]
 手元（GPU不要）：
 
 ```bash
-pip install -r requirements-dev.txt          # 実行だけならrequirements.txt。numpy・scipyはテストだけで使う
+pip install -r requirements-dev.txt          # 実行だけならrequirements.txt。numpy・scipy・matplotlibはテストと図だけで使う
 python -m pytest -q                       # PRごとにCIでも回る。保存済みの8Bの答えで、並び順・リクエスト・読み取り・採点を全件照合する（ADR-0010）
 ```
 
@@ -173,7 +174,7 @@ python scripts/noninferiority.py --batching runs/<回収したフォルダ>
 ```
 
 GPUインスタンスでの実行（apply → 準備 → セルの一覧を回す → 回収 → destroy）は[docs/gpu-runbook.md](docs/gpu-runbook.md)の手順で行う。
-READMEの図は`python scripts/plot_results.py`で作り直せる。
+READMEの図は`python scripts/plot_results.py`で作り直せる（図の値は、`--check runs/`で生の記録と照合できる）。
 本番4回分の生の記録（manifest・生出力・実行条件）は[Release `runs-2026-10`](https://github.com/yuya0408/toolcall-serving-bench/releases/tag/runs-2026-10)にあり、`runs/`に展開すると上の足切りを作り直せる。
 
 ## ディレクトリ構成
@@ -181,8 +182,8 @@ READMEの図は`python scripts/plot_results.py`で作り直せる。
 | 場所 | 中身 |
 | --- | --- |
 | `data/`・`schema/` | 評価セット、事例とrun manifestのschema、ツールカタログ |
-| `eval_bench/` | ハーネス本体（エンジンごとのadapter、分離採点、レイテンシ、容量の判定、セルの実行） |
-| `scripts/` | セルの実行・足切り・図の作成・評価セットの生成。`scripts/gpu/`はGPUインスタンスでの手順 |
+| `eval_bench/` | ハーネス本体（エンジンごとのadapter、分離採点、レイテンシ、容量の判定、非劣化と足切りの判定、ゴールデンの照合） |
+| `scripts/` | コマンド（セルの実行・足切り・図の作成・評価セットの生成）とシミュレーション。`scripts/gpu/`はGPUインスタンスでの手順 |
 | `infra/` | Terraform（GPUインスタンス） |
 | `docs/` | [詳しい結果](docs/results.md)、ADR、GPUでの実行の記録（`gpu-*.md`）、エンジンごとの違い（`engines.md`）、図 |
 

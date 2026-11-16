@@ -11,6 +11,11 @@
 
 ## 0. applyの前に
 
+- stateを置くS3バケットの名前は、リポジトリに入れていない`infra/backend.hcl`から渡す。初めてのとき（またはバケットを変えたとき）だけ、`infra/backend.hcl.example`を写してバケット名を書き、initする。
+  ```
+  cp infra/backend.hcl.example infra/backend.hcl   # bucket を自分のものに書き換える
+  terraform -chdir=infra/gpu init -reconfigure -backend-config=../backend.hcl
+  ```
 - SSHを許可するIP（`infra/gpu/variables.tf`の`ssh_allowed_cidr`）には既定値が無い。同じシェルで今の回線のIPを環境変数に入れてから、applyとdestroyを打つ
   （入れ忘れると、terraformが値を聞いてくる）。
   ```
@@ -73,6 +78,7 @@ ls -l /proc/<PID>/fd                                     # 0・1・2が pipe:[..
 
 1. **AMIの前提の確認**：`nvidia-smi`と`nvcc --version`。`nvcc`が無ければllama.cppのCUDAビルドができないので、ここで止まる
    （AMI `base-oss-nvidia-driver-gpu-ubuntu-22.04`の前提が崩れたということ）。自動シャットダウンの予定（`shutdown --show`）も記録する。
+   AMIはSSMの最新版を取るので、applyごとにドライバが変わりうる。使ったAMIのIDを`checks/ami-id.txt`に残す（2026-11-16から。それより前の回は記録していない）。
 2. vLLM・transformers（accelerate）の環境を`uv`で作る（`~/venv`）。版は`scripts/gpu/pins.sh`で固定している（ADR-0006）。
 3. llama.cppを`pins.sh`のコミットにして、CUDA（L4はsm_89）でビルドする。**コミットハッシュは`~/out/llama_cpp_commit.txt`にすぐ書く**。destroyの後は二度と取れず、
    manifestの`engine_version`がこの形式（`^[0-9a-f]{7,40}$`）を求める。
