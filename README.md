@@ -121,7 +121,7 @@ SGLangはツール定義を書き換えて入力が約100トークン長くな�
 | TRT-LLM AWQ | 2 | 並行数4で21/1,000 |
 | TRT-LLM bf16・SGLang bf16 | 1 | 並行数2が判定不能（超過9・15/1,000） |
 
-TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果](docs/results.md)にある。
+TTFT・TPOTの値、スループット、第1段階の結果は[詳しい結果](docs/results.md)に、第2段階の結果の原因（SGLangの足切り、FP8の差、プリフィルの割り込み）は[原因の分析](docs/analysis-batching.md)にある。
 
 ---
 
@@ -202,7 +202,7 @@ READMEの図は`python scripts/plot_results.py`で作り直せる（図の値は
 | `eval_bench/` | ハーネス本体（エンジンごとのadapter、分離採点、レイテンシ、容量の判定、非劣化と足切りの判定、ゴールデンの照合） |
 | `scripts/` | コマンド（セルの実行・足切り・図の作成・評価セットの生成）とシミュレーション。`scripts/gpu/`はGPUインスタンスでの手順 |
 | `infra/` | Terraform（GPUインスタンス） |
-| `docs/` | [詳しい結果](docs/results.md)、ADR、GPUでの実行の記録（`gpu-*.md`）、エンジンごとの違い（`engines.md`）、図 |
+| `docs/` | [詳しい結果](docs/results.md)、[原因の分析](docs/analysis-batching.md)、ADR、GPUでの実行の記録（`gpu-*.md`）、エンジンごとの違い（`engines.md`）、図 |
 
 ## 判断の記録
 
