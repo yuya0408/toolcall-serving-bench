@@ -16,6 +16,8 @@ apart because the instance and the accuracy gate differ):
                         the per-cell verdict as the marker fill, as in Red Hat's
                         'Ollama vs. vLLM: A deep dive into performance benchmarking'
   throughput*.png       reference only, not used by any verdict
+  prefill_batching.png  phase-2 cause analysis: prefill weight against the decode
+                        slowdown it causes (docs/analysis-batching.md)
   noninferiority.png, gate_batching.png
                         confidence interval against the margin, as recommended by
                         the CONSORT extension for non-inferiority trials
@@ -130,6 +132,14 @@ PHASE2 = Phase(
     "第2段階のインスタンス（第1段階とは別）。9構成をすべて同じ1台で測った。",
     16,
 )
+
+# Phase 2 cause analysis (docs/analysis-batching.md): {config: (c1 TTFT median ms,
+# TPOT rise per overlapping prefill at c4 ms, how the layers compute)}.
+PREFILL = {
+    "TRT-LLM FP8": (434, 8.5, "W8A8"), "SGLang FP8": (566, 12.7, "W8A8"), "TRT-LLM AWQ": (700, 15.3, "W4A16"),
+    "vLLM AWQ": (713, 15.7, "W4A16"), "TRT-LLM bf16": (746, 14.7, "bf16"), "vLLM bf16": (776, 14.0, "bf16"),
+    "SGLang AWQ": (778, 18.4, "W4A16"), "SGLang bf16": (807, 17.3, "bf16"), "vLLM FP8": (931, 19.3, "W8A16"),
+}
 
 WORKLOAD = "Qwen3-8B | NVIDIA L4 1台（g6.xlarge）| 日本語のツール呼び出し200件（入力 約2,300トークン）"
 
@@ -345,6 +355,48 @@ def interval(phase, title_text, filename, interval_label, groups=None):
     plt.close(fig)
 
 
+def correlation(xs, ys):
+    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    return sxy / (sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys)) ** 0.5
+
+
+def prefill(title_text, filename):
+    """How heavy the prefill is against how much it slows the others' decode.
+    Descriptive only: nine configs, no test and no fitted line."""
+    fig, ax = plt.subplots(figsize=(9.6, 5.2))
+    # Only the FP8 points carry a name; the six AWQ and bf16 points sit close
+    # together and are read from the legend (color = engine, marker = quantization).
+    for name, (ttft, rise, form) in PREFILL.items():
+        color, marker, _ = look(name)
+        ax.scatter(ttft, rise, s=80, marker=marker, color=color, edgecolor=SURFACE, zorder=3)
+        if name.endswith("FP8"):
+            ax.annotate(f"{name}（{form}）", (ttft, rise), xytext=(-9, 0) if name == "vLLM FP8" else (9, 0),
+                        textcoords="offset points", ha="right" if name == "vLLM FP8" else "left", va="center",
+                        fontsize=9.5, color=INK, fontweight="bold")
+    ax.annotate("AWQ（W4A16）とbf16：\n3エンジンとも中ほど", (765, 15.6), xytext=(820, 11.2), textcoords="data",
+                ha="left", va="center", fontsize=9, color=INK_2,
+                arrowprops={"arrowstyle": "-", "color": MUTED, "linewidth": 0.8})
+    ax.set_xlim(380, 1020)
+    ax.set_ylim(6, 21)
+    ax.set_xlabel("プリフィルの重さ：並行数1のTTFTの中央値（ms）　← 軽い")
+    ax.set_ylabel("TPOTの増え方（ms／重なり1件、並行数4）")
+    ax.set_title("左下ほど、同時に処理しても生成が遅れにくい", loc="left", fontsize=10.5, color=INK)
+    r = correlation([v[0] for v in PREFILL.values()], [v[1] for v in PREFILL.values()])
+    engines = ("vLLM", "TRT-LLM", "SGLang")
+    marks = ([plt.Line2D([], [], marker="o", color=ENGINE_COLOR[e], linestyle="none", markersize=8) for e in engines]
+             + [plt.Line2D([], [], marker=QUANT_LOOK[q][0], color=INK_2, linestyle="none", markersize=8)
+                for q in ("bf16", "AWQ", "FP8")])
+    ax.legend(marks, [*engines, "bf16", "AWQ", "FP8"], loc="upper left", fontsize=9, ncol=2,
+              title="色＝エンジン　印の形＝量子化", title_fontsize=9)
+    top = title(fig, title_text, "縦軸は、生成中にほかのリクエストのプリフィルが1件重なるごとのTPOTの増え方。"
+                f"9構成の記述的な関係（r = {r:.2f}、検定ではない）。括弧は線形層の計算の形")
+    bottom = footer(fig, WORKLOAD, PHASE2.footnote + "増え方は、重なりが0件と3件のTPOTの中央値の差を3で割った値。")
+    fig.tight_layout(rect=(0, bottom, 1, top))
+    fig.savefig(OUT / filename, dpi=150)
+    plt.close(fig)
+
+
 # --check: where each written value comes from in Release runs-2026-10
 RUNS = {"第1段階": "gpu-20261024-main-latency", "第2段階": "gpu-20261028-i-0bd6a9b5da22d5bf5"}
 RUNS_PHASE1_Q4 = "gpu-20261026-i-0362dcd8fb58ed4b7"   # main run 3: Q4_K_M, and the phase-1 gate
@@ -394,10 +446,23 @@ def recorded_gates(runs):
     return {"第1段階": phase1, "第2段階": phase2}, set(names[k] for k in gate["passing"])
 
 
+def recorded_prefill(runs, name):
+    """(c1 TTFT median, TPOT rise per overlap at c4) from the client records, rounded as written."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from statistics import median
+    from tpot_prefill_overlap import load, overlaps
+
+    c1 = load(next(cell_dir(runs, PHASE2, name, 1).glob("*.raw.jsonl")))
+    pairs = overlaps(load(next(cell_dir(runs, PHASE2, name, 4).glob("*.raw.jsonl"))))
+    at = {n: median(t for k, t in pairs if k == n) for n in (0, 3)}
+    return round(median(r["ttft_ms"] for r in c1 if r["phase"] == "measured")), round((at[3] - at[0]) / 3, 1)
+
+
 def check(runs):
     """Compare every value written above with the raw records; return the number that differ."""
     gates, passing2 = recorded_gates(runs)
-    rows = []   # (where, written, recorded)
+    rows = [(f"第2段階 {name} prefill (c1 TTFT median, TPOT rise)", (ttft, rise), recorded_prefill(runs, name))
+            for name, (ttft, rise, _) in PREFILL.items()]   # (where, written, recorded)
     for phase in (PHASE1, PHASE2):
         for name, points in phase.latency.items():
             for c, *written in points:
@@ -436,6 +501,7 @@ def main():
               "selection_batching.png")
     latency(PHASE2, "第2段階：並行数4でTTFT・TPOTとも基準を満たしたのは、TRT-LLM FP8だけ", "latency_batching.png")
     throughput(PHASE2, "第2段階：1台のスループット（参考。判定には使わない）", "throughput_batching.png")
+    prefill("第2段階：プリフィルが軽い構成ほど、同時に処理したときの生成の遅れが小さい", "prefill_batching.png")
     interval(PHASE2, "第2段階：精度の足切りを通ったのは9構成中4つ", "gate_batching.png",
              "片側99.9%の下限 ＝ 両側99.8%区間の左端",
              groups=[("bf16", "bf16（基準：他の2エンジンのbf16の平均）"),
