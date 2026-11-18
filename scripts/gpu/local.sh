@@ -8,6 +8,8 @@
 #     scripts/gpu/local.sh cells   <ip> <list>      # start run_cells.py with a cell list, detached
 #     scripts/gpu/local.sh collect <ip> [dest]      # copy ~/out back every minute until DONE (default runs/gpu-<date>-<instance id>)
 #     scripts/gpu/local.sh status  <ip>             # setup / cell progress at a glance
+#     scripts/gpu/local.sh prefill <ip>             # the prefill-kernel check instead of setup + cells
+#                                                   # (docs/prefill-kernel-check.md); then collect as usual
 #
 # setup and cells run under setsid + nohup, so a dropped SSH connection does not
 # stop them; collect is the only thing that has to keep running here, and the
@@ -70,6 +72,10 @@ case "$cmd" in
     ssh_ "test -f ~/out/SETUP_DONE" || { echo "setup has not finished" >&2; exit 1; }
     detach_ "rm -f ~/out/DONE; setsid nohup ~/venv/bin/python ~/toolcall-serving-bench/scripts/gpu/run_cells.py ~/toolcall-serving-bench/$list > ~/out/cells-$(basename "$list" .json).log 2>&1 < /dev/null &"
     echo "cells started: $list"
+    ;;
+  prefill)
+    detach_ "mkdir -p ~/out; setsid nohup bash ~/toolcall-serving-bench/scripts/gpu/prefill_bench.sh > ~/out/prefill_bench.log 2>&1 < /dev/null &"
+    echo "prefill check started; collect with: scripts/gpu/local.sh collect $ip"
     ;;
   collect)
     # Which apply this is: the instance ID changes with every apply. cloud-init
