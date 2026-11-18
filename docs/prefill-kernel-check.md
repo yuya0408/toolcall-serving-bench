@@ -22,13 +22,16 @@
 
 プリフィルでは、一度に処理するトークンの数（行列計算のM）がプロンプトの長さ（最大2,048）になる。生成ではMが1になる。
 
-| 構成 | モデル | 引数 | L4で選ばれる見込みのカーネル | 計算の形 |
-| --- | --- | --- | --- | --- |
-| bf16 | `Qwen/Qwen3-8B` | なし | （量子化なし） | bf16 |
-| fp8-block | `Qwen/Qwen3-8B-FP8` | なし（第2段階と同じ） | `MarlinFP8ScaledMMLinearKernel` | W8A16 |
-| fp8-block-triton | `Qwen/Qwen3-8B-FP8` | `linear_backend="triton"` | `TritonFp8BlockScaledMMKernel` | W8A8（ブロック単位） |
-| fp8-tensor | `Qwen/Qwen3-8B` | `quantization="fp8"`（読み込み時にテンソル単位へ量子化） | `CutlassFP8ScaledMMLinearKernel` | W8A8（テンソル単位、計算側のスケールは動的） |
-| awq | `Qwen/Qwen3-8B-AWQ` | なし | Marlin（W4A16） | W4A16 |
+vLLMは、チェックポイントの`config.json`にある量子化の設定（形式）とGPUを見て、線形層のカーネルを優先順の一覧から自動で選ぶ。
+`--linear-backend`を指定すると、その系統のカーネルに絞れる。
+
+| 構成 | モデル | 引数 | L4で選ばれる見込みのカーネル | 計算の形 | 位置づけ |
+| --- | --- | --- | --- | --- | --- |
+| bf16 | `Qwen/Qwen3-8B` | なし | （量子化なし） | bf16 | 基準 |
+| fp8-block | `Qwen/Qwen3-8B-FP8` | なし（第2段階と同じ） | `MarlinFP8ScaledMMLinearKernel` | W8A16 | 第2段階の再現 |
+| fp8-tensor | `Qwen/Qwen3-8B` | `quantization="fp8"`（読み込み時にテンソル単位へ量子化） | `CutlassFP8ScaledMMLinearKernel` | W8A8（テンソル単位、計算側のスケールは動的） | **形式を選ぶ手**（カーネルは自動） |
+| fp8-block-triton | `Qwen/Qwen3-8B-FP8` | `linear_backend="triton"` | `TritonFp8BlockScaledMMKernel` | W8A8（ブロック単位） | カーネルを指定する手（ふつうは使わない。参考） |
+| awq | `Qwen/Qwen3-8B-AWQ` | なし | Marlin（W4A16） | W4A16 | 重みだけ小さくする形の比較 |
 
 fp8-tensorは、TensorRT-LLMのFP8（ModelOptで校正した静的なスケール）と同じではない。計算側のスケールを実行時に求めるので、その分だけ重い。
 
@@ -51,6 +54,8 @@ fp8-tensorは、TensorRT-LLMのFP8（ModelOptで校正した静的なスケー�
 | fp8-blockが短いプロンプトでも遅い | 「Mが大きい形に向かない」ではなく、W8A16のどの形でも戻す手間が勝っている。分析の文書の理由を直す |
 | fp8-tensorが長いプロンプトでbf16より速い | 推定2を確かめた。第2段階のFP8の差は、エンジンの差より計算の形の差という読みを支える |
 | fp8-tensorが長いプロンプトでbf16より速くない | 推定2は確かめられなかった。TensorRT-LLMのFP8が速かったのは、静的なスケールやエンジンの実装など別の理由の可能性がある。そう書く |
+| fp8-block-tritonが長いプロンプトでfp8-blockより速い | L4では、vLLMの既定の優先順（MarlinがTritonのW8A8より先）がこのワークロードに合っていない可能性がある。手の候補は「形式を選ぶ（fp8-tensor）」と「カーネルを指定する（fp8-block-triton）」の2つ。並行時の速さと精度は測っていないので、どちらを選ぶかの結論にはしない |
+| fp8-block-tritonとfp8-tensorの、長いプロンプトでの速さ | 2つの手のどちらがプリフィルを軽くするかとして並べる。主に見るのはfp8-tensor（ふつうの手） |
 | 起動のログのカーネルが上の表と違う | 見込みのカーネルの列を直し、その構成は「別のカーネルで測った」として読む |
 
 並行数4での超過（台数の判定）までは測らない。1件ずつの時間から台数は出せない。
