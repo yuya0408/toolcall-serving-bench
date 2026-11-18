@@ -10,9 +10,14 @@ the 2,048-token chunk), with random token ids so that no two prompts share a
 prefix, and prefix caching off. The time is the wall time of llm.generate()
 for one prompt: with max_tokens=1 it is the prefill plus one sampling step;
 with max_tokens=1+DECODE_TOKENS, the difference over DECODE_TOKENS is the time
-of one decode step (M = 1).
+of one decode step (M = 1). (RequestOutput.metrics is not filled: LLM turns
+the engine's stats off.)
 
-Writes <out>/<name>.json (every repetition) and prints the medians.
+After the timing, one 2,048-token prefill runs under the torch profiler, so
+the time can be split by kernel (linear layers against attention).
+
+Writes <out>/<name>.json (every repetition with its wall-clock start, to line
+up with gpu.csv) and <out>/profile/<name>/, and prints the medians.
 """
 from __future__ import annotations
 
@@ -23,10 +28,11 @@ import statistics
 import time
 from pathlib import Path
 
-LENGTHS = (16, 64, 256, 1024, 2048, 2304)   # 2,304: the median prompt (about 2,300) runs as two chunks
+LENGTHS = (16, 64, 128, 256, 512, 1024, 2048, 2304)   # 2,304: the median prompt (about 2,300) runs as two chunks
 WARMUP, REPS = 3, 10
 DECODE_TOKENS = 64
 DECODE_LENGTH = 2048
+PROFILE_LENGTH = 2048   # one full chunk, outside the CUDA graphs, so every kernel shows
 # The same engine settings as the phase-2 vLLM cells, except prefix caching
 # (off, so that repeated lengths are not served from the cache).
 BASE_ENGINE = {"dtype": "bfloat16", "max_model_len": 4096, "max_num_batched_tokens": 2048,
@@ -54,34 +60,41 @@ def main(argv: list[str] | None = None) -> int:
 
     from vllm import LLM, SamplingParams   # only on the GPU instance
 
+    profile_dir = args.out / "profile" / args.name
     engine = {**BASE_ENGINE, **json.loads(args.engine)}
-    llm = LLM(**engine)
+    llm = LLM(**engine, profiler_config={"profiler": "torch", "torch_profiler_dir": str(profile_dir),
+                                         "torch_profiler_with_stack": False})
     vocab = llm.get_tokenizer().vocab_size   # ids below this are ordinary tokens, never special ones
     rng = random.Random(0)
 
-    def timed(length: int, max_tokens: int) -> float:
+    def timed(length: int, max_tokens: int) -> tuple[float, float]:
         prompt = {"prompt_token_ids": [rng.randrange(1000, vocab) for _ in range(length)]}
-        params = SamplingParams(max_tokens=max_tokens, temperature=0, ignore_eos=True)
+        params = SamplingParams(max_tokens=max_tokens, temperature=0, ignore_eos=True, detokenize=False)
+        at = time.time()
         start = time.perf_counter()
         llm.generate([prompt], params, use_tqdm=False)
-        return (time.perf_counter() - start) * 1000
+        return at, (time.perf_counter() - start) * 1000
 
     rows = []
     for length in LENGTHS:
         for i in range(WARMUP + REPS):
-            ms = timed(length, 1)
+            at, ms = timed(length, 1)
             if i >= WARMUP:
-                rows.append({"kind": "prefill", "length": length, "ms": ms})
+                rows.append({"kind": "prefill", "length": length, "at": at, "ms": ms})
     for i in range(WARMUP + REPS):
-        ms = timed(DECODE_LENGTH, 1 + DECODE_TOKENS)
+        at, ms = timed(DECODE_LENGTH, 1 + DECODE_TOKENS)
         if i >= WARMUP:
-            rows.append({"kind": "decode", "length": DECODE_LENGTH, "ms": ms})
+            rows.append({"kind": "decode", "length": DECODE_LENGTH, "at": at, "ms": ms})
 
     summary = summarize(rows)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / f"{args.name}.json").write_bytes(json.dumps(
         {"name": args.name, "engine": engine, "rows": rows, "summary": summary}, indent=1).encode())
     print(json.dumps({"name": args.name, **summary}))
+
+    llm.start_profile()
+    timed(PROFILE_LENGTH, 1)
+    llm.stop_profile()
     return 0
 
 
