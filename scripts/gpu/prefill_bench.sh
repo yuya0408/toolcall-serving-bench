@@ -37,7 +37,12 @@ nvidia-smi --query-gpu=$QUERY --format=csv -lms 500 > "$OUT/gpu.csv" &
 SMI=$!
 
 step "vLLM environment"
-export PATH="$HOME/.local/bin:/usr/local/cuda/bin:$PATH"
+# ~/venv/bin first: FlashInfer's JIT (vLLM's sampler) runs the venv's ninja, as in run_cells.py.
+export PATH="$HOME/venv/bin:$HOME/.local/bin:/usr/local/cuda/bin:$PATH"
+# Models on the instance store: bf16 (15.3 GiB) is over 90% of the free RAM, so vLLM
+# turns off its prefetch and reads by mmap page faults, which the gp3 root volume
+# served at ~5.6 MB/s (2026-11-18, ~7 min per shard).
+if [ -d /opt/dlami/nvme ]; then export HF_HOME=/opt/dlami/nvme/hf; fi
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
 uv venv --allow-existing --seed --python 3.12 ~/venv
 uv pip install --python ~/venv/bin/python "vllm==$VLLM_VERSION" "transformers==$TRANSFORMERS_VERSION" \

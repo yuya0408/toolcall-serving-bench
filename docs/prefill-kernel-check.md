@@ -109,3 +109,24 @@ scripts/gpu/local.sh collect <ip> runs/prefill-<date>
 ```
 
 結果は`<dest>/prefill/<構成>-r<周>.json`（各回の時間と開始時刻、中央値）、選ばれたカーネルは`<構成>-r<周>.kernels.txt`、プロファイラは`<dest>/prefill/profile/<構成>-r<周>/`、失敗した構成は`<dest>/prefill/failed.txt`。
+
+## 実施の記録（2026-11-19）
+
+結果と読み方は[原因の分析の「L4で確かめた」](analysis-batching.md#l4で確かめた2026-11-19)に書いた。
+
+| 項目 | 内容 |
+| --- | --- |
+| インスタンス | `i-08a60624a1f5d84e7`（apply 23:02Z → destroy 00:26Z、約1.4時間・約$1.7） |
+| データ | `runs/gpu-20261119-i-08a60624a1f5d84e7`（`collect`の既定の場所。上の`runs/prefill-<date>`ではない） |
+| 測定に使ったコミット | `b9f86a4`（`~/out/repo_commit.txt`） |
+| 自動シャットダウン | 120分で始め、1回目の止め直しの後に約145分へ延ばした（`shutdown -h +100`） |
+| 失敗した構成 | 無し（10/10） |
+
+3回目で通った。止めた2回の記録は、同じ場所の`aborted-1/`・`aborted-2/`に残した。どちらも測定の値は出ていない。
+
+| 回 | 起きたこと | 直し方 |
+| --- | --- | --- |
+| 1回目（`9fcfc7e`） | bf16の重みの読み込みが1シャード約7分。重み（15.3GiB）が空きメモリの90%を超えると、vLLMは先読みを切ってmmapで読み、ルートのgp3では約5.6MB/sだった（ダイレクトIOで順に読めば248MB/s） | モデルのキャッシュをインスタンスストア（`/opt/dlami/nvme`）へ写し、`HF_HOME`をそこに向けた。読み込みは36秒になった |
+| 2回目（`9fcfc7e`＋`HF_HOME`） | 全構成が最初のサンプリングで落ちた。FlashInferのJITが`ninja`を探し、`~/venv/bin`がPATHに無かった（`run_cells.py`は入れている） | `prefill_bench.sh`で`~/venv/bin`をPATHに入れ、インスタンスストアがあれば`HF_HOME`をそこにする（`b9f86a4`） |
+
+どちらも読み込みと起動の問題で、測る量（プリフィルの時間）とエンジンの引数は変えていない。
