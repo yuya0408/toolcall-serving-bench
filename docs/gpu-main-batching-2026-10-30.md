@@ -25,7 +25,7 @@ ADR-0009の3の本番のセル（`scripts/gpu/cells/main-batching.json`、56セ�
 | 速さの45セル | 10-28 12:33Z → 10-29 13:57Z（約25.4時間。見込みは26.4時間） | `cells-main-batching.log` |
 | 精度の11セル | 10-29 13:57Z → 23:47Z（約9.8時間。見込みは10.7時間） | 同上 |
 | セルの結果 | 56セル中53が`ok`、3つが`unsupported`（bf16の並行数16。3エンジンとも容量の判定で載らない。疎通と同じ） | `status.jsonl` |
-| 起動中の落ち | TensorRT-LLM FP8の並行数1で1回（疎通と同じ`nvmlSystemGetConfComputeSettings`の中のsegfault）。1回だけ起動し直す規則（PR #30）で約4分で戻った | `status.jsonl`の`startup_crashes` |
+| 起動中の落ち | TensorRT-LLM FP8の並行数1で1回（疎通と同じ`nvmlSystemGetConfComputeSettings`の中のsegfault。TensorRT-LLM 1.2.1の不具合で、原因は[疎通の記録](gpu-smoke-batching-2026-10-28.md)）。1回だけ起動し直す規則（PR #30）で約4分で戻った | `status.jsonl`の`startup_crashes` |
 | ModelOptのチェックポイント | int4_awq・fp8とも、ハッシュが疎通のものと一致 | `checks/modelopt-*-sha256.txt` |
 | 回収 | 実行中の定期の回収で、1回だけのつまずきが11回あり、次の回ですべて取れた。最後のコピー（PR #31）も通った | 手元のログ |
 | 結果のファイル | `runs/gpu-20261028-i-0bd6a9b5da22d5bf5/`（リポジトリには入れない） | |

@@ -40,7 +40,7 @@ ADR-0009の2の疎通（`scripts/gpu/cells/smoke-batching.json`、39セル）を
 | 1 | SGLangの速さ（並行数16） | 追い出しの回数のカウンタは、1回目の追い出しまで`/metrics`に出ない | ゲージが出ていれば0回とみなす（#28） |
 | 1 | TensorRT-LLMの速さ（並行数1） | 容量を読む前の1件が、チャットの書式の先頭`<\|im_start\|>`を質問と共有した | `/v1/completions`で送る（#28） |
 | 1 | TensorRT-LLMの速さ（並行数16） | 記録の形式の定義に`active_requests`が無かった | 定義に追加（#28） |
-| 1 | TensorRT-LLM FP8の並行数16 | 起動中に`nvmlSystemGetConfComputeSettings`の中で落ちた（segfault）。同じ構成はそれまでに3回起動していた | 流し直して通った。原因は不明 |
+| 1 | TensorRT-LLM FP8の並行数16 | 起動中に`nvmlSystemGetConfComputeSettings`の中で落ちた（segfault）。同じ構成はそれまでに3回起動していた | 流し直して通った。原因はTensorRT-LLM 1.2.1の不具合：`tensorrt_llm/_utils.py`の`confidential_compute_enabled()`が、ポインタを受け取るNVMLの関数に構造体を値のまま渡している（`ctypes.byref`が無い）。書き込み先がメモリの中身次第になるので、まれに落ちる。mainはPR #16850で直り、1.2.1への取り込みは[issue #18816](https://github.com/NVIDIA/TensorRT-LLM/issues/18816)で提案中（2026-11-21に、落ちたときのログとソースを突き合わせて特定） |
 | 2 | SGLangの並行数8・16 | SGLangの入力が100トークン長く、観測した最長（2,600）が計画（2,591）を超えた | SGLangの入力で上限を数える（#29。下の「決めたこと」2） |
 
 起動中に落ちたサーバーの扱いも直した（#30）。この回は、TensorRT-LLMのMPIのワーカーが落ちても親のプロセスが残ったため、
