@@ -137,7 +137,7 @@ B1とCは重みの値も少し違うが（ModelOptも重みのスケールは各
 | `scripts/gpu/setup.sh` | `SETUP_LLAMA`と同じ形で`SETUP_SGLANG=0`を足し、SGLangの環境・パッケージの一覧・版の記録と確認・Qwen公式のAWQとFP8のダウンロードを外す（今は`venv-sglang`とsglangの版を必須にしていて、入れないと準備の最後で止まる）。ModelOptは`fp8`だけ作れるようにする（`int4_awq`は約40分かかり、使わない）。インスタンスストアがあれば、`HF_HOME`とModelOptの書き出し先をそこにする。`gpu.csv`を5秒ごと（`-l 5`）から0.5秒ごと（`-lms 500`）にし、電力の上限・メモリのクロックも取る（`prefill_bench.sh`と同じ） |
 | `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の5セル。名前は第2段階と重ならないようにする（T1・T2は`lat-trt-fp8-c4-r1`・`-r2`、B1は`lat-vllm-fp8tensor-c4`、Cは`lat-vllm-fp8modelopt-c4`、B2は`ni-vllm-fp8tensor-c1`）。第2段階の足切り（`noninferiority.py --batching`）は決まった9つの名前だけを読むので、B2が第2段階のvLLM FP8を上書きすることも、足切りに混ざることもない |
 | `scripts/gpu/make_main_cells.py`（`estimated_minutes`） | 新しいセルの一覧にも時間の見積もりを足す。見積もりが無いと、残り時間が足りないときにセルを始めない確かめ（`run_cells.py`の`shutdown_shortfall`）が働かない |
-| 集計のスクリプト | T1・B1・C・T2の3指標と、上の規則の適用。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
+| 集計のスクリプト | T1・B1・C・T2の3指標と、上の規則の適用。B1・Cの入力のトークン数（記録済みの`usage.prompt_tokens`）を、第2段階のvLLMとケースごとに突き合わせ、ずれがあれば大きさを書く（Cはトークナイザとチャットテンプレートを、ModelOptの書き出し先から読むため）。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
 
 ## 手順
 
