@@ -70,6 +70,7 @@ TRT-LLMは2回しか測らないので、|T1 − T2|はたまたま小さく出�
 | B1が大きく、差がある | 形式をそろえても差が残る。計算側のスケール（TRT-LLMは事前に校正した静的な値、vLLMは実行時のトークンごとの値）、プリフィルと生成の組み方、エンジンの実装の違いを含み、分けない。第2段階のvLLM FP8（+19.3ms、別のインスタンス）と並べ、差のどれだけが縮んだかを参考として書く |
 | B1が小さく、差がある | このワークロードでは、vLLMのテンソル単位のほうがTRT-LLM FP8より割り込みが小さい。そう書く |
 | 起動のログのカーネルが`CutlassFP8ScaledMMLinearKernel`でない | 「別のカーネルで測った」として読み直す |
+| 起動後の記録（`engine-server_info-before.json`）の`quantization`が`fp8_per_tensor`でない | B1は意図した構成で測れていない。読まない |
 
 **C：同じModelOptのFP8でのエンジンの差**
 
@@ -79,6 +80,7 @@ TRT-LLMは2回しか測らないので、|T1 − T2|はたまたま小さく出�
 | Cが大きく、差がある | エンジンの差がある。カーネル・プリフィルと生成の組み方・そのほかの実装の違いを含み、分けない |
 | Cが小さく、差がある | 同じファイルなら、vLLMのほうがTRT-LLMより割り込みが小さい |
 | 起動のログのカーネルが`CutlassFP8ScaledMMLinearKernel`でない | 「別のカーネルで測った」として読み直す |
+| 起動後の記録（`engine-server_info-before.json`）の`quantization`が`modelopt`でない | Cは意図した構成で測れていない（素のbf16などを読んだ）。読まない |
 | 起動のログに、まとめて計算する層（Q・K・Vなど）の入力のスケールが違うという警告が出る | vLLMは最大の値に合わせる。TRT-LLMの扱いは確かめていない。違いが残る点として書く |
 | Cが起動しない | Cは読まない。B1の読み方はそのまま使う |
 
@@ -123,7 +125,7 @@ TRT-LLMは2回しか測らないので、|T1 − T2|はたまたま小さく出�
 
 | ファイル | 内容 |
 | --- | --- |
-| `scripts/gpu/run_cells.py` | 量子化`fp8-tensor`（`Qwen/Qwen3-8B`＋`--quantization fp8_per_tensor`、vLLMだけ）と`fp8-modelopt`（vLLMにModelOptのFP8のフォルダを渡す）。`HF_HOME`をインスタンスストアへ |
+| `scripts/gpu/run_cells.py` | 量子化`fp8-tensor`（`Qwen/Qwen3-8B`＋`--quantization fp8_per_tensor`、vLLMだけ）と、vLLMでの`modelopt-fp8`（TRT-LLMと同じ名前）。今のvLLMのコマンドは`MODELS`のHFの名前しか渡さないので、そのままだとCは素の`Qwen/Qwen3-8B`（bf16）で起動してしまう。TRT-LLMと同じく、`LOCAL_CHECKPOINTS`にあればそのフォルダを渡すようにする（記録に残す名前は今のまま）。第2段階の構成のコマンドが変わらないことをテストで固定する。`HF_HOME`をインスタンスストアへ |
 | `scripts/gpu/setup.sh`か準備のスクリプト | vLLMとTRT-LLMだけの準備（SGLang・llama.cppを入れない）。ModelOptは`fp8`だけ作る（`int4_awq`は約40分かかり、使わない） |
 | `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の5セル。名前は第2段階と重ならないようにする（T1・T2は`lat-trt-fp8-c4-r1`・`-r2`、B1は`lat-vllm-fp8tensor-c4`、Cは`lat-vllm-fp8modelopt-c4`、B2は`ni-vllm-fp8tensor-c1`）。第2段階の足切り（`noninferiority.py --batching`）は決まった9つの名前だけを読むので、B2が第2段階のvLLM FP8を上書きすることも、足切りに混ざることもない |
 | 集計のスクリプト | T1・B1・C・T2の3指標と、上の規則の適用。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
