@@ -99,8 +99,8 @@ L4は72Wの電力上限でクロックが揺れ、同じインスタンスでも
 | --- | --- |
 | `scripts/gpu/run_cells.py` | 量子化`fp8-tensor`（`Qwen/Qwen3-8B`＋`--quantization fp8_per_tensor`、vLLMだけ）。`HF_HOME`をインスタンスストアへ |
 | `scripts/gpu/setup.sh`か準備のスクリプト | vLLMとTRT-LLMだけの準備（SGLang・llama.cppを入れない）。ModelOptは`fp8`だけ作る（`int4_awq`は約40分かかり、使わない） |
-| `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の4セル（T1・T2は`-r1`・`-r2`のように名前を一意にする） |
-| 集計のスクリプト | T1・B1・T2の3指標と、上の規則の適用。B2は`noninferiority.py`の第2段階の式に、新しい腕を足せるようにする |
+| `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の4セル。名前は第2段階と重ならないようにする（T1・T2は`lat-trt-fp8-c4-r1`・`-r2`、B1は`lat-vllm-fp8tensor-c4`、B2は`ni-vllm-fp8tensor-c1`）。第2段階の足切り（`noninferiority.py --batching`）は決まった9つの名前だけを読むので、B2が第2段階のvLLM FP8を上書きすることも、足切りに混ざることもない |
+| 集計のスクリプト | T1・B1・T2の3指標と、上の規則の適用。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
 
 ## 手順
 
