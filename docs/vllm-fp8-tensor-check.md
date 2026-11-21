@@ -86,7 +86,7 @@ T1・B1・C・T2・第2段階の値を1つの表に並べて書く。
 | Cが小さい | 同じファイルなら、vLLMのほうがTRT-LLMより割り込みが小さい |
 | 起動のログのカーネルが`CutlassFP8ScaledMMLinearKernel`でない | 「別のカーネルで測った」として読み直す |
 | 起動後の記録（`engine-server_info-before.json`）の`quantization`が`modelopt`でない | Cは意図した構成で測れていない（素のbf16などを読んだ）。読まない |
-| 起動のログに、まとめて計算する層（Q・K・Vなど）の入力のスケールが違うという警告が出る | vLLMは最大の値に合わせる。TRT-LLMの扱いは確かめていない。違いが残る点として書く |
+| 起動のログに、まとめて計算する層（Q・K・V、gate・up）の入力のスケールが違うという警告が出る | 起きない見込み。ModelOpt 0.37.0は書き出すときに、まとめて計算する層の入力と重みのスケールを最大値にそろえる（`modelopt/torch/export/quant_utils.py`の`preprocess_linear_fusion`）。出たら記録として書く |
 | Cが起動しない | Cは読まない。B1の読み方はそのまま使う |
 
 **B1とCを合わせた読み方**
