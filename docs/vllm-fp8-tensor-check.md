@@ -33,7 +33,7 @@
 | 起動の引数 | 第2段階と同じ（`max_model_len` 8,192。[ADR-0009](adr/0009-batching-engines.md)の6）。違うのは、B1は`--quantization fp8_per_tensor`、Cは渡すモデルのフォルダだけ |
 | 速さ | 第2段階と同じ`lat`のセル：並行数4、ウォームアップ200件＋計測1,000件＋クールダウン、temperature 0.7 |
 | 精度 | 第2段階と同じ`ni`のセル：並行数1、greedy、200件×5試行（ツールの並び順を試行ごとに変える） |
-| GPUの状態 | `gpu.csv`（0.5秒ごと）。72Wの電力上限でクロックが揺れるので、セルごとに記録する |
+| GPUの状態 | `gpu.csv`（0.5秒ごと。クロック・温度・電力・電力の上限・メモリのクロック・クロックが下がった理由）。72Wの電力上限でクロックが揺れるので、T1とT2のずれの原因を突き合わせるのに使う。判定には使わない |
 
 | 順 | セル | 構成 | チャンクの上限 | 目的 | 時間（根拠） |
 | --- | --- | --- | --- | --- | --- |
@@ -128,7 +128,7 @@ TRT-LLMは2回しか測らないので、|T1 − T2|はたまたま小さく出�
 | ファイル | 内容 |
 | --- | --- |
 | `scripts/gpu/run_cells.py` | 量子化`fp8-tensor`（`Qwen/Qwen3-8B`＋`--quantization fp8_per_tensor`、vLLMだけ）と、vLLMでの`modelopt-fp8`（TRT-LLMと同じ名前）。今のvLLMのコマンドは`MODELS`のHFの名前しか渡さないので、そのままだとCは素の`Qwen/Qwen3-8B`（bf16）で起動してしまう。TRT-LLMと同じく、`LOCAL_CHECKPOINTS`にあればそのフォルダを渡すようにする（記録に残す名前は今のまま）。第2段階の構成のコマンドが変わらないことをテストで固定する。サーバーの起動でも`setup.sh`と同じ`HF_HOME`を見て、`LOCAL_CHECKPOINTS`のパスはModelOptの書き出し先（インスタンスストア）に合わせる |
-| `scripts/gpu/setup.sh` | `SETUP_LLAMA`と同じ形で`SETUP_SGLANG=0`を足し、SGLangの環境・パッケージの一覧・版の記録と確認・Qwen公式のAWQとFP8のダウンロードを外す（今は`venv-sglang`とsglangの版を必須にしていて、入れないと準備の最後で止まる）。ModelOptは`fp8`だけ作れるようにする（`int4_awq`は約40分かかり、使わない）。インスタンスストアがあれば、`HF_HOME`とModelOptの書き出し先をそこにする |
+| `scripts/gpu/setup.sh` | `SETUP_LLAMA`と同じ形で`SETUP_SGLANG=0`を足し、SGLangの環境・パッケージの一覧・版の記録と確認・Qwen公式のAWQとFP8のダウンロードを外す（今は`venv-sglang`とsglangの版を必須にしていて、入れないと準備の最後で止まる）。ModelOptは`fp8`だけ作れるようにする（`int4_awq`は約40分かかり、使わない）。インスタンスストアがあれば、`HF_HOME`とModelOptの書き出し先をそこにする。`gpu.csv`を5秒ごと（`-l 5`）から0.5秒ごと（`-lms 500`）にし、電力の上限・メモリのクロックも取る（`prefill_bench.sh`と同じ） |
 | `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の5セル。名前は第2段階と重ならないようにする（T1・T2は`lat-trt-fp8-c4-r1`・`-r2`、B1は`lat-vllm-fp8tensor-c4`、Cは`lat-vllm-fp8modelopt-c4`、B2は`ni-vllm-fp8tensor-c1`）。第2段階の足切り（`noninferiority.py --batching`）は決まった9つの名前だけを読むので、B2が第2段階のvLLM FP8を上書きすることも、足切りに混ざることもない |
 | 集計のスクリプト | T1・B1・C・T2の3指標と、上の規則の適用。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
 
