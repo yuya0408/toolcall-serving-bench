@@ -37,14 +37,14 @@
 
 | 順 | セル | 構成 | チャンクの上限 | 目的 | 時間（根拠） |
 | --- | --- | --- | --- | --- | --- |
-| 0 | 準備 | vLLMとTRT-LLMの環境、`Qwen/Qwen3-8B`、ModelOptのFP8 | — | — | 約45分（推定。vLLMの環境とダウンロードはプリフィルの確認で約25分、TRT-LLMの環境約15〜20分、ModelOptのfp8は第2段階で105秒＋読み書き） |
+| 0 | 準備 | vLLMとTRT-LLMの環境、`Qwen/Qwen3-8B`、ModelOptのFP8 | — | — | 約45分（推定。vLLMの環境とダウンロードはプリフィルの確認で約25分、TRT-LLMの環境約15〜20分。第2段階の実績はダウンロード53分（3モデル、gp3へ。今回は`Qwen/Qwen3-8B`の1つだけ）、ModelOptのfp8が読み書きを含めて約9.5分。70〜90分に延びることもある） |
 | 1 | T1 | TRT-LLM FP8 | （分けない） | 基準（1回目）。第2段階の再測定 | 約30分（第2段階の`lat-trt-fp8-c4`） |
 | 2 | B1 | vLLM fp8-tensor | 2,048（既定） | Bの速さ | 約30分（推定。読み込み時の量子化で起動が少し延びる） |
 | 3 | C | vLLM＋ModelOptのFP8 | 2,048（既定） | Cの速さ | 約30分（推定） |
 | 4 | T2 | TRT-LLM FP8 | （分けない） | 基準（2回目）。インスタンスの中の時間によるずれを測る | 約30分 |
 | 5 | B2 | vLLM fp8-tensor（`ni`） | 2,048（既定） | Bの精度 | 約48分（第2段階の`ni-vllm-fp8-c1`） |
 | | 回収・余り | | | | 約15分 |
-| | **合計** | | | | **約3.9時間・約$4.6**（$1.167/時間）。自動シャットダウンは300分 |
+| | **合計** | | | | **約3.9時間・約$4.6**（$1.167/時間）。自動シャットダウンは360分 |
 
 L4は72Wの電力上限でクロックが揺れ、同じインスタンスでも時間で速さが変わる（プリフィルの確認では、同じbf16が1周目と2周目で約4%ずれた）。B1とCをT1とT2で挟み、TRT-LLMとの差を、その間のずれと並べて書く。
 速さのセル（1〜4）を先に回す。T1・B1・C・T2は同じインスタンスでないと読めないので、途中で止まったら1〜4を測り直す。B2はgreedyなので、別のインスタンスで回してよい。
@@ -136,8 +136,9 @@ B1とCは重みの値も少し違うが（ModelOptも重みのスケールは各
 | `scripts/gpu/run_cells.py` | 量子化`fp8-tensor`（`Qwen/Qwen3-8B`＋`--quantization fp8_per_tensor`、vLLMだけ）と、vLLMでの`modelopt-fp8`（TRT-LLMと同じ名前）。今のvLLMのコマンドは`MODELS`のHFの名前しか渡さないので、そのままだとCは素の`Qwen/Qwen3-8B`（bf16）で起動してしまう。TRT-LLMと同じく、`LOCAL_CHECKPOINTS`にあればそのフォルダを渡すようにする（記録に残す名前は今のまま）。第2段階の構成のコマンドが変わらないことをテストで固定する。サーバーの起動でも`setup.sh`と同じ`HF_HOME`を見て、`LOCAL_CHECKPOINTS`のパスはModelOptの書き出し先（インスタンスストア）に合わせる |
 | `scripts/gpu/setup.sh` | `SETUP_LLAMA`と同じ形で`SETUP_SGLANG=0`を足し、SGLangの環境・パッケージの一覧・版の記録と確認・Qwen公式のAWQとFP8のダウンロードを外す（今は`venv-sglang`とsglangの版を必須にしていて、入れないと準備の最後で止まる）。ModelOptは`fp8`だけ作れるようにする（`int4_awq`は約40分かかり、使わない）。インスタンスストアがあれば、`HF_HOME`とModelOptの書き出し先をそこにする。`gpu.csv`を5秒ごと（`-l 5`）から0.5秒ごと（`-lms 500`）にし、電力の上限・メモリのクロックも取る（`prefill_bench.sh`と同じ） |
 | `scripts/gpu/cells/vllm-fp8-tensor.json` | 上の5セル。名前は第2段階と重ならないようにする（T1・T2は`lat-trt-fp8-c4-r1`・`-r2`、B1は`lat-vllm-fp8tensor-c4`、Cは`lat-vllm-fp8modelopt-c4`、B2は`ni-vllm-fp8tensor-c1`）。第2段階の足切り（`noninferiority.py --batching`）は決まった9つの名前だけを読むので、B2が第2段階のvLLM FP8を上書きすることも、足切りに混ざることもない |
+| `scripts/gpu/make_main_cells.py`（`estimated_minutes`） | 新しいセルの一覧にも時間の見積もりを足す。見積もりが無いと、残り時間が足りないときにセルを始めない確かめ（`run_cells.py`の`shutdown_shortfall`）が働かない |
 | 集計のスクリプト | T1・B1・C・T2の3指標と、上の規則の適用。B2は、①今の`noninferiority.py --batching`に第2段階のフォルダだけを渡し、vLLM FP8 −2.08pt・TRT-LLM FP8 −1.43ptが再現できるかを確かめる（合わなければ止まる）、②同じ読み込みのvLLM bf16・TRT-LLM bf16と、パスを指定したB2の記録を、第2段階と同じ`pooled_noninferiority`に渡す。第2段階の足切りのコードは変えない |
 
 ## 手順
 
-[GPUでの実行の手順](gpu-runbook.md)のapply・destroyはそのまま使い、`local.sh`の準備とセルで回す。自動シャットダウンは300分（`auto_shutdown_minutes=300`）。
+[GPUでの実行の手順](gpu-runbook.md)のapply・destroyはそのまま使い、`local.sh`の準備とセルで回す。自動シャットダウンは360分（`auto_shutdown_minutes=360`）。延ばしても、費用がかかるのは実際に動いた時間だけ。
