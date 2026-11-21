@@ -4,6 +4,7 @@
 #     scripts/gpu/local.sh push    <ip>             # copy the committed tree (git archive, so every run matches a commit)
 #     scripts/gpu/local.sh setup   <ip>             # start setup.sh on the instance, detached
 #     SETUP_LLAMA=0 scripts/gpu/local.sh setup <ip> # the same, without llama.cpp and the GGUFs (docs/adr/0009)
+#     SETUP_LLAMA=0 SETUP_SGLANG=0 SETUP_AWQ=0 scripts/gpu/local.sh setup <ip>   # docs/vllm-fp8-tensor-check.md
 #     scripts/gpu/local.sh wait-setup <ip>          # wait until setup.sh finished (SETUP_DONE / SETUP_FAILED)
 #     scripts/gpu/local.sh cells   <ip> <list>      # start run_cells.py with a cell list, detached
 #     scripts/gpu/local.sh collect <ip> [dest]      # copy ~/out back every minute until DONE (default runs/gpu-<date>-<instance id>)
@@ -41,10 +42,13 @@ case "$cmd" in
     echo "pushed $(git rev-parse --short HEAD)"
     ;;
   setup)
-    # SETUP_LLAMA is passed on (setup.sh's own default is 1); only 0 or 1, as it reaches a remote shell.
-    llama=${SETUP_LLAMA:-1}
-    case "$llama" in 0|1) ;; *) echo "SETUP_LLAMA must be 0 or 1" >&2; exit 1 ;; esac
-    detach_ "mkdir -p ~/out; SETUP_LLAMA=$llama setsid nohup bash ~/toolcall-serving-bench/scripts/gpu/setup.sh > ~/out/setup.log 2>&1 < /dev/null &"
+    # SETUP_LLAMA, SETUP_SGLANG and SETUP_AWQ are passed on (setup.sh's defaults are 1);
+    # only 0 or 1, as they reach a remote shell.
+    llama=${SETUP_LLAMA:-1}; sglang=${SETUP_SGLANG:-1}; awq=${SETUP_AWQ:-1}
+    for v in "$llama" "$sglang" "$awq"; do
+      case "$v" in 0|1) ;; *) echo "SETUP_LLAMA, SETUP_SGLANG and SETUP_AWQ must be 0 or 1" >&2; exit 1 ;; esac
+    done
+    detach_ "mkdir -p ~/out; SETUP_LLAMA=$llama SETUP_SGLANG=$sglang SETUP_AWQ=$awq setsid nohup bash ~/toolcall-serving-bench/scripts/gpu/setup.sh > ~/out/setup.log 2>&1 < /dev/null &"
     echo "setup started; wait for it with: scripts/gpu/local.sh wait-setup $ip"
     ;;
   wait-setup)

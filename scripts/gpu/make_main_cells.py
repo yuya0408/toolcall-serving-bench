@@ -18,6 +18,11 @@
   (docs/adr/0009 7); each block is shuffled from BATCHING_SEED.
 - cells/smoke-batching.json: the same configurations, short, to check each
   engine against docs/adr/0009 2 before the main list.
+- cells/vllm-fp8-tensor.json (docs/vllm-fp8-tensor-check.md): TensorRT-LLM FP8
+  at concurrency 4, vLLM with a per-tensor FP8 made as it loads and with
+  TensorRT-LLM's own ModelOpt FP8, TensorRT-LLM FP8 again, then the per-tensor
+  FP8's greedy accuracy. A fixed order, not drawn: the two TensorRT-LLM cells
+  bracket the vLLM ones.
 
 Each list runs in a random order drawn once from SEED (main-quant.json from
 QUANT_SEED, so adding it left the first two lists as they were run), fixed
@@ -57,6 +62,8 @@ CONFIGS = {   # name -> (engine, quantization)
     "trt-bf16": ("tensorrt_llm", "bf16-none"),
     "trt-awq": ("tensorrt_llm", "modelopt-int4-awq"),
     "trt-fp8": ("tensorrt_llm", "modelopt-fp8"),
+    "vllm-fp8tensor": ("vllm", "fp8-tensor"),             # docs/vllm-fp8-tensor-check.md
+    "vllm-fp8modelopt": ("vllm", "modelopt-fp8"),
 }
 PASS_TYPES = {"acc": "accuracy", "third": "accuracy_under_load", "ni": "accuracy_under_load",
               "lat": "latency"}
@@ -140,6 +147,12 @@ SMOKE_BATCHING_RERUN = ([e for e in SMOKE_BATCHING if e[1].startswith("sglang-")
 # others' (docs/engines.md), which moved its memory fraction to 0.87, so every
 # SGLang cell again.
 SMOKE_BATCHING_RERUN2 = [e for e in SMOKE_BATCHING_RERUN if e[1].startswith("sglang-")]
+# docs/vllm-fp8-tensor-check.md, in this order: T1, B1, C, T2, then B2. Minutes
+# from the phase-2 cells (lat-trt-fp8-c4 ~22, lat-vllm-fp8-c4 ~30,
+# ni-vllm-fp8-c1 ~48), rounded up; the last field names the repeat.
+FP8_CHECK = [("lat", "trt-fp8", 4, 30, "-r1"), ("lat", "vllm-fp8tensor", 4, 30, ""),
+             ("lat", "vllm-fp8modelopt", 4, 30, ""), ("lat", "trt-fp8", 4, 30, "-r2"),
+             ("ni", "vllm-fp8tensor", 1, 55, "")]
 
 
 def cell(kind: str, config: str, concurrency: int, est_min: int) -> dict:
@@ -169,6 +182,15 @@ def ordered(entries: list[tuple], rng: random.Random) -> list[dict]:
     return cells
 
 
+def fp8_check() -> list[dict]:
+    cells = []
+    for kind, config, concurrency, est_min, repeat in FP8_CHECK:
+        c = cell(kind, config, concurrency, est_min)
+        c["name"] += repeat
+        cells.append(c)
+    return cells
+
+
 def smoke(kind: str, config: str, concurrency: int, repeat: str) -> dict:
     c = cell(kind, config, concurrency, 0)
     c.update(name=c["name"] + repeat, prefix="smoke-", max_cases=20)
@@ -191,7 +213,8 @@ def lists() -> dict[str, list[dict]]:
             "main-batching.json": ordered(BATCHING_LATENCY, batching) + ordered(BATCHING_ACCURACY, batching),
             "smoke-batching.json": [smoke(*e) for e in SMOKE_BATCHING],
             "smoke-batching-rerun.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN],
-            "smoke-batching-rerun2.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN2]}
+            "smoke-batching-rerun2.json": [smoke(*e) for e in SMOKE_BATCHING_RERUN2],
+            "vllm-fp8-tensor.json": fp8_check()}
 
 
 def estimated_minutes() -> dict[str, int]:
@@ -201,7 +224,8 @@ def estimated_minutes() -> dict[str, int]:
             "main-batching.json": sum(e[3] for e in BATCHING_LATENCY + BATCHING_ACCURACY),
             "smoke-batching.json": 4 * len(SMOKE_BATCHING),
             "smoke-batching-rerun.json": 4 * len(SMOKE_BATCHING_RERUN),
-            "smoke-batching-rerun2.json": 4 * len(SMOKE_BATCHING_RERUN2)}   # ~4 min each, mostly the server start
+            "smoke-batching-rerun2.json": 4 * len(SMOKE_BATCHING_RERUN2),   # ~4 min each, mostly the server start
+            "vllm-fp8-tensor.json": sum(e[3] for e in FP8_CHECK)}
 
 
 if __name__ == "__main__":
