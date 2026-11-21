@@ -24,7 +24,6 @@ disagreements with each reference, are printed for reference.
 from __future__ import annotations
 import argparse
 import csv
-import glob
 import json
 import pathlib
 import statistics
