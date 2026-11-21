@@ -66,6 +66,34 @@ def test_tensorrt_llm_serves_the_local_modelopt_checkpoint_with_the_qwen3_parser
     assert bf16[1] == "Qwen/Qwen3-8B"
 
 
+def test_vllm_serves_modelopt_fp8_from_its_local_folder_under_the_model_id():
+    # docs/vllm-fp8-tensor-check.md C: TensorRT-LLM's own files, not the bf16 the model id names.
+    cmd = run_cells.server_command({"engine": "vllm", "quantization": "modelopt-fp8",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[1:3] == ["serve", str(run_cells.LOCAL_CHECKPOINTS["modelopt-fp8"])]
+    assert cmd[cmd.index("--served-model-name") + 1] == "Qwen/Qwen3-8B"
+    assert "--quantization" not in cmd
+
+
+def test_vllm_makes_the_per_tensor_fp8_from_bf16_as_it_loads():
+    cmd = run_cells.server_command({"engine": "vllm", "quantization": "fp8-tensor",
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[1:3] == ["serve", "Qwen/Qwen3-8B"]
+    assert cmd[cmd.index("--quantization") + 1] == "fp8_per_tensor"
+    assert cmd[cmd.index("--max-model-len") + 1] == "8192"
+
+
+@pytest.mark.parametrize("quantization,model", [("bf16-none", "Qwen/Qwen3-8B"), ("awq-4bit", "Qwen/Qwen3-8B-AWQ"),
+                                                ("fp8-block", "Qwen/Qwen3-8B-FP8")])
+def test_phase_2_vllm_commands_are_unchanged(quantization, model):
+    # The phase-2 cells serve from the HF cache by id with no --quantization, as recorded.
+    cmd = run_cells.server_command({"engine": "vllm", "quantization": quantization,
+                                    "server": {"max_model_len": 8192}})
+    assert cmd[1:] == ["serve", model, "--served-model-name", model, "--host", "127.0.0.1", "--port", "8000",
+                       "--enable-auto-tool-choice", "--tool-call-parser", "hermes",
+                       "--enable-prompt-tokens-details", "--max-model-len", "8192"]
+
+
 def test_llama_server_is_sized_to_the_requirement():
     # ADR-0005 1 and its 2026-10-23 addendum: one slot per request, each with its own
     # cache of (longest prompt + max_tokens + 1-token margin) padded to 256; --fit off.

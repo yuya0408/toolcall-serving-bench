@@ -4,6 +4,8 @@
 #
 #     bash scripts/gpu/setup.sh            # ~/out/setup.log has the full output
 #     SETUP_LLAMA=0 bash scripts/gpu/setup.sh   # docs/adr/0009: no llama.cpp, no GGUFs
+#     SETUP_LLAMA=0 SETUP_SGLANG=0 SETUP_AWQ=0 bash scripts/gpu/setup.sh
+#         # docs/vllm-fp8-tensor-check.md: vLLM and TensorRT-LLM, FP8 only
 #
 # Everything a manifest or a later reader needs is written to ~/out as soon as
 # it is known (the instance and its disk disappear at the auto-shutdown):
@@ -17,8 +19,27 @@ REPO=~/toolcall-serving-bench
 # 1: build llama.cpp and the GGUFs (the first stage). The continuous-batching
 # stage (docs/adr/0009) measures vLLM, SGLang and TensorRT-LLM only and skips them.
 SETUP_LLAMA=${SETUP_LLAMA:-1}
+# 0: no SGLang environment (docs/vllm-fp8-tensor-check.md measures vLLM and TensorRT-LLM).
+SETUP_SGLANG=${SETUP_SGLANG:-1}
+# 0: no 4-bit models (Qwen/Qwen3-8B-AWQ, and ModelOpt's int4_awq, ~40 min to make).
+SETUP_AWQ=${SETUP_AWQ:-1}
 source "$REPO/scripts/gpu/pins.sh"   # the engine versions and model revisions every apply runs
+# Model files on the instance store when there is one: bf16 (15.3 GiB) is over
+# 90% of the free RAM, so vLLM turns off its prefetch and reads by mmap page
+# faults, which the gp3 root volume served at ~5.6 MB/s (2026-11-18). ~/models
+# and the HF cache become links there, so every reader (setup, servers, client)
+# finds them at the usual paths. Only loading gets faster: nothing measured reads
+# the disk once the weights are on the GPU. ~/out stays on the root volume.
+if [ -d /opt/dlami/nvme ] && [ -w /opt/dlami/nvme ]; then
+  for pair in "$HOME/models:/opt/dlami/nvme/models" "$HOME/.cache/huggingface:/opt/dlami/nvme/hf"; do
+    link=${pair%%:*}; target=${pair#*:}
+    mkdir -p "$target" "$(dirname "$link")"
+    if [ -d "$link" ] && [ ! -L "$link" ]; then cp -a "$link"/. "$target"/ && rm -rf "$link"; fi
+    ln -sfn "$target" "$link"
+  done
+fi
 mkdir -p "$OUT/checks" "$MODELS"
+readlink -f "$MODELS" "$HOME/.cache/huggingface" > "$OUT/checks/model_dirs.txt" 2>&1 || true
 rm -f "$OUT/SETUP_DONE" "$OUT/SETUP_FAILED"
 # A marker local.sh collect stops on; the failing command is the last lines of ~/out/setup.log.
 trap 'echo "setup.sh line $LINENO: $BASH_COMMAND" > "$OUT/SETUP_FAILED"' ERR
@@ -28,19 +49,20 @@ step() { echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) $*"; }
 
 # Monitors for the whole life of the instance (they outlive this script; a rerun
 # does not start a second copy). status.jsonl's timestamps say which cell ran when.
-#   gpu.csv: VRAM, utilization, power, temperature and SM clock every 5 s -- a clock
-#            that drops under sustained load would make later latency cells look worse
+#   gpu.csv: VRAM, utilization, power and its limit, temperature, SM and memory
+#            clocks every 0.5 s -- the L4's 72 W cap moves the clock during long
+#            prefills, which is how two runs of one cell can differ (docs/prefill-kernel-check.md)
 #   vmstat.log: host memory every 5 s -- 16 GB, about the size of the bf16 weights
 if ! pgrep -f "nvidia-smi --query-gpu=timestamp" >/dev/null; then
   # Why the clock dropped, if it did; the field was renamed (clocks_event_reasons in
   # newer drivers), and a name the driver rejects would stop the whole log.
-  GPU_FIELDS=timestamp,memory.used,memory.total,utilization.gpu,power.draw,temperature.gpu,clocks.sm
+  GPU_FIELDS=timestamp,memory.used,memory.total,utilization.gpu,power.draw,power.limit,temperature.gpu,clocks.sm,clocks.mem
   for reason in clocks_event_reasons.active clocks_throttle_reasons.active; do
     if nvidia-smi --query-gpu="$GPU_FIELDS,$reason" --format=csv,noheader >/dev/null 2>&1; then
       GPU_FIELDS="$GPU_FIELDS,$reason"; break
     fi
   done
-  nohup nvidia-smi --query-gpu="$GPU_FIELDS" --format=csv -l 5 > "$OUT/gpu.csv" 2>&1 < /dev/null &
+  nohup nvidia-smi --query-gpu="$GPU_FIELDS" --format=csv -lms 500 > "$OUT/gpu.csv" 2>&1 < /dev/null &
 fi
 if ! pgrep -f "vmstat -t -S M 5" >/dev/null; then
   nohup vmstat -t -S M 5 > "$OUT/vmstat.log" 2>&1 < /dev/null &
@@ -88,11 +110,13 @@ uv venv --allow-existing --seed --python 3.12 ~/venv
 uv pip install --python ~/venv/bin/python "vllm==$VLLM_VERSION" "transformers==$TRANSFORMERS_VERSION" \
   accelerate -r "$REPO/requirements.txt" --torch-backend=auto
 
+if [ "$SETUP_SGLANG" = 1 ]; then
 step "SGLang in its own environment (docs/adr/0009)"
 # SGLang 0.5.21 pins torch 2.13.0 and transformers 5.12.1, unlike the vLLM
 # environment; it serves from here, and the client still runs in ~/venv.
 uv venv --allow-existing --seed --python 3.12 ~/venv-sglang
 uv pip install --python ~/venv-sglang/bin/python "sglang==$SGLANG_VERSION" --torch-backend=auto
+fi
 
 step "TensorRT-LLM in its own environment (docs/adr/0009)"
 # The documented pip install (v1.2.1 docs/source/installation/linux.md): torch
@@ -127,9 +151,11 @@ cmake --build ~/llama.cpp/build --config Release -j "$(nproc)" --target llama-se
 fi
 
 step "model weights (Hugging Face cache)"
-~/venv/bin/python - <<'EOF' > "$OUT/checks/model_paths.txt"
+~/venv/bin/python - "$SETUP_AWQ" <<'EOF' > "$OUT/checks/model_paths.txt"
+import sys
 from huggingface_hub import snapshot_download
-for repo in ("Qwen/Qwen3-8B", "Qwen/Qwen3-8B-AWQ", "Qwen/Qwen3-8B-FP8"):
+repos = ["Qwen/Qwen3-8B", "Qwen/Qwen3-8B-FP8"] + (["Qwen/Qwen3-8B-AWQ"] if sys.argv[1] == "1" else [])
+for repo in repos:
     print(repo, snapshot_download(repo))
 EOF
 cat "$OUT/checks/model_paths.txt"
@@ -147,7 +173,9 @@ if [ ! -d ~/Model-Optimizer ]; then
   git clone -q --branch "$MODELOPT_VERSION" --depth 1 https://github.com/NVIDIA/Model-Optimizer.git ~/Model-Optimizer
 fi
 uv pip install --python ~/venv-trtllm/bin/python -c ~/trtllm-torch-constraint.txt fire rouge_score datasets
-for q in int4_awq:Qwen3-8B-int4-awq-modelopt fp8:Qwen3-8B-fp8-modelopt; do
+MODELOPT_BUILDS="fp8:Qwen3-8B-fp8-modelopt"
+if [ "$SETUP_AWQ" = 1 ]; then MODELOPT_BUILDS="int4_awq:Qwen3-8B-int4-awq-modelopt $MODELOPT_BUILDS"; fi
+for q in $MODELOPT_BUILDS; do
   format=${q%%:*}; dir="$MODELS/${q#*:}"
   if [ ! -f "$dir/config.json" ]; then
     (cd ~/Model-Optimizer/examples/llm_ptq && ~/venv-trtllm/bin/python hf_ptq.py --pyt_ckpt_path "$SNAPSHOT" \
@@ -182,15 +210,29 @@ fi
 step "version checks (runbook step 4)"
 ~/venv/bin/vllm serve --help=all 2>/dev/null | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || \
   ~/venv/bin/vllm serve --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/vllm_tool_call_parser.txt" || true
-~/venv-sglang/bin/python -m sglang.launch_server --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/sglang_tool_call_parser.txt" || true
+# vLLM quantizes bf16 to per-tensor FP8 as it loads (docs/vllm-fp8-tensor-check.md
+# B1/B2). That path ran through LLM() on 2026-11-19, never through `vllm serve`;
+# without it among the server's choices both cells would fail to start, so stop here.
+~/venv/bin/vllm serve --help=all 2>&1 | grep -A3 -- "--quantization" > "$OUT/checks/vllm_quantization.txt" || true
+grep -qw fp8_per_tensor "$OUT/checks/vllm_quantization.txt" || {
+  echo "vllm serve --quantization does not list fp8_per_tensor -- see $OUT/checks/vllm_quantization.txt"; exit 1; }
+if [ "$SETUP_SGLANG" = 1 ]; then
+  ~/venv-sglang/bin/python -m sglang.launch_server --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/sglang_tool_call_parser.txt" || true
+fi
 ~/venv-trtllm/bin/trtllm-serve serve --help 2>&1 | grep -A3 -i "tool_parser" > "$OUT/checks/trtllm_tool_parser.txt" || true
 # Every package in each environment, not just the engines: the harness's client
 # (requests, urllib3) runs in ~/venv and its timeout handling depends on them.
-for env in venv venv-sglang venv-trtllm; do
+ENVS="venv venv-trtllm"
+if [ "$SETUP_SGLANG" = 1 ]; then ENVS="$ENVS venv-sglang"; fi
+for env in $ENVS; do
   uv pip freeze --python ~/$env/bin/python > "$OUT/checks/pip-freeze-$env.txt"
 done
-ENGINE_VERSIONS=$(printf '{"sglang": "%s", "tensorrt_llm": "%s", "modelopt": "%s", "trtllm_torch": "%s"}' \
-  "$(~/venv-sglang/bin/python -c 'from importlib.metadata import version; print(version("sglang"))')" \
+SGLANG_INSTALLED=null
+if [ "$SETUP_SGLANG" = 1 ]; then
+  SGLANG_INSTALLED="\"$(~/venv-sglang/bin/python -c 'from importlib.metadata import version; print(version("sglang"))')\""
+fi
+ENGINE_VERSIONS=$(printf '{"sglang": %s, "tensorrt_llm": "%s", "modelopt": "%s", "trtllm_torch": "%s"}' \
+  "$SGLANG_INSTALLED" \
   "$(~/venv-trtllm/bin/python -c 'from importlib.metadata import version; print(version("tensorrt_llm"))')" \
   "$(~/venv-trtllm/bin/python -c 'from importlib.metadata import version; print(version("nvidia-modelopt"))')" \
   "$(~/venv-trtllm/bin/python -c 'import torch; print(torch.__version__)')")
@@ -216,7 +258,7 @@ EOF
 # Anything other than scripts/gpu/pins.sh would be a different measurement: stop here.
 ~/venv/bin/python - "$OUT/versions.json" "$VLLM_VERSION" "$TRANSFORMERS_VERSION" "$LLAMA_CPP_COMMIT" \
   "$QWEN3_8B_REVISION" "$QWEN3_8B_AWQ_REVISION" "$SGLANG_VERSION" "$TRTLLM_VERSION" "$MODELOPT_VERSION" \
-  "$QWEN3_8B_FP8_REVISION" "$SETUP_LLAMA" <<'EOF'
+  "$QWEN3_8B_FP8_REVISION" "$SETUP_LLAMA" "$SETUP_SGLANG" "$SETUP_AWQ" <<'EOF'
 import json, sys
 got = json.load(open(sys.argv[1]))
 want = {"vllm": sys.argv[2], "transformers": sys.argv[3], "llama_cpp_commit": sys.argv[4],
@@ -224,6 +266,10 @@ want = {"vllm": sys.argv[2], "transformers": sys.argv[3], "llama_cpp_commit": sy
         "tensorrt_llm": sys.argv[8], "modelopt": sys.argv[9], "Qwen/Qwen3-8B-FP8": sys.argv[10]}
 if sys.argv[11] != "1":
     del want["llama_cpp_commit"]   # not built (SETUP_LLAMA=0)
+if sys.argv[12] != "1":
+    del want["sglang"]             # not installed (SETUP_SGLANG=0)
+if sys.argv[13] != "1":
+    del want["Qwen/Qwen3-8B-AWQ"]  # not downloaded (SETUP_AWQ=0)
 keys = ("vllm", "transformers", "llama_cpp_commit", "sglang", "tensorrt_llm", "modelopt")
 have = {**{k: got.get(k) for k in keys}, **got["model_revisions"]}
 wrong = {k: (have.get(k), v) for k, v in want.items() if have.get(k) != v}
@@ -232,7 +278,9 @@ if wrong:
 print("pinned versions: ok")
 EOF
 grep -c hermes "$OUT/checks/vllm_tool_call_parser.txt" >/dev/null && echo "hermes parser: listed" || echo "hermes parser: NOT FOUND -- check $OUT/checks/vllm_tool_call_parser.txt"
-grep -qw qwen "$OUT/checks/sglang_tool_call_parser.txt" && echo "sglang qwen parser: listed" || echo "sglang qwen parser: NOT FOUND -- check $OUT/checks/sglang_tool_call_parser.txt"
+if [ "$SETUP_SGLANG" = 1 ]; then
+  grep -qw qwen "$OUT/checks/sglang_tool_call_parser.txt" && echo "sglang qwen parser: listed" || echo "sglang qwen parser: NOT FOUND -- check $OUT/checks/sglang_tool_call_parser.txt"
+fi
 grep -qw qwen3 "$OUT/checks/trtllm_tool_parser.txt" && echo "trtllm qwen3 parser: listed" || echo "trtllm qwen3 parser: NOT FOUND -- check $OUT/checks/trtllm_tool_parser.txt"
 if [ "$SETUP_LLAMA" = 1 ]; then
 step "does llama.cpp honour seed (runbook step 4c)"

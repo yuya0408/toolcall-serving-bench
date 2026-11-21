@@ -1,0 +1,7 @@
+[
+  {"name": "lat-trt-fp8-c4-r1", "prefix": "", "pass_type": "latency", "engine": "tensorrt_llm", "quantization": "modelopt-fp8", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-fp8tensor-c4", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "fp8-tensor", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-vllm-fp8modelopt-c4", "prefix": "", "pass_type": "latency", "engine": "vllm", "quantization": "modelopt-fp8", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "lat-trt-fp8-c4-r2", "prefix": "", "pass_type": "latency", "engine": "tensorrt_llm", "quantization": "modelopt-fp8", "tool_stage": 10, "concurrency": 4, "n_requests": 1000, "server": {"max_model_len": 8192}},
+  {"name": "ni-vllm-fp8tensor-c1", "prefix": "", "pass_type": "accuracy_under_load", "engine": "vllm", "quantization": "fp8-tensor", "tool_stage": 10, "concurrency": 1, "n": 5, "temperature": 0, "server": {"max_model_len": 8192}}
+]
