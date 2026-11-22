@@ -83,23 +83,29 @@ MODELS = {   # quantization -> the model id the manifest records and the server 
     "fp8-block": "Qwen/Qwen3-8B-FP8",              # docs/adr/0009 4
     "modelopt-int4-awq": "Qwen/Qwen3-8B",          # made on the instance from Qwen/Qwen3-8B (setup.sh)
     "modelopt-fp8": "Qwen/Qwen3-8B",               # likewise
+    "fp8-tensor": "Qwen/Qwen3-8B",                 # quantized by vLLM as it loads (VLLM_QUANTIZATION)
     "gguf-bf16": "Qwen/Qwen3-8B",
     "gguf-q4_k_m": "Qwen/Qwen3-8B",
 }
 # Checkpoints a server loads from a local directory instead of the HF cache.
+# setup.sh links ~/models (and the HF cache) to the instance store when there is one.
 LOCAL_CHECKPOINTS = {"modelopt-int4-awq": HOME / "models" / "Qwen3-8B-int4-awq-modelopt",
                      "modelopt-fp8": HOME / "models" / "Qwen3-8B-fp8-modelopt"}
 # Which quantizations each engine serves. TensorRT-LLM 1.2.1 reads no HF AWQ
 # checkpoint (_torch/model_config.py load_hf_quant_config has no awq branch) and
 # lists no FP8 block scaling for Qwen3 or Ada (docs/source/features/quantization.md),
 # so its 4-bit and FP8 are ModelOpt's, made from the same base (docs/adr/0009 4).
+# vLLM also serves ModelOpt's FP8 (the same files as TensorRT-LLM) and an FP8
+# made per tensor as it loads bf16 (docs/vllm-fp8-tensor-check.md).
 ENGINE_QUANTIZATIONS = {
-    "vllm": {"bf16-none", "awq-4bit", "fp8-block"},
+    "vllm": {"bf16-none", "awq-4bit", "fp8-block", "modelopt-fp8", "fp8-tensor"},
     "sglang": {"bf16-none", "awq-4bit", "fp8-block"},
     "tensorrt_llm": {"bf16-none", "modelopt-int4-awq", "modelopt-fp8"},
     "llama_cpp": set(GGUFS),
     "transformers_hf": {"bf16-none"},
 }
+# vLLM's --quantization for a quantization it makes itself from the served model.
+VLLM_QUANTIZATION = {"fp8-tensor": "fp8_per_tensor"}
 # Arguments a cell may pass through to run_cell.py, as written in the cell list.
 RUN_CELL_ARGS = ("pass_type", "engine", "quantization", "tool_stage", "concurrency", "n",
                  "n_requests", "temperature", "max_cases", "seed_base", "request_timeout")
@@ -161,11 +167,17 @@ def server_command(cell: dict[str, Any], max_prompt_tokens: int | None = None,
     kv is llama.cpp's KV layout (capacity.LLAMA_KV_LAYOUTS)."""
     server = cell.get("server", {})
     if cell["engine"] == "vllm":
-        model = MODELS[cell["quantization"]]
-        cmd = [str(VENV_BIN / "vllm"), "serve", model, "--served-model-name", model,
+        quantization = cell["quantization"]
+        model = MODELS[quantization]
+        # A local checkpoint is served under the model id the manifest records,
+        # as TensorRT-LLM's is (run_cell.py sends that id).
+        path = LOCAL_CHECKPOINTS.get(quantization, model)
+        cmd = [str(VENV_BIN / "vllm"), "serve", str(path), "--served-model-name", model,
                "--host", "127.0.0.1", "--port", str(PORT["vllm"]),
                "--enable-auto-tool-choice", "--tool-call-parser", "hermes",
                "--enable-prompt-tokens-details"]
+        if quantization in VLLM_QUANTIZATION:
+            cmd += ["--quantization", VLLM_QUANTIZATION[quantization]]
         if "max_model_len" in server:
             cmd += ["--max-model-len", str(server["max_model_len"])]
         return cmd
