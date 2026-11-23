@@ -213,10 +213,13 @@ step "version checks (runbook step 4)"
 # vLLM quantizes bf16 to per-tensor FP8 as it loads (docs/vllm-fp8-tensor-check.md
 # B1/B2). That path ran through LLM() on 2026-11-19, never through `vllm serve`;
 # without it among the server's choices both cells would fail to start, so stop here.
-~/venv/bin/vllm serve --help=all 2>&1 | grep -A3 -- "--quantization" > "$OUT/checks/vllm_quantization.txt" || true
+# vLLM 0.31.0's --help does not print the choices, so read the registry --quantization
+# is checked against instead of grepping the help text (2026-11-23: the grep stopped setup).
+~/venv/bin/python -c 'from vllm.model_executor.layers.quantization import QUANTIZATION_METHODS as Q; print("\n".join(sorted(Q)))' \
+  > "$OUT/checks/vllm_quantization.txt" 2>&1 || true
 # `exit` skips the ERR trap, so the marker local.sh wait-setup stops on is written here.
-grep -qw fp8_per_tensor "$OUT/checks/vllm_quantization.txt" || {
-  echo "vllm serve --quantization does not list fp8_per_tensor -- see $OUT/checks/vllm_quantization.txt"     | tee "$OUT/SETUP_FAILED"; exit 1; }
+grep -qx fp8_per_tensor "$OUT/checks/vllm_quantization.txt" || {
+  echo "vLLM's QUANTIZATION_METHODS has no fp8_per_tensor -- see $OUT/checks/vllm_quantization.txt"     | tee "$OUT/SETUP_FAILED"; exit 1; }
 if [ "$SETUP_SGLANG" = 1 ]; then
   ~/venv-sglang/bin/python -m sglang.launch_server --help 2>&1 | grep -A3 -i "tool-call-parser" > "$OUT/checks/sglang_tool_call_parser.txt" || true
 fi
