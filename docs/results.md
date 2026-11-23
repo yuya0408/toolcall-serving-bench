@@ -246,7 +246,7 @@ llama.cpp Q4_K_Mと最後の行は本番3回目、それ以外は本番1回目�
 
 ## 費用の内訳
 
-GPUでの実行は11回のapplyに分けた（手順は[docs/gpu-runbook.md](gpu-runbook.md)）。費用はCost Explorerの値（第1段階の本番3回目と2026-11-23は単価からの見積もり、第2段階は2026-10-30時点の見込み値）。
+GPUでの実行は11回のapplyに分けた（手順は[docs/gpu-runbook.md](gpu-runbook.md)）。費用はCost Explorerの値（第1段階の本番3回目は単価からの見積もり、第2段階は2026-10-30時点の見込み値）。
 
 | apply | 内容 | インスタンスの時間 | 費用 |
 | --- | --- | --- | --- |

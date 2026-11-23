@@ -159,7 +159,7 @@ python scripts/fp8_tensor_check_summary.py runs/<回収したフォルダ> runs/
 
 | 項目 | 内容 |
 | --- | --- |
-| インスタンス | `i-076a190d1c424d999`（apply 01:35Z → destroy 05:21Z、約3.8時間・約$4.4。単価からの見積もり） |
+| インスタンス | `i-076a190d1c424d999`（apply 01:35Z → destroy 05:21Z、約3.8時間・約$4.4。Cost Explorerの値（月の締め前）でg6.xlarge $4.29・EBS $0.10） |
 | データ | `runs/gpu-20261123-i-076a190d1c424d999` |
 | 測定に使ったコミット | `6837332`（`~/out/repo_commit.txt`） |
 | 準備 | 1回目は、`vllm serve --help`に`fp8_per_tensor`が無いとして止まった（0.31.0のヘルプは選択肢を出さない）。登録一覧（`QUANTIZATION_METHODS`）を読む確かめに直し（PR #46）、準備をやり直した（02:52Z〜02:55Z） |
