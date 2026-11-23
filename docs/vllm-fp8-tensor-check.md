@@ -1,4 +1,4 @@
-# vLLMのテンソル単位のFP8とエンジンの差の確認（計画）
+# vLLMのテンソル単位のFP8とエンジンの差の確認（計画と実施の記録）
 
 [プリフィルのカーネルの確認](prefill-kernel-check.md)で、vLLMはブロック単位のFP8をL4でW8A16（Marlin）にし、プリフィルがbf16の1.30倍になること、読み込み時にテンソル単位にすればW8A8（CUTLASS）で0.68倍になることを確かめた。
 1件ずつの時間なので、並行時に生成がどれだけ割り込まれるかと、精度は測っていない。ここでは、L4でvLLMを動かすときに設定で選べる手（FP8の形式）を、第2段階と同じ負荷で確かめ、同じインスタンスでTensorRT-LLM FP8と直接比べる。
@@ -152,3 +152,18 @@ scripts/gpu/local.sh cells <ip> scripts/gpu/cells/vllm-fp8-tensor.json
 scripts/gpu/local.sh collect <ip>
 python scripts/fp8_tensor_check_summary.py runs/<回収したフォルダ> runs/gpu-20261028-i-0bd6a9b5da22d5bf5
 ```
+
+## 実施の記録（2026-11-23）
+
+結果と読み方は[原因の分析の「並行数4で確かめた」](analysis-batching.md#並行数4で確かめた2026-11-23)に書いた。
+
+| 項目 | 内容 |
+| --- | --- |
+| インスタンス | `i-076a190d1c424d999`（apply 01:35Z → destroy 05:21Z、約3.8時間・約$4.4。単価からの見積もり） |
+| データ | `runs/gpu-20261123-i-076a190d1c424d999` |
+| 測定に使ったコミット | `6837332`（`~/out/repo_commit.txt`） |
+| 準備 | 1回目は、`vllm serve --help`に`fp8_per_tensor`が無いとして止まった（0.31.0のヘルプは選択肢を出さない）。登録一覧（`QUANTIZATION_METHODS`）を読む確かめに直し（PR #46）、準備をやり直した（02:52Z〜02:55Z） |
+| セル | 02:55Z〜05:12Z、5/5成功（`status.jsonl`） |
+| TRT-LLMの起動し直し | 0回 |
+| ModelOptのFP8 | ハッシュが第2段階と一致（`checks/modelopt-fp8-sha256.txt`） |
+| 自動シャットダウン | 360分 |
