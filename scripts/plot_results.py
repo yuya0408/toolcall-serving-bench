@@ -18,6 +18,8 @@ apart because the instance and the accuracy gate differ):
   throughput*.png       reference only, not used by any verdict
   prefill_batching.png  phase-2 cause analysis: prefill weight against the decode
                         slowdown it causes (docs/analysis-batching.md)
+  fp8_form_check.png    the vLLM FP8 slowdown against TRT-LLM FP8 by checkpoint form
+                        (docs/analysis-batching.md, 2026-11-23 check at concurrency 4)
   noninferiority.png, gate_batching.png
                         confidence interval against the margin, as recommended by
                         the CONSORT extension for non-inferiority trials
@@ -140,6 +142,17 @@ PREFILL = {
     "vLLM AWQ": (713, 15.7, "W4A16"), "TRT-LLM bf16": (746, 14.7, "bf16"), "vLLM bf16": (776, 14.0, "bf16"),
     "SGLang AWQ": (778, 18.4, "W4A16"), "SGLang bf16": (807, 17.3, "bf16"), "vLLM FP8": (931, 19.3, "W8A16"),
 }
+
+# FP8 form check at concurrency 4 (docs/analysis-batching.md "並行数4で確かめた（2026-11-23）",
+# scripts/fp8_tensor_check_summary.py): (label, how the layers compute, TPOT rise per overlap ms,
+# difference from TRT-LLM FP8 as written in the analysis, same instance). The differences are
+# copied, not recomputed from the rounded ms. Not in Release runs-2026-10, so --check skips it.
+FP8_FORM = [
+    ("vLLM　ブロック単位（Qwen公式、既定）", "W8A16", 19.34, "+126%", False),
+    ("vLLM　テンソル単位（読み込み時にbf16から）", "W8A8", 9.95, "+13.5%", True),
+    ("vLLM　TRT-LLMと同じModelOptのファイル", "W8A8", 9.38, "+7.0%", True),
+    ("TRT-LLM（ModelOpt、基準）", "W8A8", (8.80 + 8.75) / 2, None, True),
+]
 
 WORKLOAD = "Qwen3-8B | NVIDIA L4 1台（g6.xlarge）| 日本語のツール呼び出し200件（入力 約2,300トークン）"
 
@@ -397,6 +410,37 @@ def prefill(title_text, filename):
     plt.close(fig)
 
 
+def fp8_form(title_text, filename):
+    """The vLLM FP8 slowdown against TRT-LLM FP8, by how the checkpoint is laid out.
+    Bars are the TPOT rise per overlapping prefill at concurrency 4; the hatched bar
+    was measured on the phase-2 instance, the others side by side on one instance."""
+    fig, ax = plt.subplots(figsize=(9.6, 3.6))
+    rows = list(reversed(FP8_FORM))   # TRT-LLM at the bottom, the default vLLM at the top
+    for y, (label, form, rise, diff, same) in enumerate(rows):
+        color = ENGINE_COLOR["TRT-LLM" if diff is None else "vLLM"]
+        if same:
+            ax.barh(y, rise, height=0.6, color=color, zorder=2)
+        else:
+            ax.barh(y, rise, height=0.6, color=SURFACE, edgecolor=color, hatch="///", linewidth=1.2, zorder=2)
+        note = f"{rise:.2f}ms" if diff is None else f"{rise:.2f}ms（{diff}）"
+        ax.text(rise + 0.25, y, note, va="center", fontsize=10, color=INK,
+                fontweight="bold" if diff is not None and same else "normal")
+        ax.text(-0.3, y, form, va="center", ha="right", fontsize=9, color=INK_2)
+    ax.axvline((8.80 + 8.75) / 2, color=INK_2, linewidth=0.9, linestyle=(0, (3, 2)), zorder=1)
+    ax.set_yticks(range(len(rows)), [r[0] for r in rows], color=INK)
+    ax.tick_params(axis="y", length=0, pad=48)
+    ax.spines["left"].set_visible(False)
+    ax.grid(axis="y", visible=False)
+    ax.set_xlim(0, 25)
+    ax.set_xlabel("TPOTの増え方（ms／重なり1件、並行数4）　← 小さいほど割り込みに強い", loc="left")
+    top = title(fig, title_text, "括弧はTRT-LLM FP8との差。下の3本は同じインスタンスで並べて測った（TRT-LLMは前後2回の平均）。\n"
+                "斜線は第2段階の別のインスタンスでの値で参考（差はそのときのTRT-LLM FP8 8.54msとの比）")
+    bottom = footer(fig, WORKLOAD, "増え方は、重なりが0件と3件のTPOTの中央値の差を3で割った値。左の文字は線形層の計算の形。")
+    fig.tight_layout(rect=(0, bottom, 1, top))
+    fig.savefig(OUT / filename, dpi=150)
+    plt.close(fig)
+
+
 # --check: where each written value comes from in Release runs-2026-10
 RUNS = {"第1段階": "gpu-20261024-main-latency", "第2段階": "gpu-20261028-i-0bd6a9b5da22d5bf5"}
 RUNS_PHASE1_Q4 = "gpu-20261026-i-0362dcd8fb58ed4b7"   # main run 3: Q4_K_M, and the phase-1 gate
@@ -502,6 +546,8 @@ def main():
     latency(PHASE2, "第2段階：並行数4でTTFT・TPOTとも基準を満たしたのは、TRT-LLM FP8だけ", "latency_batching.png")
     throughput(PHASE2, "第2段階：1台のスループット（参考。判定には使わない）", "throughput_batching.png")
     prefill("第2段階：プリフィルが軽い構成ほど、同時に処理したときの生成の遅れが小さい", "prefill_batching.png")
+    fp8_form("vLLMのFP8は、計算も8bitで行う形にすると、TRT-LLM FP8との差が+126%から+7〜14%に縮んだ",
+             "fp8_form_check.png")
     interval(PHASE2, "第2段階：精度の足切りを通ったのは9構成中4つ", "gate_batching.png",
              "片側99.9%の下限 ＝ 両側99.8%区間の左端",
              groups=[("bf16", "bf16（基準：他の2エンジンのbf16の平均）"),
